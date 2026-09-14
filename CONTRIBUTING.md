@@ -154,24 +154,33 @@ Golden-Master-Replays, Zustands-Hashes und später Render-Snapshots sind eingefr
 
 ## Engine-Anbindung
 
-Die Engine steht als git-Dependency mit Tag im Workspace-Manifest (ab P0/WP6.3):
+Die Engine steht als git-Dependency mit Tag im Workspace-Manifest (seit P0/WP6.3):
 
 ```toml
 [workspace.dependencies]
 grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.1.0" }
 ```
 
-`Cargo.lock` hält den Commit-Hash des Tags. Das Repo ist privat, also braucht auch Cargo lokal
-Zugangsdaten. Am einfachsten lädt Cargo über die git-CLI, die dann die Anmeldung der GitHub CLI
-nutzt:
+`Cargo.lock` hält den Commit-Hash des Tags (Quelle
+`git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.1.0#<commit>`) für jedes bezogene
+Engine-Crate. Das Repo ist privat, also braucht auch Cargo lokal Zugangsdaten. Einmalig genügt:
 
 ```powershell
 gh auth setup-git
 ```
 
-und `git-fetch-with-cli` in der Cargo-Konfiguration (siehe nächster Abschnitt). **Auch mit aktivem
-`[patch]`** muss Cargo das Original-Repo erreichen, solange es nicht im Cache liegt (am 2026-09-14 mit
-Cargo 1.98.1 nachgeprüft: `--offline` scheitert dann).
+Die versionierte `.cargo/config.toml` des Spiel-Repos setzt `[net] git-fetch-with-cli = true`, damit
+Cargo wie in der CI über die git-CLI lädt. Zwingend ist das nicht: Am 2026-09-14 holte Cargo 1.98.1
+das Repo auch mit dem eingebauten Git-Client über den Credential-Helper der GitHub CLI. In diese
+Datei gehört **nie** ein `[patch]`. **Auch mit aktivem `[patch]`** muss Cargo das Original-Repo
+erreichen, solange es nicht im Cache liegt (am 2026-09-14 mit Cargo 1.98.1 nachgeprüft: `--offline`
+scheitert dann).
+
+Prüfen, dass der Pin greift:
+
+```bash
+cargo tree -i grimoire --locked   # genau ein grimoire, Quelle ...grimoire?tag=v0.1.0#<commit>
+```
 
 ## Lokale Engine-Entwicklung mit `[patch]`
 
@@ -179,7 +188,7 @@ Engine und Spiel liegen nebeneinander:
 
 ```text
 <Arbeitsordner>\
-├── .cargo\config.toml     ← nicht versioniert, gilt für alles unterhalb von <Arbeitsordner>\
+├── .cargo\config.toml     ← nicht versioniert, nur während der Iteration anlegen
 ├── grimoire\              ← Engine-Checkout
 └── Prototype\             ← Spiel-Checkout
 ```
@@ -187,16 +196,15 @@ Engine und Spiel liegen nebeneinander:
 `<Arbeitsordner>\.cargo\config.toml`:
 
 ```toml
-[net]
-git-fetch-with-cli = true
-
 # Nur während gemeinsamer Arbeit an Engine und Spiel einkommentieren (siehe Stolperfallen).
 # [patch."https://github.com/LupusMalusDeviant/grimoire"]
 # grimoire = { path = "grimoire/crates/grimoire" }
 ```
 
-`[net]` darf dauerhaft aktiv bleiben. Der `[patch]`-Block ist ein **Schalter für die Iteration**:
-einkommentieren, Engine und Spiel gemeinsam ändern, danach wieder auskommentieren.
+`[net] git-fetch-with-cli` steht bereits in der versionierten `.cargo/config.toml` des Spiels und
+gehört nicht in diese Datei. Der `[patch]`-Block ist ein **Schalter für die Iteration**:
+einkommentieren, Engine und Spiel gemeinsam ändern, danach wieder auskommentieren. Wer ihn gerade
+nicht braucht, legt die Datei am besten gar nicht an.
 
 Warum das so funktioniert (Cargo-Referenz, Kapitel „Configuration“ und „Overriding Dependencies“):
 
@@ -217,9 +225,9 @@ Prüfen, ob der Patch greift: `cargo tree -i grimoire` zeigt dann den lokalen Pf
 Stolperfallen:
 
 - **Ein aktiver Patch bricht `--locked` überall unter `<Arbeitsordner>\`.** Er gilt für jeden Cargo-Aufruf
-  unterhalb von `<Arbeitsordner>\`, also auch im Engine-Repo, in allen Worktrees unter `<Arbeitsordner>\_wt\` und im
-  Spiel, solange es die Engine noch nicht referenziert. Wo er ungenutzt ist, trägt Cargo ihn als
-  `[[patch.unused]]` in `Cargo.lock` ein. Mit `--locked` endet jeder Aufruf mit „cannot update the
+  unterhalb von `<Arbeitsordner>\`, also auch im Engine-Repo und in allen Worktrees unter `<Arbeitsordner>\_wt\`. Wo er
+  ungenutzt ist (Engine-Repo, Engine-Worktrees), trägt Cargo ihn als `[[patch.unused]]` in
+  `Cargo.lock` ein. Mit `--locked` endet jeder Aufruf mit „cannot update the
   lock file … because --locked was passed“, ohne `--locked` verändert sich das versionierte
   Lockfile (am 2026-09-14 mit Cargo 1.98.1 in einem Wegwerf-Workspace nachgeprüft).
 - **Auch im Spiel scheitern die Pflichtprüfungen**, solange der Patch greift: Er ersetzt die Quelle
@@ -240,6 +248,11 @@ Stolperfallen:
    ```bash
    cargo update -p grimoire
    ```
+   Cargo liest das `Cargo.lock` der Engine bei Git-Dependencies nicht. Das Spiel-Lockfile wurde beim
+   ersten Pin aus dem Lockfile des Engine-Tags vorbelegt, damit die Drittanbieter-Versionen (wgpu,
+   winit usw.) denen der Engine-CI entsprechen. Beim Upgrade die Versionen gegen
+   `git show vX.Y.Z:Cargo.lock` im Engine-Repo vergleichen und Abweichungen mit
+   `cargo update -p <crate> --precise <version>` angleichen.
 4. Lokale Pflichtprüfungen; bei gebrochenen Golden-Mastern gilt die Golden-Master-Regel.
 5. Commit `build(engine): bump grimoire to vX.Y.Z` mit `Cargo.toml` und `Cargo.lock`, pushen und den
    CI-Lauf überwachen.
