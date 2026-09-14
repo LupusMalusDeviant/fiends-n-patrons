@@ -1,0 +1,179 @@
+# Game release: tag vX.Y.Z -> version check, release builds on three operating systems,
+# DRAFT GitHub release with git-cliff notes and the binaries attached.
+# Windows binaries are signed locally afterwards (the .pfx never enters CI), then the draft is
+# published by hand. Procedure: CONTRIBUTING.md, section "Release".
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify-version:
+    name: Tag matches workspace version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compare Cargo.toml versions with the tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+          import tomllib
+
+          with open("Cargo.toml", "rb") as fh:
+              version = tomllib.load(fh)["workspace"]["package"]["version"]
+          with open("crates/fnp_app/Cargo.toml", "rb") as fh:
+              app_version = tomllib.load(fh)["package"].get("version")
+          if isinstance(app_version, dict) and app_version.get("workspace") is True:
+              app_version = version
+
+          tag = os.environ["TAG"]
+          errors = []
+          if tag != f"v{version}":
+              errors.append(f"Tag {tag}, aber Cargo.toml [workspace.package] version = {version}.")
+          if app_version != version:
+              errors.append(f"fnp_app hat Version {app_version}, der Workspace {version}.")
+          if errors:
+              print("::error title=Version passt nicht zum Tag::" + " ".join(errors)
+                    + " Tag loeschen, Version korrigieren, neu taggen.")
+              sys.exit(1)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"version={version}\n")
+          print(f"Tag {tag} entspricht der Workspace-Version {version}.")
+          PY
+
+  build:
+    name: release build (${{ matrix.platform }})
+    needs: verify-version
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x86_64
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: macos-latest
+            platform: macos-aarch64
+    steps:
+      - uses: actions/checkout@v7
+      # A release without the engine cannot be built: missing key fails the job here.
+      - name: Engine access
+        uses: ./.github/actions/engine-access
+        with:
+          deploy-key: ${{ secrets.GRIMOIRE_DEPLOY_KEY }}
+          require: "true"
+      - name: Install pinned toolchain (rust-toolchain.toml)
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: false
+      - name: Build fiends-n-patrons (release)
+        run: cargo build --release --locked -p fnp_app --bin fiends-n-patrons
+      # upload-artifact drops the executable bit, so Unix binaries travel inside a tarball.
+      # The Windows exe stays bare so it can be signed and replaced in the draft release.
+      - name: Package
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          VERSION: ${{ needs.verify-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          name="fiends-n-patrons-${VERSION}-${PLATFORM}"
+          mkdir -p dist
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp target/release/fiends-n-patrons.exe "dist/${name}.exe"
+          else
+            tar -czf "dist/${name}.tar.gz" -C target/release fiends-n-patrons
+          fi
+          ls -l dist
+      - name: Upload release binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Draft GitHub release
+    needs: [verify-version, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Generate release notes (git-cliff)
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --current --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+      - name: Append signing and platform notes
+        run: |
+          cat >> RELEASE_NOTES.md <<'EOF'
+
+          ---
+
+          ### Hinweise zu den Binaries
+
+          - **Windows:** Die `.exe` wird nach dem CI-Build **lokal** mit dem Code-Signing-Zertifikat
+            `CN=Lupus Malus Deviant` signiert und in diesem Release ersetzt. Die CI signiert nicht, weil die
+            `.pfx` den Entwicklungsrechner nie verlässt. Solange dieses Release ein Entwurf ist, ist die
+            angehängte Exe noch unsigniert.
+          - **macOS:** nicht notarisiert (privater Vertrieb ohne Developer-Account). Beim ersten Start per
+            Rechtsklick > Öffnen bestätigen.
+          - **Linux/macOS:** Archiv entpacken, `./fiends-n-patrons` starten.
+          EOF
+      - name: Download release binaries
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.verify-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          flags=(--draft --verify-tag --title "Fiends n Patrons ${TAG}" --notes-file RELEASE_NOTES.md)
+          case "$VERSION" in
+            *-*) flags+=(--prerelease) ;;
+          esac
+          gh release create "$TAG" "${flags[@]}" dist/*
+          {
+            echo "## Entwurf ${TAG} erstellt"
+            echo
+            echo "Naechste Schritte (lokal): Windows-Exe herunterladen, signieren, ersetzen, Entwurf veroeffentlichen."
+            echo "Anleitung: CONTRIBUTING.md, Abschnitt Release."
+          } >> "$GITHUB_STEP_SUMMARY"

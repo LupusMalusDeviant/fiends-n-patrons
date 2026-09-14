@@ -1,0 +1,108 @@
+# Engine access for jobs that run cargo against the private Grimoire repository (ADR-0009).
+#
+#  * No Cargo.toml references github.com/LupusMalusDeviant/grimoire -> cargo steps run normally.
+#  * Referenced and deploy key available -> key goes into ssh-agent, engine URLs are rewritten
+#    to SSH and Cargo fetches through the git CLI.
+#  * Referenced but key missing -> warning plus skipped cargo steps (job stays green),
+#    or a hard failure when `require` is 'true' (release builds).
+#
+# Callers gate their cargo steps on `steps.<id>.outputs.cargo == 'true'`.
+# The secret is handed over as an input; it reaches the detection step only through env,
+# because secrets cannot be tested in `if:` expressions directly.
+name: Grimoire engine access
+description: Detects the engine git dependency and loads the read-only deploy key.
+
+inputs:
+  deploy-key:
+    description: Private SSH deploy key (secrets.GRIMOIRE_DEPLOY_KEY). May be empty.
+    required: false
+    default: ""
+  require:
+    description: "'true' fails the job when the engine is referenced but no key is available."
+    required: false
+    default: "false"
+
+outputs:
+  cargo:
+    description: "'true' when the cargo steps can run, 'false' when they must be skipped."
+    value: ${{ steps.detect.outputs.cargo }}
+  engine-referenced:
+    description: "'true' when a Cargo.toml references the Grimoire git repository."
+    value: ${{ steps.detect.outputs.referenced }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect engine reference and deploy key
+      id: detect
+      shell: bash
+      env:
+        DEPLOY_KEY: ${{ inputs.deploy-key }}
+        REQUIRE_KEY: ${{ inputs.require }}
+      run: |
+        set -euo pipefail
+
+        # git grep exits 1 when nothing matches; capture it instead of letting -e abort the step.
+        status=0
+        git grep -n -I -i -E -e 'github\.com[:/]LupusMalusDeviant/grimoire' -- ':(glob)**/Cargo.toml' || status=$?
+        case "$status" in
+          0) referenced=true ;;
+          1) referenced=false ;;
+          *) echo "::error title=Engine-Erkennung defekt::git grep ist mit Status ${status} fehlgeschlagen."; exit "$status" ;;
+        esac
+
+        has_key=false
+        if [ -n "${DEPLOY_KEY}" ]; then
+          has_key=true
+        fi
+
+        if [ "$referenced" = false ]; then
+          echo "Keine Engine-Git-Abhaengigkeit gefunden: Cargo-Schritte laufen ohne Deploy-Key."
+          cargo=true
+          use_key=false
+        elif [ "$has_key" = true ]; then
+          echo "Engine-Git-Abhaengigkeit gefunden, Deploy-Key vorhanden: Zugriff ueber SSH."
+          cargo=true
+          use_key=true
+        elif [ "$REQUIRE_KEY" = true ]; then
+          echo "::error title=Engine-Zugriff fehlt::Das Spiel haengt von github.com/LupusMalusDeviant/grimoire ab, aber das Secret GRIMOIRE_DEPLOY_KEY fehlt. Einrichten mit scripts/setup-ci-deploy-key.ps1."
+          exit 1
+        else
+          echo "::warning title=Engine-Zugriff fehlt, Cargo-Schritte uebersprungen::Das Spiel haengt von github.com/LupusMalusDeviant/grimoire ab, aber das Secret GRIMOIRE_DEPLOY_KEY ist nicht verfuegbar. Einrichten mit scripts/setup-ci-deploy-key.ps1 (lokal ausfuehren). Dieser Lauf hat NICHTS gebaut oder getestet."
+          {
+            echo "### Engine-Zugriff fehlt"
+            echo
+            echo "Cargo-Schritte wurden **uebersprungen**: Das Secret \`GRIMOIRE_DEPLOY_KEY\` ist nicht gesetzt."
+            echo "Einrichtung: \`powershell -ExecutionPolicy Bypass -File scripts/setup-ci-deploy-key.ps1\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          cargo=false
+          use_key=false
+        fi
+
+        {
+          echo "referenced=${referenced}"
+          echo "use-key=${use_key}"
+          echo "cargo=${cargo}"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Load deploy key into ssh-agent
+      if: steps.detect.outputs.use-key == 'true'
+      uses: webfactory/ssh-agent@v0.10.0
+      with:
+        ssh-private-key: ${{ inputs.deploy-key }}
+        log-public-key: false
+
+    - name: Route engine fetches over SSH
+      if: steps.detect.outputs.use-key == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        # GitHub's SSH host keys from the TLS-protected API instead of trust-on-first-use.
+        mkdir -p ~/.ssh
+        gh api meta --jq '.ssh_keys[] | "github.com " + .' >> ~/.ssh/known_hosts
+        # Only the owner's URLs go over SSH; crates.io and public git dependencies stay on HTTPS.
+        git config --global url."git@github.com:LupusMalusDeviant/".insteadOf "https://github.com/LupusMalusDeviant/"
+        echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "$GITHUB_ENV"
+        echo "Engine-Zugriff eingerichtet: https://github.com/LupusMalusDeviant/ -> git@github.com:LupusMalusDeviant/ (git CLI)."

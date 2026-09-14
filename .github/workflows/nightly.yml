@@ -1,0 +1,119 @@
+# Nightly game builds from main: release binaries for three operating systems as 7-day artifacts.
+# Scheduled runs are skipped when main had no commits in the last 24 hours.
+# Nightly Windows binaries are unsigned; only tagged releases are signed (locally, see CONTRIBUTING.md).
+name: Nightly
+
+on:
+  schedule:
+    # 02:47 UTC, off the full hour and after the engine nightly.
+    - cron: "47 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  changes:
+    name: Commits in the last 24 hours?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check age of the newest commit
+        id: check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" != "schedule" ]; then
+            echo "Manueller Start: Nightly laeuft unabhaengig vom Commit-Alter."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            last_commit=$(git log -1 --format=%ct)
+            age=$(( $(date +%s) - last_commit ))
+            if [ "$age" -lt 86400 ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice title=Nightly uebersprungen::Keine Commits auf main in den letzten 24 Stunden."
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          # Short changelog since the previous nightly (PRD-0017 FR-06).
+          {
+            echo "## Nightly $(date -u +%Y-%m-%d) ($(git rev-parse --short HEAD))"
+            echo
+            echo "Commits der letzten 24 Stunden:"
+            echo
+            git log --since="24 hours ago" --no-merges --format='- %s (%h)' | grep . || echo "- (keine)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: release build (${{ matrix.platform }})
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x86_64
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: macos-latest
+            platform: macos-aarch64
+    steps:
+      - uses: actions/checkout@v7
+      - name: Engine access
+        id: engine
+        uses: ./.github/actions/engine-access
+        with:
+          deploy-key: ${{ secrets.GRIMOIRE_DEPLOY_KEY }}
+      - name: Install pinned toolchain (rust-toolchain.toml)
+        if: steps.engine.outputs.cargo == 'true'
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        if: steps.engine.outputs.cargo == 'true'
+      - name: Build fiends-n-patrons (release)
+        if: steps.engine.outputs.cargo == 'true'
+        run: cargo build --release --locked -p fnp_app --bin fiends-n-patrons
+      # upload-artifact drops the executable bit, so Unix binaries travel inside a tarball.
+      - name: Package
+        if: steps.engine.outputs.cargo == 'true'
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          name="fiends-n-patrons-nightly-$(date -u +%Y%m%d)-${GITHUB_SHA::8}-${PLATFORM}"
+          mkdir -p dist
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp target/release/fiends-n-patrons.exe "dist/${name}.exe"
+          else
+            tar -czf "dist/${name}.tar.gz" -C target/release fiends-n-patrons
+          fi
+          ls -l dist
+      - name: Upload nightly artifact
+        if: steps.engine.outputs.cargo == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: fiends-n-patrons-nightly-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
