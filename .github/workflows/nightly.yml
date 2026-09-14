@@ -100,16 +100,23 @@ jobs:
             platform: macos-aarch64
     steps:
       - uses: actions/checkout@v7
+      # Nightly runs only on schedule or by hand, never for untrusted code: a missing key fails.
       - name: Engine access
         id: engine
         uses: ./.github/actions/engine-access
         with:
           deploy-key: ${{ secrets.GRIMOIRE_DEPLOY_KEY }}
+          require: "true"
       - name: Install pinned toolchain (rust-toolchain.toml)
         if: steps.engine.outputs.cargo == 'true'
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.engine.outputs.cargo == 'true'
+      # The shipped binary uses the release profile; CI tests only the dev profile. Optimisation
+      # level must not change the golden hash on any platform.
+      - name: Determinism gate (release profile)
+        if: steps.engine.outputs.cargo == 'true'
+        run: cargo test --release --locked -p fnp_sim_harness --test determinism
       - name: Build fiends-n-patrons (release)
         if: steps.engine.outputs.cargo == 'true'
         run: cargo build --release --locked -p fnp_app --bin fiends-n-patrons

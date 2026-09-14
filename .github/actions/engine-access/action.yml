@@ -3,8 +3,11 @@
 #  * No Cargo.toml references github.com/LupusMalusDeviant/grimoire -> cargo steps run normally.
 #  * Referenced and deploy key available -> key goes into ssh-agent, engine URLs are rewritten
 #    to SSH and Cargo fetches through the git CLI.
-#  * Referenced but key missing -> warning plus skipped cargo steps (job stays green),
-#    or a hard failure when `require` is 'true' (release builds).
+#  * Referenced but key missing -> hard failure when `require` is 'true' (CI on pushes, manual
+#    runs and same-repository pull requests, Nightly, Release); warning plus skipped cargo steps
+#    only when `require` is 'false', i.e. pull requests that receive no secrets (forks,
+#    Dependabot). Every Cargo.toml revision since P0/WP6.3 references the engine, so a missing
+#    key is a broken setup (for example a revoked gh authorisation), never a transition.
 #
 # Callers gate their cargo steps on `steps.<id>.outputs.cargo == 'true'`.
 # The secret is handed over as an input; it reaches the detection step only through env,

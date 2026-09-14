@@ -57,11 +57,14 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
+      # A missing deploy key fails the job. Only pull requests that receive no secrets (forks,
+      # Dependabot) skip the Cargo steps with a warning instead.
       - name: Engine access
         id: engine
         uses: ./.github/actions/engine-access
         with:
           deploy-key: ${{ secrets.GRIMOIRE_DEPLOY_KEY }}
+          require: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
       - name: Install pinned toolchain (rust-toolchain.toml)
         if: steps.engine.outputs.cargo == 'true'
         run: rustup toolchain install
@@ -72,9 +75,34 @@ jobs:
       - name: Clippy
         if: steps.engine.outputs.cargo == 'true'
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # The engine contract keeps the facade's determinism lints identical in every simulation
+      # crate; the game's copies must match the clippy.toml of the pinned engine tag.
+      - name: Determinism lint copies match the pinned facade
+        if: steps.engine.outputs.cargo == 'true' && runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          manifest=$(cargo metadata --format-version 1 --locked \
+            | jq -r '.packages[] | select(.name == "grimoire") | .manifest_path')
+          facade="$(dirname "$manifest")/clippy.toml"
+          test -f "$facade"
+          status=0
+          for required in crates/fnp_game crates/fnp_sim_harness; do
+            if [ ! -f "$required/clippy.toml" ]; then
+              echo "::error title=clippy.toml fehlt::$required/clippy.toml fehlt (Kopie von crates/grimoire/clippy.toml der Engine)."
+              status=1
+            fi
+          done
+          for copy in crates/*/clippy.toml; do
+            if ! diff -u "$facade" "$copy"; then
+              echo "::error file=$copy,title=clippy.toml veraltet::$copy weicht von crates/grimoire/clippy.toml des gepinnten Engine-Tags ab. Datei aus dem Tag kopieren (CONTRIBUTING.md, Engine-Upgrade)."
+              status=1
+            fi
+          done
+          exit "$status"
+      # --no-fail-fast: a red unit test must not stop the determinism gate of later test binaries.
       - name: Test
         if: steps.engine.outputs.cargo == 'true'
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --locked --no-fail-fast
       - name: Build
         if: steps.engine.outputs.cargo == 'true'
         run: cargo build --workspace --locked

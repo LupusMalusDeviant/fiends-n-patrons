@@ -92,6 +92,9 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: false
+      # The golden hash must hold under the release profile the binaries are built with.
+      - name: Determinism gate (release profile)
+        run: cargo test --release --locked -p fnp_sim_harness --test determinism
       - name: Build fiends-n-patrons (release)
         run: cargo build --release --locked -p fnp_app --bin fiends-n-patrons
       # upload-artifact drops the executable bit, so Unix binaries travel inside a tarball.
