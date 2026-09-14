@@ -30,6 +30,12 @@ Option 3. `grimoire_gpu` kapselt wgpu; `grimoire_render` implementiert den kompl
 selbst. Kein Engine-Code oberhalb von `grimoire_gpu` spricht wgpu-Typen direkt an (Austauschbarkeit
 als Trait-Vertrag — sollte je der Wunsch nach einem nativen Backend entstehen, ist die Schnittstelle da).
 
+**Präzisierung (P0, 2026-09-14):** Die Kapselungsgrenze liegt am datenorientierten
+Renderer-Vertrag. wgpu-Typen sind innerhalb von `grimoire_gpu` und `grimoire_render` sichtbar;
+oberhalb davon (Fassade, Spiel) nie. Eine zusätzliche RHI-Hülle zwischen den beiden Crates hätte
+kaum Wert, weil wgpu selbst bereits die Hardware-Abstraktion ist. Details:
+Engine-Repo `grimoire/docs/adr/0002-gpu-kapselungsgrenze.md`.
+
 ## Konsequenzen
 
 - (+) Ein Shader-Dialekt (WGSL) für alle Plattformen; Mobile-Pfad ist derselbe Code.

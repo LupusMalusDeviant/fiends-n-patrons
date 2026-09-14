@@ -1,6 +1,6 @@
 # Plan-0001: Phase P0 — Fundament (Repos, CI, Grimoire-Grundgerüst)
 
-- **Status:** Entwurf
+- **Status:** In Umsetzung
 - **Datum:** 2026-09-14
 - **Autor:** Lupus Malus Deviant (PO) / Claude (Ausarbeitung)
 - **Basis-PRD:** [PRD-0002 Grimoire Engine](../prd/0002-grimoire-engine-architektur.md), [PRD-0017 Plattform & CI](../prd/0017-plattform-ci-distribution.md); Phasendefinition: [PRD-0000 §5](../prd/0000-index-fiends-n-patrons.md)
@@ -9,6 +9,24 @@
 > **Zeitmodell-Hinweis:** Das Projekt plant in Phasen statt Kalenderdaten (Register E19).
 > Schätzungen sind **fokussierte Arbeitstage** (nicht Kalendertage); Meilensteine sind
 > Zustands-Gates ohne Datum.
+
+## Umsetzungsstand
+
+| WP | Stand | Nachweis / Bemerkung |
+|----|-------|----------------------|
+| WP1 | erledigt | Beide Repos lokal angelegt und committet; private GitHub-Repos `LupusMalusDeviant/grimoire` und `LupusMalusDeviant/fiends-n-patrons` erstellt (noch nicht gepusht); Fenster-Bibliothek winit (Engine-ADR-0001) |
+| WP2 | in Arbeit | Workflows für beide Repos entstehen im CI-Strang; Nachweis erst mit dem ersten Push |
+| WP3 | in Arbeit | Plattform-Schicht implementiert, im Review |
+| WP4 | in Arbeit | wgpu-Kontext und instanzierter Sprite-Renderer |
+| WP5 | in Arbeit | ECS, danach Simulation mit Golden-Hash-Determinismustest |
+| WP6 | in Arbeit | OF-2.1 als Float-Spike, OF-2.2 als Engine-ADR-0003, OF-17.1 als ADR-0009; Tag `v0.1.0` nach dem ersten grünen CI-Lauf |
+
+**Abweichungen vom ursprünglichen Plan**
+
+- Zusätzliche Blatt-Crate `grimoire_core` für stabiles Hashing und deterministische Mathematik (Engine-ADR-0005).
+- Beispiele liegen je Crate (`grimoire_platform/examples/window.rs`, `grimoire_render/examples/instancing.rs`, `grimoire/examples/sim_loop.rs`) statt nummeriert in einem Ordner.
+- Parallele Arbeitsstränge laufen in temporären Git-Worktrees unter `<Arbeitsordner>\_wt\` und werden nach Review in `main` zusammengeführt.
+- Die Umstellung des Spiels auf die Git-Tag-Abhängigkeit (WP6.3) setzt einen remote existierenden Engine-Tag voraus: Cargo lädt die Original-Quelle auch dann, wenn ein lokaler `[patch]` sie ersetzt.
 
 ## Kontext / Motivation
 
