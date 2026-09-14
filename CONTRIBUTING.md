@@ -80,6 +80,11 @@ ein aktiver Patch lässt jeden `--locked`-Aufruf scheitern. Vor dem Commit zusä
   Ein per Pfadfilter übersprungener Workflow meldet keinen Status; reine Doku-PRs bleiben bei
   Pflicht-Checks auf „Expected“ stehen und brauchen `gh workflow run ci.yml --ref <branch>` oder
   einen Admin-Merge.
+- **Erster Push eines neuen Branches:** Beobachtet am 2026-09-14 beim ersten Push von `main` in das
+  leere Repository. Für den Pfadfilter zählte offenbar nur der letzte Commit des Pushes. War das ein
+  reiner Doku-Commit (hier ein Doku-Merge), startete `ci.yml` nicht, obwohl der Push auch Code
+  enthielt. Nach so einem Push mit `gh run list --commit "$(git rev-parse HEAD)"` prüfen und bei
+  fehlendem Lauf `gh workflow run ci.yml --ref <branch>` auslösen.
 - Ein neuer Push auf denselben Pull Request bricht dessen laufende CI ab. Läufe auf `main` werden
   **nie** abgebrochen; jeder `main`-Commit bekommt ein Ergebnis.
 - Nightly-Binaries für Windows sind **unsigniert**; signiert werden nur Releases.
