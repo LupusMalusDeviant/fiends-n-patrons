@@ -4,10 +4,11 @@
 //! golden-master replays and balancing reports (PRD-0018).
 //!
 //! **Status:** P0. [`run_seed`] runs the [`FiendsGame`] plugin through the facade's
-//! `App::run_headless` with the scripted [`bot_input`]; the integration tests in
+//! `App::run_headless` with the scripted [`bot_input`]; [`simulate`] drives the same run on a
+//! bare [`Simulation`] so tests can inspect game state. The integration tests in
 //! `tests/determinism.rs` prove determinism and freeze a golden final hash.
 
-use fnp_game::{FiendsGame, GAME_TITLE};
+use fnp_game::{FiendsGame, GAME_TITLE, TICK_RATE_HZ};
 use grimoire::HeadlessReport;
 use grimoire::prelude::*;
 
@@ -58,9 +59,26 @@ pub fn run_with_input(
         ..WindowConfig::default()
     })
     .seed(seed)
+    // run_headless steps a fixed tick count and ignores the rate; set for symmetry with fnp_app.
+    .tick_rate(TICK_RATE_HZ)
     .hash_every(HASH_EVERY)
     .plugin(FiendsGame::new())
     .run_headless(ticks, input)
+}
+
+/// Builds the game into a fresh [`Simulation`] with `seed` and steps it `ticks` times.
+///
+/// Same order as `run_headless`: build the plugin, then `step(input(tick))` per tick, so the final
+/// [`Simulation::state_hash`] equals the `final_hash` of [`run_with_input`]. Unlike the report,
+/// the returned simulation exposes the game state (positions, orbits, the ritual circle).
+#[must_use]
+pub fn simulate(seed: u64, ticks: u64, input: &mut dyn FnMut(u64) -> TickInput) -> Simulation {
+    let mut sim = Simulation::new(seed);
+    FiendsGame::new().build(&mut sim);
+    for _ in 0..ticks {
+        sim.step(input(sim.tick()));
+    }
+    sim
 }
 
 #[cfg(test)]
