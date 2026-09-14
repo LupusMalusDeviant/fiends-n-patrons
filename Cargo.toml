@@ -1,0 +1,28 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+authors = ["LupusMalus"]
+repository = "https://github.com/LupusMalusDeviant/fiends-n-patrons"
+publish = false
+
+[workspace.dependencies]
+fnp_content = { path = "crates/fnp_content" }
+fnp_game = { path = "crates/fnp_game" }
+# The engine dependency (Grimoire, pinned to a release tag) is added in P0/WP6.3.
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+
+[profile.dev.package."*"]
+opt-level = 2

@@ -1,0 +1,15 @@
+[package]
+name = "fnp_sim_harness"
+description = "Headless bot runs, determinism checks and balancing simulations for Fiends n Patrons."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+fnp_game.workspace = true
+
+[lints]
+workspace = true

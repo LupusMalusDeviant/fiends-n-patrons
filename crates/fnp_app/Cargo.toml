@@ -1,0 +1,19 @@
+[package]
+name = "fnp_app"
+description = "Fiends n Patrons executable: boots Grimoire with the game plugin."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "fiends-n-patrons"
+path = "src/main.rs"
+
+[dependencies]
+fnp_game.workspace = true
+
+[lints]
+workspace = true

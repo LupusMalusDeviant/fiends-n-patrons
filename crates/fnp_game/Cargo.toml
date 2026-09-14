@@ -1,0 +1,15 @@
+[package]
+name = "fnp_game"
+description = "Fiends n Patrons game states and run logic."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+fnp_content.workspace = true
+
+[lints]
+workspace = true
