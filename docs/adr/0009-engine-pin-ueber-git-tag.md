@@ -52,8 +52,9 @@ die Engine referenziert, lädt den Schlüssel per `webfactory/ssh-agent`, lenkt
 `git@github.com:LupusMalusDeviant/` um und setzt `CARGO_NET_GIT_FETCH_WITH_CLI=true`. Fehlt das
 Secret, warnen CI und Nightly sichtbar und überspringen die Cargo-Schritte; der Release-Workflow
 bricht ab. Einrichtung und Rotation übernimmt `scripts/setup-ci-deploy-key.ps1`. Ein Deploy-Key ist
-einem persönlichen Token vorgezogen: Er gilt für genau ein Repo, nur lesend, hängt an keinem
-Benutzerkonto-Scope und muss nicht vor einem Ablaufdatum erneuert werden.
+einem persönlichen Token vorgezogen: Er gilt für genau ein Repo, nur lesend, und hat kein
+Ablaufdatum. Weil er über `gh` angelegt wird, lebt er allerdings so lange wie die
+GitHub-CLI-Autorisierung des Nutzers (siehe Konsequenzen).
 
 **3. Lokale Iteration über `[patch]` in einer Cargo-Konfigurationsdatei außerhalb beider Repos.**
 `<Arbeitsordner>\.cargo\config.toml` (nicht versioniert):
@@ -68,7 +69,8 @@ grimoire = { path = "grimoire/crates/grimoire" }
 Konfigurationsdateien beziehen sich auf das Verzeichnis, **das den `.cargo`-Ordner enthält** — hier
 `<Arbeitsordner>\`. Deshalb lautet der Pfad `grimoire/crates/grimoire` und nicht
 `../grimoire/crates/grimoire` (das zeigte auf `<Arbeitsordner>\..\grimoire`). Beides wurde am
-2026-09-14 mit Cargo 1.98.1 in einem Wegwerf-Workspace nachgeprüft.
+2026-09-14 mit Cargo 1.98.1 in einem Wegwerf-Workspace nachgeprüft. Der `[patch]`-Block ist nur
+während gemeinsamer Arbeit an Engine und Spiel aktiv und sonst auskommentiert (siehe Konsequenzen).
 
 ## Konsequenzen
 
@@ -79,6 +81,6 @@ Konfigurationsdateien beziehen sich auf das Verzeichnis, **das den `.cargo`-Ordn
 - (−) Cargo löst bei git-Dependencies keine SemVer-Bereiche auf; jedes Upgrade ist Handarbeit (gewollt).
 - (−) Auch mit aktivem `[patch]` muss Cargo die Original-Quelle erreichen, solange sie nicht im Cache liegt (nachgeprüft: `--offline` scheitert). Lokal braucht es daher Git-Zugangsdaten für das private Repo (`gh auth setup-git` plus `net.git-fetch-with-cli = true`).
 - (−) Ein aktiver Patch schreibt eine Pfad-Quelle in `Cargo.lock`. Dieses Lockfile darf nicht committet werden; die CI fällt dank `--locked` darauf auf.
-- (−) Der Patch in `<Arbeitsordner>\.cargo\config.toml` gilt für jeden Cargo-Aufruf unterhalb von `<Arbeitsordner>\`, also auch im Engine-Repo und in Worktrees. Dort meldet Cargo harmlos „patch was not used in the crate graph".
+- (−) Der Patch in `<Arbeitsordner>\.cargo\config.toml` gilt für jeden Cargo-Aufruf unterhalb von `<Arbeitsordner>\`, also auch im Engine-Repo und in Worktrees. Wo er ungenutzt ist, trägt Cargo `[[patch.unused]]` in `Cargo.lock` ein; jeder `--locked`-Aufruf (alle Pflichtprüfungen beider Repos) scheitert dann, ohne `--locked` verändert sich das Lockfile (nachgeprüft mit Cargo 1.98.1). Auch im Spiel scheitert `--locked`, solange der Patch greift. Deshalb ist der Patch ein bewusst ein- und wieder auszukommentierender Schalter und kein Dauerzustand.
 - (−) Von `gh` angelegte Deploy-Keys hängen am Token der GitHub CLI: Wird diese Autorisierung widerrufen, entfernt GitHub den Key. Dann einmal das Setup-Skript erneut ausführen.
 - (−) SSH über `webfactory/ssh-agent` auf Windows-Runnern ist laut Action-Doku noch wenig erprobt; der erste echte CI-Lauf mit Engine-Dependency ist die Verifikation.

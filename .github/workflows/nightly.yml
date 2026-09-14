@@ -1,5 +1,5 @@
 # Nightly game builds from main: release binaries for three operating systems as 7-day artifacts.
-# Scheduled runs are skipped when main had no commits in the last 24 hours.
+# Scheduled runs are skipped when main did not change (push or merge) in the last 24 hours.
 # Nightly Windows binaries are unsigned; only tagged releases are signed (locally, see CONTRIBUTING.md).
 name: Nightly
 
@@ -35,32 +35,51 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Check age of the newest commit
+      # Decides on when main last MOVED (pushes and merges from the repository activity API), not
+      # on commit dates: a commit made days ago and pushed today still counts as a change.
+      - name: Did main change in the last 24 hours?
         id: check
         env:
           EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          since=""
           if [ "$EVENT_NAME" != "schedule" ]; then
-            echo "Manueller Start: Nightly laeuft unabhaengig vom Commit-Alter."
-            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Manueller Start: Nightly laeuft unabhaengig von Aenderungen."
           else
-            last_commit=$(git log -1 --format=%ct)
-            age=$(( $(date +%s) - last_commit ))
-            if [ "$age" -lt 86400 ]; then
-              echo "run=true" >> "$GITHUB_OUTPUT"
+            # "<count> <sha of main before the oldest change in the last 24 hours>"
+            if result=$(gh api "repos/${GITHUB_REPOSITORY}/activity?ref=refs/heads/main&time_period=day&per_page=100" \
+                  --jq '[.[] | select(.activity_type != "branch_deletion")] | "\(length) \(last.before // "")"') \
+               && [[ "$result" =~ ^[0-9]+\ [0-9a-f]*$ ]]; then
+              count="${result%% *}"
+              since="${result#* }"
+              echo "Aenderungen an main in den letzten 24 Stunden (Aktivitaets-API): ${count}"
             else
-              echo "::notice title=Nightly uebersprungen::Keine Commits auf main in den letzten 24 Stunden."
+              # Fallback: committer date of HEAD (misses commits that were pushed long after creation).
+              echo "::warning title=Aktivitaets-API nicht verfuegbar::Entscheidung ueber das Committer-Datum von HEAD."
+              age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+              count=$(( age < 86400 ? 1 : 0 ))
+            fi
+            if [ "$count" -eq 0 ]; then
+              echo "::notice title=Nightly uebersprungen::Keine Aenderungen an main in den letzten 24 Stunden."
               echo "run=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
           fi
-          # Short changelog since the previous nightly (PRD-0017 FR-06).
+          echo "run=true" >> "$GITHUB_OUTPUT"
+          # Short changelog (PRD-0017 FR-06): everything main gained in the last 24 hours.
           {
             echo "## Nightly $(date -u +%Y-%m-%d) ($(git rev-parse --short HEAD))"
             echo
-            echo "Commits der letzten 24 Stunden:"
-            echo
-            git log --since="24 hours ago" --no-merges --format='- %s (%h)' | grep . || echo "- (keine)"
+            if [ -n "$since" ] && [[ ! "$since" =~ ^0+$ ]] && git cat-file -e "${since}^{commit}" 2>/dev/null; then
+              echo "Neu auf main seit ${since::8} (Stand vor 24 Stunden):"
+              echo
+              git log --no-merges --format='- %s (%h)' "${since}..HEAD" | grep . || echo "- (keine)"
+            else
+              echo "Commits der letzten 24 Stunden (nach Commit-Datum):"
+              echo
+              git log --since="24 hours ago" --no-merges --format='- %s (%h)' | grep . || echo "- (keine)"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   build:
@@ -89,7 +108,7 @@ jobs:
       - name: Install pinned toolchain (rust-toolchain.toml)
         if: steps.engine.outputs.cargo == 'true'
         run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.engine.outputs.cargo == 'true'
       - name: Build fiends-n-patrons (release)
         if: steps.engine.outputs.cargo == 'true'

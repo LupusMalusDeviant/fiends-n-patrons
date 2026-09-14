@@ -63,7 +63,9 @@ cargo test --workspace --locked
 cargo build --workspace --locked
 ```
 
-Vor dem Commit zusätzlich prüfen, dass `Cargo.lock` **keine** Pfad-Quelle für `grimoire` enthält
+Die Pflichtprüfungen laufen nur mit **auskommentiertem** `[patch]` in `<Arbeitsordner>\.cargo\config.toml`;
+ein aktiver Patch lässt jeden `--locked`-Aufruf scheitern. Vor dem Commit zusätzlich prüfen, dass
+`Cargo.lock` weder eine Pfad-Quelle für `grimoire` noch einen `[[patch.unused]]`-Eintrag enthält
 (siehe „Lokale Engine-Entwicklung“).
 
 ## CI im Überblick
@@ -71,13 +73,15 @@ Vor dem Commit zusätzlich prüfen, dass `Cargo.lock` **keine** Pfad-Quelle für
 | Workflow | Auslöser | Inhalt |
 |----------|----------|--------|
 | `ci.yml` | Push auf `main`, Pull Request, manuell | `fmt`; `test` auf Windows/Linux/macOS mit clippy, Tests und Build |
-| `nightly.yml` | täglich 02:47 UTC, manuell | Release-Build von `fiends-n-patrons` für drei Systeme als Artefakt (7 Tage), Kurz-Changelog im Job-Summary; geplante Läufe entfallen, wenn `main` 24 h keinen Commit hatte |
+| `nightly.yml` | täglich 02:47 UTC, manuell | Release-Build von `fiends-n-patrons` für drei Systeme als Artefakt (7 Tage), Kurz-Changelog im Job-Summary; geplante Läufe entfallen, wenn `main` 24 h nicht bewegt wurde (Push oder Merge laut Aktivitäts-API, nicht Commit-Datum) |
 | `release.yml` | Tag `vX.Y.Z` | Versionsprüfung, Release-Builds für drei Systeme, **Entwurf** eines GitHub-Release mit git-cliff-Notes und Binaries |
 
 - Commits, die nur Markdown oder `docs/` ändern, lösen `ci.yml` nicht aus. **Achtung Branch-Schutz:**
   Ein per Pfadfilter übersprungener Workflow meldet keinen Status; reine Doku-PRs bleiben bei
   Pflicht-Checks auf „Expected“ stehen und brauchen `gh workflow run ci.yml --ref <branch>` oder
   einen Admin-Merge.
+- Ein neuer Push auf denselben Pull Request bricht dessen laufende CI ab. Läufe auf `main` werden
+  **nie** abgebrochen; jeder `main`-Commit bekommt ein Ergebnis.
 - Nightly-Binaries für Windows sind **unsigniert**; signiert werden nur Releases.
 - **Kosten:** In privaten Repos zählen Linux-Minuten einfach, Windows doppelt, macOS zehnfach.
 
@@ -181,9 +185,13 @@ Engine und Spiel liegen nebeneinander:
 [net]
 git-fetch-with-cli = true
 
-[patch."https://github.com/LupusMalusDeviant/grimoire"]
-grimoire = { path = "grimoire/crates/grimoire" }
+# Nur während gemeinsamer Arbeit an Engine und Spiel einkommentieren (siehe Stolperfallen).
+# [patch."https://github.com/LupusMalusDeviant/grimoire"]
+# grimoire = { path = "grimoire/crates/grimoire" }
 ```
+
+`[net]` darf dauerhaft aktiv bleiben. Der `[patch]`-Block ist ein **Schalter für die Iteration**:
+einkommentieren, Engine und Spiel gemeinsam ändern, danach wieder auskommentieren.
 
 Warum das so funktioniert (Cargo-Referenz, Kapitel „Configuration“ und „Overriding Dependencies“):
 
@@ -203,12 +211,19 @@ Prüfen, ob der Patch greift: `cargo tree -i grimoire` zeigt dann den lokalen Pf
 
 Stolperfallen:
 
-- **`Cargo.lock` mit aktivem Patch nie committen.** Der Patch schreibt eine Pfad-Quelle ins Lockfile;
-  die CI bricht dank `--locked` ab. Vor dem Commit Patch auskommentieren und
-  `cargo update -p grimoire` ausführen (oder die Lockfile-Änderung mit `git restore Cargo.lock`
-  verwerfen).
-- Der Patch gilt für **jeden** Cargo-Aufruf unter `<Arbeitsordner>\`, auch im Engine-Repo und in Worktrees.
-  Dort meldet Cargo harmlos „Patch `grimoire` was not used in the crate graph“.
+- **Ein aktiver Patch bricht `--locked` überall unter `<Arbeitsordner>\`.** Er gilt für jeden Cargo-Aufruf
+  unterhalb von `<Arbeitsordner>\`, also auch im Engine-Repo, in allen Worktrees unter `<Arbeitsordner>\_wt\` und im
+  Spiel, solange es die Engine noch nicht referenziert. Wo er ungenutzt ist, trägt Cargo ihn als
+  `[[patch.unused]]` in `Cargo.lock` ein. Mit `--locked` endet jeder Aufruf mit „cannot update the
+  lock file … because --locked was passed“, ohne `--locked` verändert sich das versionierte
+  Lockfile (am 2026-09-14 mit Cargo 1.98.1 in einem Wegwerf-Workspace nachgeprüft).
+- **Auch im Spiel scheitern die Pflichtprüfungen**, solange der Patch greift: Er ersetzt die Quelle
+  von `grimoire` im Lockfile. Während der Iteration daher ohne `--locked` bauen und testen; die
+  Pflichtprüfungen laufen erst nach dem Auskommentieren.
+- **`Cargo.lock` mit aktivem Patch nie committen**, weder im Spiel (Pfad-Quelle) noch in der Engine
+  (`[[patch.unused]]`); die CI bricht dank `--locked` ab. Vor dem Commit Patch auskommentieren und die
+  Lockfile-Änderung mit `git restore Cargo.lock` verwerfen (im Spiel alternativ
+  `cargo update -p grimoire`).
 - Braucht das Spiel eine Engine-Änderung, gilt: Engine-PR mergen, Engine-Release taggen, dann im Spiel
   den Tag heben. Ein Spiel-Commit, der nur mit lokalem Patch baut, ist nicht fertig.
 

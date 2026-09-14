@@ -44,10 +44,19 @@ runs:
 
         # git grep exits 1 when nothing matches; capture it instead of letting -e abort the step.
         status=0
-        git grep -n -I -i -E -e 'github\.com[:/]LupusMalusDeviant/grimoire' -- ':(glob)**/Cargo.toml' || status=$?
+        # Case-sensitive on purpose: the SSH rewrite below (url.insteadOf) is an exact prefix match.
+        git grep -n -I -E -e 'github\.com[:/]LupusMalusDeviant/grimoire' -- ':(glob)**/Cargo.toml' || status=$?
         case "$status" in
           0) referenced=true ;;
-          1) referenced=false ;;
+          1)
+            referenced=false
+            # A differently cased URL would be detected but never rewritten, and the fetch would fail
+            # with an obscure authentication error. Stop with a clear message instead.
+            if git grep -n -I -i -E -e 'github\.com[:/]LupusMalusDeviant/grimoire' -- ':(glob)**/Cargo.toml'; then
+              echo "::error title=Engine-URL falsch geschrieben::Ein Cargo.toml nennt die Engine mit abweichender Gross-/Kleinschreibung. Exakt https://github.com/LupusMalusDeviant/grimoire verwenden, sonst greift die SSH-Umlenkung nicht."
+              exit 1
+            fi
+            ;;
           *) echo "::error title=Engine-Erkennung defekt::git grep ist mit Status ${status} fehlgeschlagen."; exit "$status" ;;
         esac
 
@@ -87,7 +96,7 @@ runs:
 
     - name: Load deploy key into ssh-agent
       if: steps.detect.outputs.use-key == 'true'
-      uses: webfactory/ssh-agent@v0.10.0
+      uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
       with:
         ssh-private-key: ${{ inputs.deploy-key }}
         log-public-key: false

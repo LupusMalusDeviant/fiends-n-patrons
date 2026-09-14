@@ -108,7 +108,26 @@ function Invoke-Native {
 
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $startInfo
-    [void]$process.Start()
+    # Windows PowerShell 5.1 (.NET Framework) builds the stdin writer from Console.InputEncoding
+    # and writes that encoding's preamble during Start(). On a UTF-8 console (code page 65001) that
+    # is a BOM in front of the private key, which ssh-add rejects. Writing to BaseStream does not
+    # help (the preamble is already out), so a BOM-free UTF-8 encoding is set just for Start().
+    $previousInputEncoding = $null
+    try {
+        try {
+            $previousInputEncoding = [Console]::InputEncoding
+            [Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
+        }
+        catch {
+            $previousInputEncoding = $null
+        }
+        [void]$process.Start()
+    }
+    finally {
+        if ($null -ne $previousInputEncoding) {
+            try { [Console]::InputEncoding = $previousInputEncoding } catch { }
+        }
+    }
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()
     $stderrTask = $process.StandardError.ReadToEndAsync()
     if ($StandardInput.Length -gt 0) {

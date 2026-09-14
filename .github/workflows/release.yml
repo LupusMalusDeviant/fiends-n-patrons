@@ -89,7 +89,7 @@ jobs:
           require: "true"
       - name: Install pinned toolchain (rust-toolchain.toml)
         run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: false
       - name: Build fiends-n-patrons (release)
@@ -129,8 +129,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # The job token has contents: write; keep it out of .git/config, where the third-party
+          # git-cliff action could read it. gh release create gets it through GH_TOKEN only.
+          persist-credentials: false
       - name: Generate release notes (git-cliff)
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
         with:
           config: cliff.toml
           args: --current --strip header
@@ -148,8 +151,10 @@ jobs:
             `CN=Lupus Malus Deviant` signiert und in diesem Release ersetzt. Die CI signiert nicht, weil die
             `.pfx` den Entwicklungsrechner nie verlässt. Solange dieses Release ein Entwurf ist, ist die
             angehängte Exe noch unsigniert.
-          - **macOS:** nicht notarisiert (privater Vertrieb ohne Developer-Account). Beim ersten Start per
-            Rechtsklick > Öffnen bestätigen.
+          - **macOS:** nicht notarisiert (privater Vertrieb ohne Developer-Account). Seit macOS 15 genügt
+            Rechtsklick > Öffnen nicht mehr: nach dem ersten blockierten Start unter Systemeinstellungen >
+            Datenschutz & Sicherheit „Dennoch öffnen“ wählen, oder vorab im Terminal
+            `xattr -d com.apple.quarantine ./fiends-n-patrons` ausführen.
           - **Linux/macOS:** Archiv entpacken, `./fiends-n-patrons` starten.
           EOF
       - name: Download release binaries

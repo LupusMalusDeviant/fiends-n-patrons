@@ -15,9 +15,12 @@ on:
       - "docs/**"
   workflow_dispatch:
 
+# Superseded pull request runs are cancelled. Runs on main are never cancelled: every main commit
+# gets a verdict, gh run watch --exit-status does not end as "cancelled", and the main-only cache
+# save is not lost.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -62,7 +65,7 @@ jobs:
       - name: Install pinned toolchain (rust-toolchain.toml)
         if: steps.engine.outputs.cargo == 'true'
         run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.engine.outputs.cargo == 'true'
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
