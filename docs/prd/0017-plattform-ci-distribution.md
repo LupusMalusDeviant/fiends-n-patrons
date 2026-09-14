@@ -53,7 +53,7 @@ graph TD
 | FR-01 | Beide Repos: GitHub Actions mit Matrix (windows-latest, macos-latest, ubuntu-latest): Format-Check, Clippy (deny warnings), Unit-/Integrationstests. | Must |
 | FR-02 | Spiel-CI zusätzlich: Asset-Compiler-Gate (alle Quell-Assets validieren + kompilieren), Headless-Sim-Tests, Golden-Master-Replay-Vergleich. | Must |
 | FR-03 | Benchmark-Jobs (mind. Linux): Bullet-Stress, Boss-Worst-Case, Kollisions-Benchmarks — Ergebnisse als Trend gespeichert; Regression > 10% bricht den Lauf. | Must |
-| FR-04 | Engine-Releases: Tag ⇒ Changelog-Generierung (Conventional Commits), GitHub-Release; Spiel referenziert Engine über git-Tag-Pin in Cargo. | Must |
+| FR-04 | Engine-Releases: Tag ⇒ Changelog-Generierung (Conventional Commits), GitHub-Release; Spiel referenziert Engine über git-Tag-Pin in Cargo ([ADR-0009](../adr/0009-engine-pin-ueber-git-tag.md)). | Must |
 | FR-05 | Spiel-Releases: Tag ⇒ Build aller 3 Desktop-Plattformen, Artefakt-Upload; Windows-Exe wird mit Zertifikat `CN=Lupus Malus Deviant` signiert (Signier-Skript des PO im Workflow bzw. lokaler Release-Schritt). | Must |
 | FR-06 | Nightly-Builds: automatischer Dev-Build von main (3 Plattformen) mit Kurz-Changelog seit letzter Nightly. | Must |
 | FR-07 | Versionsschema: SemVer beide Repos; Spiel-Version im Titel-/Todesscreen sichtbar; Build-Metadaten (git-Hash, Engine-Pin) im Log und in Save-/Replay-Headern (PRD-0015 FR-04). | Must |
@@ -86,7 +86,7 @@ graph TD
 
 ## Offene Fragen
 
-- **OF-17.1:** Engine-Pin technisch: git-Tag-Dependency vs. eigene private Registry vs. git-Submodule? Empfehlung: Cargo git-Dependency mit Tag. ADR in P0.
+- ~~**OF-17.1:** Engine-Pin technisch: git-Tag-Dependency vs. eigene private Registry vs. git-Submodule?~~ **Entschieden** durch [ADR-0009](../adr/0009-engine-pin-ueber-git-tag.md) (akzeptiert, 2026-09-14): Cargo-git-Dependency mit Tag, Read-only-Deploy-Key für die CI, lokaler `[patch]` für die Engine-Iteration.
 - **OF-17.2:** Linux-Paketformat (AppImage vs. tar.gz vs. beides)? Entscheidung vor ersten Nightlies (P3).
 - **OF-17.3:** Benchmark-Stabilität auf geteilten CI-Runnern (Rauschen) — dedizierte Schwellen/Median-Strategie oder Self-Hosted-Runner? Spike P1.
 - **OF-17.4:** Wo werden private Releases gehostet (privates GitHub-Release + Invite vs. eigener Server auf eigener Server-Infrastruktur)? PO-Entscheidung P3.

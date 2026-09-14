@@ -21,10 +21,14 @@ der Nachweis ist Teil von M0, nicht vorausgesetzt. `grimoire_collide`, `grimoire
 `grimoire_assets` und `grimoire_debug` sind Platzhalter; std-Transzendentalfunktionen weichen zwischen
 den Plattformen ab, deshalb rechnet die Simulationsseite ausschließlich über `dmath` (Engine-ADR-0004).
 
-Stand 2026-09-14 ist P0 noch nicht abgeschlossen: Engine-`main` liegt 15 lokale Commits vor `origin`
-(die letzten P0-Korrekturen sind ungepusht), der Engine-Tag `v0.1.0` existiert noch nicht,
-Engine-ADR-0003 und -0004 sind „vorgeschlagen“ (Annahme erst nach grünem 3-OS-Lauf), und das
-Spiel-Manifest enthält die Engine-Abhängigkeit noch nicht (P0-WP6.3 offen). All das ist
+Stand 2026-09-14 (aktualisiert nach der Umsetzung von P0-WP6.3) ist P0 noch nicht abgeschlossen.
+Engine-`main` ist gepusht, der Engine-Tag `v0.1.0` existiert remote (Commit `93bed40`), und
+Engine-ADR-0004 ist nach einem grünen 3-OS-Lauf akzeptiert. Engine-ADR-0003 ist weiter
+„vorgeschlagen“. Das Spiel-Manifest pinnt `v0.1.0` über einen Git-Tag (ADR-0009), dieser Stand ist
+aber noch ungepusht. Der Nachweis in der Spiel-CI fehlt: Ohne Secret `GRIMOIRE_DEPLOY_KEY` und
+Deploy-Key auf `grimoire` hat noch kein Spiel-CI-Lauf Clippy, Tests und Build ausgeführt, und der
+goldene Endhash des Spiels ist nur lokal unter Windows erfasst. P0-WP6.3 gilt erst mit einem
+solchen grünen 3-OS-Lauf als erledigt. All das ist
 Eintrittsbedingung dieses Plans (M0).
 
 Definition of Done aus PRD-0000 §5: *Toon-Renderer + Punktlichter + Kamera; 10k-Bullet-Stresstest

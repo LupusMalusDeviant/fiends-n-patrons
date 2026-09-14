@@ -44,7 +44,9 @@ grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.1.
 Das Manifest nennt die HTTPS-URL (neutral gegenüber dem Transport). `Cargo.lock` wird committet;
 CI baut mit `--locked`. Engine-Tags werden nach dem Release nie verschoben oder gelöscht. Das
 Spiel-Repo versioniert eine `.cargo/config.toml` mit `[net] git-fetch-with-cli = true`, damit Cargo
-lokal wie in CI über die git-CLI lädt; einen `[patch]` enthält diese Datei nie.
+lokal wie in CI über die git-CLI lädt; einen `[patch]` enthält diese Datei nie. *(Die beiden Sätze
+zur `.cargo/config.toml` wurden bei der Umsetzung am 2026-09-14 ergänzt; ursprünglich war
+`git-fetch-with-cli` als lokale Voraussetzung gedacht, siehe „Umsetzung“.)*
 
 **2. CI-Zugriff über einen Read-only-Deploy-Key.** Der öffentliche Schlüssel liegt als Deploy-Key
 **ohne Schreibrecht** auf `grimoire`, der private als Secret `GRIMOIRE_DEPLOY_KEY` in
@@ -53,7 +55,8 @@ die Engine referenziert, lädt den Schlüssel per `webfactory/ssh-agent`, lenkt
 `https://github.com/LupusMalusDeviant/` per `git config --global url.<ssh>.insteadOf` auf
 `git@github.com:LupusMalusDeviant/` um und setzt `CARGO_NET_GIT_FETCH_WITH_CLI=true`. Fehlt das
 Secret, warnen CI und Nightly sichtbar und überspringen die Cargo-Schritte; der Release-Workflow
-bricht ab. Einrichtung und Rotation übernimmt `scripts/setup-ci-deploy-key.ps1`. Ein Deploy-Key ist
+bricht ab. *(Bei der Umsetzung am 2026-09-14 verschärft: Seit das Spiel die Engine referenziert,
+brechen auch CI und Nightly ab; nur Pull Requests ohne Secrets warnen noch, siehe „Umsetzung“.)* Einrichtung und Rotation übernimmt `scripts/setup-ci-deploy-key.ps1`. Ein Deploy-Key ist
 einem persönlichen Token vorgezogen: Er gilt für genau ein Repo, nur lesend, und hat kein
 Ablaufdatum. Weil er über `gh` angelegt wird, lebt er allerdings so lange wie die
 GitHub-CLI-Autorisierung des Nutzers (siehe Konsequenzen).
@@ -81,7 +84,7 @@ während gemeinsamer Arbeit an Engine und Spiel aktiv und sonst auskommentiert (
 - (+) Minimale Rechte in CI: Der Schlüssel kann die Engine nur lesen und kein anderes Repo erreichen.
 - (+) Lokale Engine-Iteration ohne versionierte Änderung; gemergt wird weiterhin nur gegen Tags (ADR-0002).
 - (−) Cargo löst bei git-Dependencies keine SemVer-Bereiche auf; jedes Upgrade ist Handarbeit (gewollt).
-- (−) Auch mit aktivem `[patch]` muss Cargo die Original-Quelle erreichen, solange sie nicht im Cache liegt (nachgeprüft: `--offline` scheitert). Lokal braucht es daher Git-Zugangsdaten für das private Repo: `gh auth setup-git`. Die git-CLI ist dafür nicht zwingend, denn auch Cargos eingebauter Git-Client nutzt diesen Credential-Helper (siehe „Umsetzung“). `git-fetch-with-cli` steht trotzdem in der versionierten `.cargo/config.toml`, damit lokal und in CI derselbe Weg greift.
+- (−) Auch mit aktivem `[patch]` muss Cargo die Original-Quelle erreichen, solange sie nicht im Cache liegt (nachgeprüft: `--offline` scheitert). Lokal braucht es daher Git-Zugangsdaten für das private Repo: `gh auth setup-git`. *(Ursprünglich stand hier „`gh auth setup-git` plus `net.git-fetch-with-cli = true`“; bei der Umsetzung am 2026-09-14 korrigiert:)* Die git-CLI ist dafür nicht zwingend, denn auch Cargos eingebauter Git-Client nutzt diesen Credential-Helper (siehe „Umsetzung“). `git-fetch-with-cli` steht trotzdem in der versionierten `.cargo/config.toml`, damit lokal und in CI derselbe Weg greift.
 - (−) Ein aktiver Patch schreibt eine Pfad-Quelle in `Cargo.lock`. Dieses Lockfile darf nicht committet werden; die CI fällt dank `--locked` darauf auf.
 - (−) Der Patch in `<Arbeitsordner>\.cargo\config.toml` gilt für jeden Cargo-Aufruf unterhalb von `<Arbeitsordner>\`, also auch im Engine-Repo und in Worktrees. Wo er ungenutzt ist, trägt Cargo `[[patch.unused]]` in `Cargo.lock` ein; jeder `--locked`-Aufruf (alle Pflichtprüfungen beider Repos) scheitert dann, ohne `--locked` verändert sich das Lockfile (nachgeprüft mit Cargo 1.98.1). Auch im Spiel scheitert `--locked`, solange der Patch greift. Deshalb ist der Patch ein bewusst ein- und wieder auszukommentierender Schalter und kein Dauerzustand.
 - (−) Von `gh` angelegte Deploy-Keys hängen am Token der GitHub CLI: Wird diese Autorisierung widerrufen, entfernt GitHub den Key. Dann einmal das Setup-Skript erneut ausführen.
@@ -102,14 +105,25 @@ Am 2026-09-14 in P0/WP6.3 umgesetzt, geprüft mit Cargo 1.98.1 unter Windows:
   sondern löst deren Abhängigkeiten neu auf („latest compatible“). Beim ersten Pin wurde das
   Spiel-Lockfile deshalb aus dem `Cargo.lock` des Engine-Tags vorbelegt. Alle Drittanbieter-Crates
   (wgpu, winit usw.) haben damit exakt die Versionen, die die Engine-CI für `v0.1.0` geprüft hat.
-- **Korrektur zur Annahme oben:** Ein Probe-Workspace mit leerem `CARGO_HOME` holte das private Repo
-  **auch ohne** `git-fetch-with-cli`, also über Cargos eingebauten Git-Client (libgit2). Der nutzt
-  den von `gh auth setup-git` eingetragenen Credential-Helper ebenfalls. `git-fetch-with-cli` ist
-  also keine Voraussetzung. Es bleibt aus Gründen der Einheitlichkeit mit der CI gesetzt, und zwar
-  im Spiel-Repo statt in `<Arbeitsordner>\.cargo\config.toml`, sodass ein frischer Klon ohne weitere Datei
-  auskommt.
+- **Korrektur der Annahme „lokal braucht Cargo `git-fetch-with-cli`“:** Die akzeptierte Fassung
+  nannte unter „Konsequenzen“ `gh auth setup-git` **plus** `net.git-fetch-with-cli = true` als
+  lokale Voraussetzung und sah die Einstellung damit neben dem `[patch]` in
+  `<Arbeitsordner>\.cargo\config.toml`. Ein Probe-Workspace mit leerem `CARGO_HOME` holte das private Repo
+  jedoch **auch ohne** `git-fetch-with-cli`, also über Cargos eingebauten Git-Client (libgit2). Der
+  nutzt den von `gh auth setup-git` eingetragenen Credential-Helper ebenfalls. `git-fetch-with-cli`
+  ist also keine Voraussetzung. Es bleibt aus Gründen der Einheitlichkeit mit der CI gesetzt, und
+  zwar in einer versionierten `.cargo/config.toml` im Spiel-Repo statt in
+  `<Arbeitsordner>\.cargo\config.toml`, sodass ein frischer Klon ohne weitere Datei auskommt. Die
+  betroffenen Stellen in „Entscheidung“ und „Konsequenzen“ sind als Korrektur markiert.
 - **CI:** `.github/actions/engine-access` erkennt die Referenz im Wurzel-`Cargo.toml`. Zum Zeitpunkt
   der Umsetzung waren weder das Secret `GRIMOIRE_DEPLOY_KEY` noch ein Deploy-Key auf `grimoire`
-  eingerichtet. Bis `scripts/setup-ci-deploy-key.ps1` gelaufen ist, überspringen CI und Nightly die
-  Cargo-Schritte mit Warnung, und der Release-Workflow bricht ab. Die Verifikation des SSH-Wegs auf
-  allen drei Runnern steht damit noch aus.
+  eingerichtet. Die Verifikation des SSH-Wegs auf allen drei Runnern steht damit noch aus.
+- **Kein weicher Modus mehr (Abweichung von „Entscheidung“, Teil 2):** Das Überspringen der
+  Cargo-Schritte mit Warnung war für die Zeit gedacht, in der das Spiel die Engine noch nicht
+  referenzierte. Seit WP6.3 referenziert jede Revision die Engine, ein fehlender Schlüssel ist also
+  immer eine kaputte Einrichtung. Er bliebe sonst als dauerhaft grüner Leerlauf unbemerkt, etwa
+  nach einem widerrufenen `gh`-Zugang, der den Deploy-Key entfernt. `ci.yml` übergibt deshalb
+  `require` für Push, manuelle Läufe und Pull Requests aus dem eigenen Repo, `nightly.yml` immer.
+  Nur Pull Requests ohne Secrets (Forks, Dependabot) warnen und überspringen weiterhin. Folge: Ohne
+  `scripts/setup-ci-deploy-key.ps1` wird schon der erste Push rot. Das Skript muss also vorher
+  laufen.

@@ -59,7 +59,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ```bash
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
+cargo test --workspace --locked --no-fail-fast
 cargo build --workspace --locked
 ```
 
@@ -72,9 +72,9 @@ ein aktiver Patch lässt jeden `--locked`-Aufruf scheitern. Vor dem Commit zusä
 
 | Workflow | Auslöser | Inhalt |
 |----------|----------|--------|
-| `ci.yml` | Push auf `main`, Pull Request, manuell | `fmt`; `test` auf Windows/Linux/macOS mit clippy, Tests und Build |
-| `nightly.yml` | täglich 02:47 UTC, manuell | Release-Build von `fiends-n-patrons` für drei Systeme als Artefakt (7 Tage), Kurz-Changelog im Job-Summary; geplante Läufe entfallen, wenn `main` 24 h nicht bewegt wurde (Push oder Merge laut Aktivitäts-API, nicht Commit-Datum) |
-| `release.yml` | Tag `vX.Y.Z` | Versionsprüfung, Release-Builds für drei Systeme, **Entwurf** eines GitHub-Release mit git-cliff-Notes und Binaries |
+| `ci.yml` | Push auf `main`, Pull Request, manuell | `fmt`; `test` auf Windows/Linux/macOS mit clippy, Tests (`--no-fail-fast`) und Build; unter Linux zusätzlich der Abgleich der `clippy.toml`-Kopien mit dem gepinnten Engine-Tag |
+| `nightly.yml` | täglich 02:47 UTC, manuell | Determinismus-Test im Release-Profil, dann Release-Build von `fiends-n-patrons` für drei Systeme als Artefakt (7 Tage), Kurz-Changelog im Job-Summary; geplante Läufe entfallen, wenn `main` 24 h nicht bewegt wurde (Push oder Merge laut Aktivitäts-API, nicht Commit-Datum) |
+| `release.yml` | Tag `vX.Y.Z` | Versionsprüfung, Determinismus-Test im Release-Profil und Release-Builds für drei Systeme, **Entwurf** eines GitHub-Release mit git-cliff-Notes und Binaries |
 
 - Commits, die nur Markdown oder `docs/` ändern, lösen `ci.yml` nicht aus. **Achtung Branch-Schutz:**
   Ein per Pfadfilter übersprungener Workflow meldet keinen Status; reine Doku-PRs bleiben bei
@@ -98,10 +98,13 @@ Alle Cargo-Jobs laufen über die lokale Action `.github/actions/engine-access`:
 |------|-----------|
 | Kein `Cargo.toml` referenziert `github.com/LupusMalusDeviant/grimoire` | Cargo-Schritte laufen normal. |
 | Referenz vorhanden, Secret `GRIMOIRE_DEPLOY_KEY` gesetzt | Schlüssel wird per `webfactory/ssh-agent` geladen, `https://github.com/LupusMalusDeviant/` per `url.insteadOf` auf SSH umgelenkt, `CARGO_NET_GIT_FETCH_WITH_CLI=true`. |
-| Referenz vorhanden, Secret fehlt | CI und Nightly: **Warnung** und übersprungene Cargo-Schritte (Job bleibt grün, hat aber nichts geprüft). Release: Abbruch. |
+| Referenz vorhanden, Secret fehlt | **Abbruch** (`require`) in CI bei Push, manuellem Lauf und Pull Requests aus dem eigenen Repo, in Nightly und Release. Nur Pull Requests ohne Zugriff auf Secrets (Forks, Dependabot) bekommen eine **Warnung** und übersprungene Cargo-Schritte; so ein Lauf hat nichts geprüft. |
 
-**Ein gelber Warnhinweis „Engine-Zugriff fehlt“ ist kein grüner Lauf.** Einmalige Einrichtung (lokal,
-mit Admin-Rechten auf beiden Repos):
+Seit P0/WP6.3 referenziert jede `Cargo.toml`-Revision die Engine; ein fehlendes Secret ist also
+immer eine kaputte Einrichtung (etwa ein widerrufener `gh`-Zugang), kein Übergangszustand, und
+färbt den Lauf rot. **Ein gelber Warnhinweis „Engine-Zugriff fehlt“ ist kein grüner Lauf.** Die
+Einrichtung muss deshalb **vor dem ersten Push** mit Engine-Pin laufen, einmalig lokal und mit
+Admin-Rechten auf beiden Repos:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-ci-deploy-key.ps1
@@ -253,9 +256,29 @@ Stolperfallen:
    winit usw.) denen der Engine-CI entsprechen. Beim Upgrade die Versionen gegen
    `git show vX.Y.Z:Cargo.lock` im Engine-Repo vergleichen und Abweichungen mit
    `cargo update -p <crate> --precise <version>` angleichen.
-4. Lokale Pflichtprüfungen; bei gebrochenen Golden-Mastern gilt die Golden-Master-Regel.
-5. Commit `build(engine): bump grimoire to vX.Y.Z` mit `Cargo.toml` und `Cargo.lock`, pushen und den
-   CI-Lauf überwachen.
+4. Determinismus-Lints abgleichen (siehe „Determinismus-Lints“): Die `clippy.toml` der Fassade im
+   Ziel-Tag muss mit jeder Kopie im Spiel übereinstimmen.
+   ```bash
+   git -C ../grimoire show vX.Y.Z:crates/grimoire/clippy.toml > /tmp/facade-clippy.toml
+   for copy in crates/*/clippy.toml; do diff -u /tmp/facade-clippy.toml "$copy"; done
+   ```
+   Bei Abweichung die Datei aus dem Tag in jede Kopie übernehmen; sie gehört in den Upgrade-Commit.
+   Neue Einträge können bestehenden Spiel-Code rot machen, das ist gewollt.
+5. Lokale Pflichtprüfungen; bei gebrochenen Golden-Mastern gilt die Golden-Master-Regel.
+6. Commit `build(engine): bump grimoire to vX.Y.Z` mit `Cargo.toml`, `Cargo.lock` und gegebenenfalls
+   den `clippy.toml`-Kopien, pushen und den CI-Lauf überwachen.
+
+## Determinismus-Lints
+
+Der Engine-Vertrag (`grimoire/docs/architektur/crate-vertraege.md`, Abschnitt 3) verbietet
+Simulationscode Wanduhrzeit, ungeordnete Hash-Container, Threads und die Plattform-libm. Durchgesetzt
+wird das über `disallowed-types` und `disallowed-methods` in `clippy.toml`. Clippy liest diese Datei
+nur aus dem Verzeichnis des jeweiligen Crates, deshalb trägt **jedes Spiel-Crate mit
+Simulationscode** eine byte-identische Kopie von `crates/grimoire/clippy.toml` aus dem gepinnten
+Engine-Tag: heute `fnp_game` und `fnp_sim_harness`, später etwa `fnp_content`, sobald es Systeme
+oder Spawn-Logik enthält. Die Kopien werden nie von Hand geändert. Neue Verbote kommen über die
+Engine und ein Engine-Upgrade. Die CI (`ci.yml`, Linux) vergleicht jede Kopie mit der Datei im
+gepinnten Tag und bricht bei Abweichung ab.
 
 ## Release
 

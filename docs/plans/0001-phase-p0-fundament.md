@@ -19,7 +19,7 @@
 | WP3 | in Arbeit | Plattform-Schicht implementiert, im Review |
 | WP4 | in Arbeit | wgpu-Kontext und instanzierter Sprite-Renderer |
 | WP5 | in Arbeit | ECS, danach Simulation mit Golden-Hash-Determinismustest |
-| WP6 | in Arbeit | OF-2.1 als Float-Spike, OF-2.2 als Engine-ADR-0003, OF-17.1 als ADR-0009; Tag `v0.1.0` nach dem ersten grünen CI-Lauf |
+| WP6 | in Arbeit | OF-2.1 als Float-Spike, OF-2.2 als Engine-ADR-0003, OF-17.1 als ADR-0009 (akzeptiert). WP6.4: Engine-Tag `v0.1.0` existiert remote (Commit `93bed40`). WP6.3: Das Spiel pinnt `v0.1.0` lokal (Stand 2026-09-14 ungepusht). **Nicht erledigt**, bis ein Spiel-CI-Lauf auf Windows, Linux und macOS Clippy, Tests und Build tatsächlich ausgeführt hat. Dafür fehlen noch das Secret `GRIMOIRE_DEPLOY_KEY` und der Deploy-Key auf `grimoire` (`scripts/setup-ci-deploy-key.ps1`, PO). |
 
 **Abweichungen vom ursprünglichen Plan**
 
@@ -27,6 +27,8 @@
 - Beispiele liegen je Crate (`grimoire_platform/examples/window.rs`, `grimoire_render/examples/instancing.rs`, `grimoire/examples/sim_loop.rs`) statt nummeriert in einem Ordner.
 - Parallele Arbeitsstränge laufen in temporären Git-Worktrees unter `<Arbeitsordner>\_wt\` und werden nach Review in `main` zusammengeführt.
 - Die Umstellung des Spiels auf die Git-Tag-Abhängigkeit (WP6.3) setzt einen remote existierenden Engine-Tag voraus: Cargo lädt die Original-Quelle auch dann, wenn ein lokaler `[patch]` sie ersetzt.
+- Der Golden-Run des Spiels (`crates/fnp_sim_harness/tests/determinism.rs`) läuft über 3.600 Ticks (eine Minute der P0-Demo „Beschwörungskreis“), nicht über die 10.000 Ticks aus WP5.6 und den Erfolgskriterien. Das 10.000-Tick-Gate mit Doppellauf gehört zur Engine-Demo-Sim (WP5.6) und liegt im Engine-Repo. Der Spiel-Test prüft zusätzlich die Integration über die Fassade und bleibt kurz, weil er in jedem CI-Lauf auf drei Systemen läuft.
+- Die Spiel-CI bricht bei fehlendem Engine-Zugriff ab (außer bei Pull Requests ohne Secrets), statt die Cargo-Schritte mit Warnung zu überspringen (ADR-0009, „Umsetzung“). Der Determinismus-Test läuft zusätzlich im Release-Profil in Nightly und Release.
 
 ## Kontext / Motivation
 
