@@ -62,17 +62,23 @@ graph TD
         AST[grimoire_assets<br/>Packs, Hot-Reload]
         DBG[grimoire_debug<br/>IPC, Profiler]
         PLT[grimoire_platform<br/>Fenster, Input, FS, Zeit]
+        CORE[grimoire_core<br/>Stabiles Hashing, dmath]
     end
     GAME --> FAC
     FAC --> ECS & SIM & REN & AUD & UI & AST & DBG
     SIM --> ECS
     COL --> ECS
     SIG --> SIM
+    ECS & SIM & COL --> CORE
     REN --> GPU --> PLT
     AUD --> PLT
     AST --> PLT
     DBG --> PLT
 ```
+
+`grimoire_core` wurde beim Schnitt der P0-Verträge als abhängigkeitsfreie Blatt-Crate ergänzt
+(Engine-ADR-0005). Die verbindlichen Crate-Schnittstellen stehen in
+`grimoire/docs/architektur/crate-vertraege.md`, engine-interne Entscheidungen in `grimoire/docs/adr/`.
 
 **Datenfluss pro Frame (fixed sim / entkoppeltes Rendering):**
 

@@ -148,8 +148,9 @@ Zwei Repos. Das Spiel pinnt Engine-Versionen (SemVer-Tags).
 │   └── packs\                  ← kompilierte Asset-Packs (Build-Artefakt, gitignored)
 │
 └── grimoire\                   ← Engine-Repo (eigenständiges Produkt)
-    ├── docs\                   ← Engine-eigene Doku + eigene ADRs
+    ├── docs\                   ← Engine-ADRs + Crate-Verträge (docs/architektur/crate-vertraege.md)
     └── crates\
+        ├── grimoire_core\      ← Blatt-Crate: stabiles Hashing, deterministische Mathematik (Engine-ADR-0005)
         ├── grimoire_platform\  ← Traits + Impl: Fenster, Input-Rohdaten, FS, Zeit, Audio-Out
         ├── grimoire_gpu\       ← wgpu-Wrapper, Ressourcen, Frame-Graph
         ├── grimoire_render\    ← 2.5D-Renderer: Toon, Clustered Lights, Instancing, Post-FX
