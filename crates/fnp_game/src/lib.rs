@@ -22,7 +22,12 @@ use grimoire::prelude::*;
 /// Display title of the game.
 pub const GAME_TITLE: &str = "Fiends n Patrons";
 
-/// Simulation rate the demo is tuned for (the facade default).
+/// Simulation rate the demo is tuned for.
+///
+/// Every runner that drives [`FiendsGame`] in real time must pass this value to
+/// `AppBuilder::tick_rate` instead of relying on the facade default: the systems scale by [`DT`],
+/// so any other rate changes the game speed. Headless runs step a fixed number of ticks and do
+/// not depend on the rate.
 pub const TICK_RATE_HZ: u32 = 60;
 
 /// Seconds per tick; simulation code scales by this constant, never by measured time.
@@ -162,7 +167,10 @@ fn wrap_angle(angle: f32) -> f32 {
     if angle >= dmath::TAU {
         angle - dmath::TAU
     } else if angle < 0.0 {
-        angle + dmath::TAU
+        let wrapped = angle + dmath::TAU;
+        // A tiny negative angle (about -2.4e-7 to 0) rounds up to exactly TAU in f32; TAU is the
+        // same direction as 0 and outside the documented range.
+        if wrapped >= dmath::TAU { 0.0 } else { wrapped }
     } else {
         angle
     }
@@ -428,10 +436,60 @@ mod tests {
         assert!(world.resource::<RitualCircle>().is_some());
     }
 
+    /// Orbits of all motes in spawn order.
+    fn orbits(sim: &Simulation) -> Vec<Orbit> {
+        sim.world().query::<&Orbit>().copied().collect()
+    }
+
+    /// Change of an angle over one tick, taking a wrap across 0 or TAU into account.
+    fn angle_delta(before: f32, after: f32) -> f32 {
+        let delta = after - before;
+        if delta > dmath::PI {
+            delta - dmath::TAU
+        } else if delta < -dmath::PI {
+            delta + dmath::TAU
+        } else {
+            delta
+        }
+    }
+
+    fn assert_finite(value: Vec2, what: &str) {
+        assert!(
+            value.x.is_finite() && value.y.is_finite(),
+            "{what} is not finite: {value:?}"
+        );
+    }
+
     #[test]
     fn the_spawn_depends_only_on_the_seed() {
+        // Compares the spawned orbits, not state hashes: the hash contains the seed itself (and
+        // the SimSeed resource), so it differs between seeds even if the spawn ignored the seed.
+        assert_eq!(orbits(&built(7)), orbits(&built(7)));
+        assert_ne!(orbits(&built(7)), orbits(&built(8)));
         assert_eq!(built(7).state_hash(), built(7).state_hash());
-        assert_ne!(built(7).state_hash(), built(8).state_hash());
+    }
+
+    #[test]
+    fn wrap_angle_keeps_every_angle_in_zero_to_tau() {
+        // The f32 rounding the fix guards against.
+        assert_eq!(-1.0e-7_f32 + dmath::TAU, dmath::TAU);
+        assert_eq!(wrap_angle(-1.0e-7), 0.0);
+        assert_eq!(wrap_angle(-2.3e-7), 0.0);
+        assert_eq!(wrap_angle(-f32::MIN_POSITIVE), 0.0);
+        assert_eq!(wrap_angle(dmath::TAU), 0.0);
+        assert_eq!(wrap_angle(0.0), 0.0);
+        assert_eq!(wrap_angle(-0.5), -0.5 + dmath::TAU);
+        let over = dmath::TAU + 0.5;
+        assert_eq!(wrap_angle(over), over - dmath::TAU);
+        for angle in [
+            -1.0, -1.0e-3, -2.5e-7, -1.0e-7, -1.0e-30, 0.0, 1.0e-7, 3.0, 6.25, 6.3, 7.0,
+        ] {
+            let wrapped = wrap_angle(angle);
+            assert!(
+                (0.0..dmath::TAU).contains(&wrapped),
+                "wrap_angle({angle:e}) = {wrapped:e}"
+            );
+        }
     }
 
     #[test]
@@ -488,7 +546,7 @@ mod tests {
     }
 
     #[test]
-    fn the_swarm_orbits_near_the_circle_and_channeling_speeds_it_up() {
+    fn the_swarm_orbits_near_the_circle_and_channeling_is_recorded() {
         let mut calm = built(9);
         let mut channeled = built(9);
         for _ in 0..300 {
@@ -515,7 +573,55 @@ mod tests {
                 .expect("circle")
                 .channeling
         );
-        assert_ne!(calm.state_hash(), channeled.state_hash());
+        assert!(
+            !calm
+                .world()
+                .resource::<RitualCircle>()
+                .expect("circle")
+                .channeling
+        );
+    }
+
+    #[test]
+    fn channeling_multiplies_the_angular_advance_by_the_boost() {
+        // Two identical simulations reach the same state, then take one calm and one channeled
+        // tick; motes are matched by spawn order.
+        let mut calm = built(9);
+        let mut channeled = built(9);
+        for tick in 0..150_u64 {
+            let buttons = u32::from(tick % 40 < 10);
+            calm.step(input(RIGHT, 0, buttons));
+            channeled.step(input(RIGHT, 0, buttons));
+        }
+        let before = orbits(&calm);
+        assert_eq!(before, orbits(&channeled));
+
+        calm.step(input(RIGHT, 0, 0));
+        channeled.step(input(RIGHT, 0, 1 << CHANNEL_BUTTON));
+
+        let calm_after = orbits(&calm);
+        let channeled_after = orbits(&channeled);
+        assert_eq!(before.len(), SWARM_SIZE as usize);
+        for ((start, calm_end), channeled_end) in
+            before.iter().zip(&calm_after).zip(&channeled_after)
+        {
+            let calm_delta = angle_delta(start.angle, calm_end.angle);
+            let channeled_delta = angle_delta(start.angle, channeled_end.angle);
+            // Angles near TAU have an f32 spacing of about 5e-7; the deltas are 6e-3 or larger.
+            let tolerance = 1.0e-5;
+            assert!(
+                (calm_delta - start.angular_speed * DT).abs() <= tolerance,
+                "calm mote advanced {calm_delta}, expected {}",
+                start.angular_speed * DT
+            );
+            assert!(
+                (channeled_delta - CHANNEL_BOOST * calm_delta).abs() <= tolerance,
+                "channeled mote advanced {channeled_delta}, expected {} x {calm_delta}",
+                CHANNEL_BOOST
+            );
+            // The wobble does not depend on channeling.
+            assert_eq!(calm_end.wobble, channeled_end.wobble);
+        }
     }
 
     #[test]
@@ -570,11 +676,30 @@ mod tests {
                 buttons,
             ));
         }
-        for orbit in sim.world().query::<&Orbit>() {
+        let world = sim.world();
+        for orbit in world.query::<&Orbit>() {
             assert!((0.0..dmath::TAU).contains(&orbit.angle));
             assert!((0.0..dmath::TAU).contains(&orbit.wobble));
+            assert!(orbit.angular_speed.is_finite() && orbit.wobble_speed.is_finite());
+            assert!(orbit.radius.is_finite());
         }
-        // state_hash panics in debug builds if any NaN reached the simulation state.
+        let mut positions = 0;
+        for (position, previous) in world.query::<(&Position, &PreviousPosition)>() {
+            assert_finite(position.at, "position");
+            assert_finite(previous.at, "previous position");
+            positions += 1;
+        }
+        assert_eq!(positions, SWARM_SIZE as usize + 1);
+        let mut velocities = 0;
+        for velocity in world.query::<&Velocity>() {
+            assert_finite(velocity.value, "velocity");
+            velocities += 1;
+        }
+        assert_eq!(velocities, 1);
+        let circle = world.resource::<RitualCircle>().expect("circle");
+        assert_finite(circle.center, "circle centre");
+        assert_finite(circle.previous_center, "previous circle centre");
+        // Extra NaN guard: state_hash panics in debug builds if any NaN reached the state.
         let _ = sim.state_hash();
     }
 
