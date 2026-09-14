@@ -14,12 +14,12 @@
 
 | WP | Stand | Nachweis / Bemerkung |
 |----|-------|----------------------|
-| WP1 | erledigt | Beide Repos lokal angelegt und committet; private GitHub-Repos `LupusMalusDeviant/grimoire` und `LupusMalusDeviant/fiends-n-patrons` erstellt (noch nicht gepusht); Fenster-Bibliothek winit (Engine-ADR-0001) |
-| WP2 | in Arbeit | Workflows für beide Repos entstehen im CI-Strang; Nachweis erst mit dem ersten Push |
-| WP3 | in Arbeit | Plattform-Schicht implementiert, im Review |
-| WP4 | in Arbeit | wgpu-Kontext und instanzierter Sprite-Renderer |
-| WP5 | in Arbeit | ECS, danach Simulation mit Golden-Hash-Determinismustest |
-| WP6 | in Arbeit | OF-2.1 als Float-Spike, OF-2.2 als Engine-ADR-0003, OF-17.1 als ADR-0009 (akzeptiert). WP6.4: Engine-Tag `v0.1.0` existiert remote (Commit `93bed40`). WP6.3: Das Spiel pinnt `v0.1.0` lokal (Stand 2026-09-14 ungepusht). **Nicht erledigt**, bis ein Spiel-CI-Lauf auf Windows, Linux und macOS Clippy, Tests und Build tatsächlich ausgeführt hat. Dafür fehlen noch das Secret `GRIMOIRE_DEPLOY_KEY` und der Deploy-Key auf `grimoire` (`scripts/setup-ci-deploy-key.ps1`, PO). |
+| WP1 | erledigt | Beide Repos angelegt und gepusht (private GitHub-Repos `LupusMalusDeviant/grimoire` und `LupusMalusDeviant/fiends-n-patrons`); gepinnte Toolchain 1.98.1; Fenster-Bibliothek winit (Engine-ADR-0001) |
+| WP2 | erledigt, mit Abweichung | Engine-CI grün auf Windows, Linux, macOS (Läufe 34883182308 und 34893513991), Standalone-Gate grün; Spiel-CI vor dem Pin grün (Lauf 34883301947). WP2.4 Branch-Schutz nicht möglich (siehe Abweichungen). Laufzeit: Windows beim ersten Lauf mit kaltem Cache 15:46 min, mit warmem Cache 2,7 min |
+| WP3 | erledigt | Desktop- und Headless-Runner, atomares Dateisystem, Monitorwahl und Start ohne Fokus, Drosselung bei minimiertem Fenster, `shutdown` auch bei macOS-`Cmd+Q`; Fenster-Beispiel unter Windows auf Bildschirm 2 geprüft |
+| WP4 | erledigt | wgpu-Kontext, instanzierter Sprite-Pass mit einem Draw-Call; Offscreen-Tests rendern in CI auf WARP (Windows), lavapipe (Linux) und Metal (macOS). Der Fensterpfad mit echter GPU ist noch nie gelaufen und wartet auf eine Testsitzung mit dem PO |
+| WP5 | erledigt | Eigenes ECS, Fixed-Timestep-Simulation, Seed-RNG, Replays, Snapshots; Determinismus-Gate mit Golden-Hash identisch auf drei Plattformen; Fassade `grimoire` mit `App`, `GamePlugin` und Hauptschleife |
+| WP6 | in Arbeit | OF-2.1 entschieden (Engine-ADR-0004 **akzeptiert** mit CI-Nachweis), OF-2.2 als Engine-ADR-0003 (Status „Vorgeschlagen“, PO-Abnahme offen), OF-17.1 als ADR-0009 (akzeptiert). Release `Grimoire v0.1.0` veröffentlicht (Release-Lauf 34894065040). WP6.4: Engine-Tag `v0.1.0` existiert remote (Commit `93bed40`). WP6.3: Das Spiel pinnt `v0.1.0` lokal (Stand 2026-09-14 ungepusht). **Nicht erledigt**, bis ein Spiel-CI-Lauf auf Windows, Linux und macOS Clippy, Tests und Build tatsächlich ausgeführt hat. Dafür fehlen noch das Secret `GRIMOIRE_DEPLOY_KEY` und der Deploy-Key auf `grimoire` (`scripts/setup-ci-deploy-key.ps1`, PO). |
 
 **Abweichungen vom ursprünglichen Plan**
 
@@ -29,6 +29,9 @@
 - Die Umstellung des Spiels auf die Git-Tag-Abhängigkeit (WP6.3) setzt einen remote existierenden Engine-Tag voraus: Cargo lädt die Original-Quelle auch dann, wenn ein lokaler `[patch]` sie ersetzt.
 - Der Golden-Run des Spiels (`crates/fnp_sim_harness/tests/determinism.rs`) läuft über 3.600 Ticks (eine Minute der P0-Demo „Beschwörungskreis“), nicht über die 10.000 Ticks aus WP5.6 und den Erfolgskriterien. Das 10.000-Tick-Gate mit Doppellauf gehört zur Engine-Demo-Sim (WP5.6) und liegt im Engine-Repo. Der Spiel-Test prüft zusätzlich die Integration über die Fassade und bleibt kurz, weil er in jedem CI-Lauf auf drei Systemen läuft.
 - Die Spiel-CI bricht bei fehlendem Engine-Zugriff ab (außer bei Pull Requests ohne Secrets), statt die Cargo-Schritte mit Warnung zu überspringen (ADR-0009, „Umsetzung“). Der Determinismus-Test läuft zusätzlich im Release-Profil in Nightly und Release.
+- WP3.1 nennt die Traits `EventPump` und `RawInputSource`. Umgesetzt wurde stattdessen das Callback-Modell `AppHandler`/`PlatformContext` mit den Enums `PlatformEvent`/`RawInputEvent`, weil winit 0.30 den Event-Loop über `ApplicationHandler` treibt (Engine-ADR-0001).
+- WP2.4 Branch-Schutz ist nicht umsetzbar: Die GitHub-API antwortet für beide privaten Repos mit 403 „Upgrade to GitHub Pro or make this repository public“. Ersatzregel bis zur PO-Entscheidung (OP-1): lokale Pflichtprüfungen vor jedem Push und `gh run watch --exit-status` für jeden Push. Derselbe Befund deutet auf den Free-Tarif; ein Engine-Push kostet dort rund 80 abrechenbare Actions-Minuten (macOS zählt zehnfach).
+- Der Nightly-Workflow ist noch nie gelaufen; der plattformübergreifende Vergleich im Release-Profil ist deshalb noch nicht belegt. Der Debug-Vergleich läuft in jeder CI.
 
 ## Kontext / Motivation
 
