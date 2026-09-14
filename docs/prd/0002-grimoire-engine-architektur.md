@@ -152,7 +152,7 @@ Then ist der finale Zustands-Hash identisch (Golden-Master)
 ## Offene Fragen
 
 - **OF-2.1:** Cross-Plattform-Bit-Determinismus mit f32 realistisch, oder Fixed-Point für Sim-Positionen? Klärung: Spike in P0, Ergebnis als ADR.
-- **OF-2.2:** ECS-Scheduler: Single-threaded deterministisch starten und später parallelisieren, oder von Beginn an paralleles Design mit fester Ordnung? Klärung: ADR in P0.
+- ~~**OF-2.2:** ECS-Scheduler: Single-threaded deterministisch starten und später parallelisieren, oder von Beginn an paralleles Design mit fester Ordnung?~~ **Entschieden** durch Engine-ADR-0006 im Repo `grimoire` (akzeptiert, 2026-09-14): paralleler Scheduler von Anfang an — ohne `unsafe`, mit verzögertem Schreiben über Befehlspuffer pro System, datenparallelen Queries in festen Blöcken und Hash-Gate über 1, 2 und N Threads; ersetzt den abgelehnten Vorschlag Engine-ADR-0003. Umsetzung als erster P1-Schritt ([Plan 0002](../plans/0002-phase-p1-sichtbarer-kern.md), WP1.0).
 - **OF-2.3:** Snapshot-Format: eigenes Binärlayout vs. `serde`-basiert (Performance vs. Aufwand). Klärung: Spike P2 (Rewind-Item als Testfall).
 
 ## Referenzen
