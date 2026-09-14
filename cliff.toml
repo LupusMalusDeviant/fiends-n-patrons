@@ -1,0 +1,58 @@
+# git-cliff configuration for Fiends n Patrons release notes.
+# https://git-cliff.org/docs/configuration
+#
+# Release notes of one tag:      git cliff --current --strip header
+# Draft for the next release:    git cliff --unreleased --tag vX.Y.Z --strip header
+
+[changelog]
+header = """
+# Changelog
+
+Alle nennenswerten Änderungen an Fiends n Patrons. Versionierung nach [SemVer](https://semver.org/lang/de/).
+Einträge entstehen aus Conventional Commits.
+"""
+# Groups carry an invisible "<!-- NN -->" prefix so that group_by sorts them in this order;
+# striptags removes it again when rendering.
+body = """
+{% if version %}\
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}
+- {% if commit.breaking %}**[inkompatibel]** {% endif %}\
+{% if commit.scope %}*({{ commit.scope }})* {% endif %}\
+{{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})\
+{% endfor %}
+{% endfor %}
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+# Breaking changes always appear, even if a parser below would skip their type.
+protect_breaking_commits = true
+filter_commits = false
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+"
+sort_commits = "oldest"
+commit_parsers = [
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^feat", group = "<!-- 00 -->Neue Funktionen" },
+  { message = "^fix", group = "<!-- 01 -->Fehlerbehebungen" },
+  { body = ".*security", group = "<!-- 02 -->Sicherheit" },
+  { message = "^build\\(engine\\)", group = "<!-- 03 -->Engine-Upgrades" },
+  { message = "^perf", group = "<!-- 04 -->Performance" },
+  { message = "^refactor", group = "<!-- 05 -->Umbauten" },
+  { message = "^doc", group = "<!-- 06 -->Dokumentation" },
+  { message = "^test", group = "<!-- 07 -->Tests" },
+  { message = "^(build|ci)", group = "<!-- 08 -->Build und CI" },
+  { message = "^style", group = "<!-- 09 -->Formatierung" },
+  { message = "^chore", group = "<!-- 10 -->Wartung" },
+  { message = "^revert", group = "<!-- 11 -->Zurückgenommen" },
+  { message = ".*", group = "<!-- 12 -->Sonstiges" },
+]
