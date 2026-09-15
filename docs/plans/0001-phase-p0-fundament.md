@@ -14,7 +14,7 @@
 
 | WP | Stand | Nachweis / Bemerkung |
 |----|-------|----------------------|
-| WP1 | erledigt | Beide Repos angelegt und gepusht (private GitHub-Repos `LupusMalusDeviant/grimoire` und `LupusMalusDeviant/fiends-n-patrons`); gepinnte Toolchain 1.98.1; Fenster-Bibliothek winit (Engine-ADR-0001) |
+| WP1 | erledigt | Beide Repos angelegt und gepusht (private GitHub-Repos `LupusMalusDeviant/grimoire` und `LupusMalusDeviant/fiends-n-patrons`); gepinnte Toolchain 1.98.1; Fenster-Bibliothek winit (Engine-ADR-0001); Lizenzentscheid aus WP1.4 nachgetragen am 2026-09-15: Alle Rechte vorbehalten, `LICENSE` und `license-file` in beiden Repos ([ADR-0012](../adr/0012-lizenz-alle-rechte-vorbehalten.md), schließt P0-Rest R-09) |
 | WP2 | erledigt, mit Abweichung | Engine-CI grün auf Windows, Linux, macOS (Läufe 34883182308 und 34893513991), Standalone-Gate grün; Spiel-CI vor dem Pin grün (Lauf 34883301947). WP2.4 Branch-Schutz nicht möglich (siehe Abweichungen). Laufzeit: Windows beim ersten Lauf mit kaltem Cache 15:46 min, mit warmem Cache 2,7 min |
 | WP3 | erledigt | Desktop- und Headless-Runner, atomares Dateisystem, Monitorwahl und Start ohne Fokus, Drosselung bei minimiertem Fenster, `shutdown` auch bei macOS-`Cmd+Q`; Fenster-Beispiel unter Windows auf Bildschirm 2 geprüft |
 | WP4 | erledigt | wgpu-Kontext, instanzierter Sprite-Pass mit einem Draw-Call; Offscreen-Tests rendern in CI auf WARP (Windows), lavapipe (Linux) und Metal (macOS). Der Fensterpfad mit echter GPU ist noch nie gelaufen und wartet auf eine Testsitzung mit dem PO |
@@ -63,7 +63,7 @@ Aufbaustrategie: „Sichtbares zuerst" — parallel dazu die unsichtbaren Garant
 1. **WP1.1:** Spiel-Repo: `git init` in `Prototype/`, `.gitignore` (Rust + Packs + IDE), bestehende `docs/` committen; GitHub-Remote (privat).
 2. **WP1.2:** Engine-Repo `<Arbeitsordner>\grimoire`: Cargo-Workspace mit leeren Crates gemäß Crate-Map (PRD-0000 §4): `grimoire_platform`, `grimoire_gpu`, `grimoire_render`, `grimoire_ecs`, `grimoire_sim`, `grimoire_collide`, `grimoire_audio`, `grimoire_ui`, `grimoire_assets`, `grimoire_sigil`, `grimoire_debug`, `grimoire` (Fassade) — jeweils mit Doc-Stub und Layer-Kommentar; GitHub-Remote (privat).
 3. **WP1.3:** Spiel-Workspace: `fnp_app`, `fnp_game`, `fnp_content`, `fnp_sim_harness` als Stubs; Engine-Anbindung zunächst per Pfad-Override (bis WP6.3 die Pin-Mechanik festlegt).
-4. **WP1.4:** `rust-toolchain.toml` (beide Repos, identische Version gepinnt), `rustfmt.toml`, `clippy.toml`, README-Stubs, Lizenz-Entscheid (privat/All rights reserved) dokumentiert.
+4. **WP1.4:** `rust-toolchain.toml` (beide Repos, identische Version gepinnt), `rustfmt.toml`, `clippy.toml`, README-Stubs, Lizenz-Entscheid (privat/All rights reserved) dokumentiert. *(Nachgetragen am 2026-09-15: Beide Repos werden öffentlich, die Lizenz bleibt „Alle Rechte vorbehalten“; Rechteinhaber Lupus Malus Deviant. Siehe [ADR-0012](../adr/0012-lizenz-alle-rechte-vorbehalten.md).)*
 5. **WP1.5:** Entscheid + Kurz-ADR im Engine-Repo: Fenster-/Event-Bibliothek der Plattform-Schicht (Empfehlung: winit — gleiche Begründungslinie wie wgpu, ADR-0003).
 
 **Ergebnis:** Zwei baubare (leere) Workspaces mit Remotes; `cargo build` grün beidseitig; Layer-Struktur sichtbar.

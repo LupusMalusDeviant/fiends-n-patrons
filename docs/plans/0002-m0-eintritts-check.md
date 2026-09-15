@@ -73,7 +73,7 @@ doppeltes `docs` entsteht.
 | R-06 | Windows CI exceeds the 15-minute target with a cold cache | `grimoire` (Befund in beiden Repos) | `p0-rest`, `ci` | nein |
 | R-07 | Document the engine checkout via the deploy key in ADR-0009 | `fiends-n-patrons` | `p0-rest`, `documentation` | nein |
 | R-08 | Align CONTRIBUTING and plan texts with the P0 end state | `fiends-n-patrons` | `p0-rest`, `documentation` | nein |
-| R-09 | Record the licence decision from P0-WP1.4 in both repositories | `fiends-n-patrons` (betrifft beide Repos) | `p0-rest`, `needs-po`, `documentation` | ja (Bestätigung) |
+| R-09 | Record the licence decision from P0-WP1.4 in both repositories | `fiends-n-patrons` (betrifft beide Repos) | `p0-rest`, `needs-po`, `documentation` | ja (Bestätigung); **erledigt** am 2026-09-15, [ADR-0012](../adr/0012-lizenz-alle-rechte-vorbehalten.md) |
 | R-10 | Update the stale cross-platform note on the RNG golden test | `grimoire` | `p0-rest`, `documentation` | nein |
 
 ---
@@ -347,6 +347,15 @@ nur die Empfehlung, keinen festgehaltenen Entscheid.
 
 **Bezug.** [Plan 0001, WP1.4](0001-phase-p0-fundament.md#wp1-repo-fundament--projektskelett); [Plan 0001, Umsetzungsstand WP1](0001-phase-p0-fundament.md#umsetzungsstand).
 
+**Erledigt (2026-09-15).** Der PO hat entschieden: Beide Repos bleiben „Alle Rechte vorbehalten“,
+Rechteinhaber ist Lupus Malus Deviant, obwohl beide Repos öffentlich werden. Umgesetzt mit einer
+`LICENSE`-Datei im Wurzelverzeichnis beider Repos, `license-file` in `[workspace.package]` und in
+jeder Crate, einem Abschnitt „Lizenz“ in beiden `README.md`, [ADR-0012](../adr/0012-lizenz-alle-rechte-vorbehalten.md)
+und Engine-ADR-0009 (Nummer vorläufig). Plan 0001 nennt den Entscheid im Umsetzungsstand WP1.
+Korrektur zum Kontext oben: Beide `README.md` enthielten bereits den Satz „Alle Rechte vorbehalten“;
+die Suche fand ihn nicht, weil sie nur englische Begriffe enthielt. Rechteinhaber, Jahr und
+`LICENSE`-Datei fehlten allerdings tatsächlich.
+
 ---
 
 ### R-10 — Update the stale cross-platform note on the RNG golden test
@@ -483,7 +492,7 @@ Worktree nach der Entscheidung in Sammelsitzung B entfernen; der gepushte Branch
 - Die Kostenspanne 14–87 Minuten je 3-OS-Lauf (Schätzung aus dem Agentenlauf, nicht nachgemessen).
 - Die 7-Tage-Verfallsregel für Actions-Caches (GitHub-Doku, heute nicht abgerufen).
 - Verfügbarkeit echter macOS- und Linux-Geräte für R-01.
-- Ob der Lizenzentscheid (R-09) außerhalb der beiden Repos festgehalten ist (etwa in einer Notiz des PO).
+- Ob der Lizenzentscheid (R-09) außerhalb der beiden Repos festgehalten ist (etwa in einer Notiz des PO). *(Gegenstandslos seit [ADR-0012](../adr/0012-lizenz-alle-rechte-vorbehalten.md).)*
 
 ## Nachprüfung (2026-09-15)
 

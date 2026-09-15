@@ -9,8 +9,7 @@ Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Rel
 > Status: **Phase P0 — Fundament**. Das Spiel pinnt Grimoire `v0.1.0` über einen Git-Tag
 > ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Die P0-Demo „Beschwörungskreis“ belegt die
 > Engine-Anbindung (Fenster, Eingabe, Fixed-Timestep-Simulation, interpolierte Sprites), noch kein
-> Gameplay. Ein Determinismus-Test friert den Endhash für Seed 42 über 3.600 Ticks ein. Alle Rechte
-> vorbehalten.
+> Gameplay. Ein Determinismus-Test friert den Endhash für Seed 42 über 3.600 Ticks ein.
 
 ## Einstieg
 
@@ -58,3 +57,11 @@ Die Toolchain ist über `rust-toolchain.toml` gepinnt (1.98.1). Im Spiel:
 
 Ohne Fenster läuft dieselbe Simulation über `fnp_sim_harness::run_seed(seed, ticks)`; die
 Determinismus-Tests liegen in `crates/fnp_sim_harness/tests/determinism.rs`.
+
+## Lizenz
+
+Copyright (c) 2026 Lupus Malus Deviant. Alle Rechte vorbehalten. Das Repo ist öffentlich einsehbar,
+räumt aber keine Rechte zur Nutzung, Bearbeitung oder Weitergabe ein; das gilt für Code, Content und
+Doku. Es gilt die Datei [LICENSE](LICENSE); die Entscheidung beschreibt
+[ADR-0012](docs/adr/0012-lizenz-alle-rechte-vorbehalten.md). Die Engine Grimoire trägt im eigenen
+Repo einen eigenen, gleichlautenden Vorbehalt.
