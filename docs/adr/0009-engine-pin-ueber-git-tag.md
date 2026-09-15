@@ -1,6 +1,7 @@
 # ADR-0009: Engine-Pin über Cargo-git-Dependency mit Tag (Deploy-Key in CI, lokaler `[patch]`)
 
-- **Status:** Akzeptiert, umgesetzt (Spiel pinnt Grimoire `v0.1.0`, siehe „Umsetzung“)
+- **Status:** Akzeptiert, umgesetzt (Spiel pinnt Grimoire `v0.1.0`, siehe „Umsetzung“); Teil 2 „CI-Zugriff über einen Read-only-Deploy-Key“ ist seit 2026-09-15 veraltet, Teil 1 (Pin) und Teil 3 (lokaler `[patch]`) gelten weiter
+- **Teilweise ersetzt durch:** [ADR-0013](0013-oeffentliche-repos-anonymer-engine-abruf.md) (öffentliche Repos, anonymer Engine-Abruf, kein Deploy-Key)
 - **Datum:** 2026-09-14
 - **Entscheider:** Lupus Malus Deviant (PO), vorbereitet durch Claude
 - **Bezug:** [ADR-0002](0002-engine-eigenes-repo.md), [PRD-0017](../prd/0017-plattform-ci-distribution.md) (OF-17.1, FR-04), [Plan-0001](../plans/0001-phase-p0-fundament.md) (WP6.3)

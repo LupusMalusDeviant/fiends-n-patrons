@@ -1,10 +1,10 @@
-# Cargo configuration of the game repository (ADR-0009).
+# Cargo configuration of the game repository (ADR-0009, ADR-0013).
 #
-# The engine is a private git dependency. Fetching through the git CLI uses the same credentials
-# as `git` itself: locally the GitHub CLI helper (`gh auth setup-git`), in CI the read-only deploy
-# key that .github/actions/engine-access loads into ssh-agent.
+# The engine is a public git dependency, fetched anonymously over HTTPS; neither CI nor a local
+# checkout needs credentials. Fetching through the git CLI is not required for that, it is kept so
+# that local builds and CI take the same path (and honour the user's git proxy settings).
 #
-# Never add a [patch] here: local engine iteration uses the unversioned
-# <Arbeitsordner>\.cargo\config.toml described in CONTRIBUTING.md.
+# Never add a [patch] here: local engine iteration uses an unversioned .cargo/config.toml in the
+# common parent directory of both checkouts, described in CONTRIBUTING.md.
 [net]
 git-fetch-with-cli = true

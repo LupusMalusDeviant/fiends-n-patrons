@@ -11,7 +11,8 @@ auf der Engine **Grimoire**, die als eigenes Repo mit gepinnten Tags eingebunden
   läuft über einen nicht versionierten `[patch]` (siehe unten); gemergt wird nur gegen Tags.
 - **Gepinnte Werkzeuge:** Rust kommt aus `rust-toolchain.toml` (1.98.1 mit rustfmt und clippy,
   identisch zur Engine); `Cargo.lock` ist versioniert, CI baut mit `--locked`.
-- **Keine Secrets im Repo.** Der Engine-Zugriff der CI läuft über ein GitHub-Secret, das
+- **Keine Secrets im Repo.** Die Engine ist öffentlich; CI und lokale Builds holen sie ohne
+  Zugangsdaten ([ADR-0013](docs/adr/0013-oeffentliche-repos-anonymer-engine-abruf.md)). Das
   Code-Signing-Zertifikat bleibt auf dem Entwicklungsrechner.
 
 ## Commits
@@ -88,42 +89,42 @@ ein aktiver Patch lässt jeden `--locked`-Aufruf scheitern. Vor dem Commit zusä
 - Ein neuer Push auf denselben Pull Request bricht dessen laufende CI ab. Läufe auf `main` werden
   **nie** abgebrochen; jeder `main`-Commit bekommt ein Ergebnis.
 - Nightly-Binaries für Windows sind **unsigniert**; signiert werden nur Releases.
-- **Kosten:** In privaten Repos zählen Linux-Minuten einfach, Windows doppelt, macOS zehnfach.
+- **Kosten:** Das Repo ist öffentlich; die gehosteten Standard-Runner (Linux, Windows, macOS)
+  verbrauchen keine Actions-Minuten. Größere Runner sind kostenpflichtig und werden nicht genutzt.
+  Maßstab bleibt die Laufzeit: Standard-Push unter 15 Minuten pro Plattform (PRD-0017).
+- **Pull Requests von außen** laufen erst, nachdem ein Maintainer den Workflow freigegeben hat
+  (Repository-Einstellung). Danach bauen und testen sie wie jeder andere Lauf.
 
 ### Engine-Zugriff der CI
 
-Alle Cargo-Jobs laufen über die lokale Action `.github/actions/engine-access`:
+Die Engine [`LupusMalusDeviant/grimoire`](https://github.com/LupusMalusDeviant/grimoire) ist ein
+öffentliches Repo. Alle Cargo-Jobs holen sie **anonym über HTTPS**, genau unter der URL aus
+`Cargo.toml` und am Commit aus `Cargo.lock`
+([ADR-0013](docs/adr/0013-oeffentliche-repos-anonymer-engine-abruf.md), Pin weiter nach
+[ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Es gibt **kein Secret, keinen Deploy-Key und
+keine eigene Action** dafür.
 
-| Lage | Verhalten |
-|------|-----------|
-| Kein `Cargo.toml` referenziert `github.com/LupusMalusDeviant/grimoire` | Cargo-Schritte laufen normal. |
-| Referenz vorhanden, Secret `GRIMOIRE_DEPLOY_KEY` gesetzt | Schlüssel wird per `webfactory/ssh-agent` geladen, `https://github.com/LupusMalusDeviant/` per `url.insteadOf` auf SSH umgelenkt, `CARGO_NET_GIT_FETCH_WITH_CLI=true`. |
-| Referenz vorhanden, Secret fehlt | **Abbruch** (`require`) in CI bei Push, manuellem Lauf und Pull Requests aus dem eigenen Repo, in Nightly und Release. Nur Pull Requests ohne Zugriff auf Secrets (Forks, Dependabot) bekommen eine **Warnung** und übersprungene Cargo-Schritte; so ein Lauf hat nichts geprüft. |
+- **Jeder Lauf baut und testet**, auch Pull Requests aus Forks und von Dependabot. Einen
+  übersprungenen Cargo-Teil gibt es nicht mehr; ein grüner Lauf hat immer clippy, Tests und Build
+  hinter sich.
+- Jeder Cargo-Job hat einen eigenen Schritt **„Fetch dependencies (engine anonymously over HTTPS)“**
+  (`cargo fetch --locked`). Scheitert genau dieser Schritt, liegt die Ursache fast nie am Code:
+  - **Vorrichtung:** Die Engine ist nicht öffentlich erreichbar (Sichtbarkeit geändert, Repo
+    umbenannt) oder der gepinnte Tag fehlt.
+  - **Fremd:** GitHub ist gestört.
+  - Die Workflows setzen `GIT_TERMINAL_PROMPT=0` und `GCM_INTERACTIVE=never`, damit so ein Fall
+    sofort mit einer Fehlermeldung endet, statt auf eine Anmeldung zu warten.
+- Prüfen, ohne eigene Zugangsdaten zu verwenden (sonst täuscht ein Credential-Helper Erfolg vor):
 
-Seit P0/WP6.3 referenziert jede `Cargo.toml`-Revision die Engine; ein fehlendes Secret ist also
-immer eine kaputte Einrichtung (etwa ein widerrufener `gh`-Zugang), kein Übergangszustand, und
-färbt den Lauf rot. **Ein gelber Warnhinweis „Engine-Zugriff fehlt“ ist kein grüner Lauf.** Die
-Einrichtung muss deshalb **vor dem ersten Push** mit Engine-Pin laufen, einmalig lokal und mit
-Admin-Rechten auf beiden Repos:
+  ```bash
+  git -c credential.helper= ls-remote https://github.com/LupusMalusDeviant/grimoire 'refs/tags/v*'
+  ```
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; & .\scripts\setup-ci-deploy-key.ps1
-```
-
-Im offenen PowerShell-Fenster aufrufen, nicht über einen neuen `powershell -File`-Prozess: So
-gestartet blieb das Skript in einem Terminal ohne Ausgabe und ohne Wirkung. Die
-Ausführungsrichtlinie gilt nur für dieses Fenster.
-
-Das Skript prüft `gh auth status`, `ssh-keygen` und beide Repos, erzeugt ein frisches ed25519-Paar
-in einem temporären Ordner, hinterlegt den öffentlichen Teil als **Read-only-Deploy-Key** auf
-`grimoire`, speichert den privaten Teil als Secret `GRIMOIRE_DEPLOY_KEY` in `fiends-n-patrons`,
-prüft das Secret über die API und löscht die Schlüsseldateien wieder. Scheitert ein Schritt nach dem
-Anlegen des Keys, aber vor dem Speichern des Secrets, entfernt das Skript den neuen Key wieder, weil
-sein privater Teil verloren wäre. **Rotation** oder ein unbrauchbarer Key aus einem abgebrochenen
-Lauf: dasselbe Skript mit `-ReplaceExisting`; es legt den neuen Key an, setzt das Secret und
-entfernt erst danach die alten Keys gleichen Titels. Von `gh`
-angelegte Deploy-Keys hängen am Token der GitHub CLI: Wird diese Autorisierung widerrufen, entfernt
-GitHub den Key, und das Skript muss erneut laufen.
+  Das dereferenzierte Tag (`refs/tags/vX.Y.Z^{}`) muss den Commit aus `Cargo.lock` nennen.
+- **Nie** einen Token, Deploy-Key oder ein Secret zurückbringen, um einen roten Abruf grün zu
+  bekommen. Soll die Engine wieder privat werden, braucht es ein neues ADR.
+- Engine-Tags werden nie verschoben oder gelöscht (ADR-0009). Seit das Repo öffentlich ist, bräche
+  ein fehlender Tag auch alle fremden Klone.
 
 ## CI-Überwachung (Pflicht)
 
@@ -142,7 +143,7 @@ Ist der Lauf rot, wird **zuerst analysiert**, bevor irgendetwas anderes passiert
 gh run view "$run_id" --log-failed
 ```
 
-Die Ursache wird benannt und zugeordnet: **Code**, **Vorrichtung** (Workflow, Cache, Deploy-Key,
+Die Ursache wird benannt und zugeordnet: **Code**, **Vorrichtung** (Workflow, Cache, Engine-Abruf,
 Runner) oder **fremd** (Dienst gestört, Zeitfehler, Runner-Image). Auch eine fremde Ursache wird
 festgehalten, zusammen mit der Antwort, ob der Test das künftig aushalten soll.
 
@@ -173,18 +174,14 @@ grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.1.
 
 `Cargo.lock` hält den Commit-Hash des Tags (Quelle
 `git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.1.0#<commit>`) für jedes bezogene
-Engine-Crate. Das Repo ist privat, also braucht auch Cargo lokal Zugangsdaten. Einmalig genügt:
-
-```powershell
-gh auth setup-git
-```
+Engine-Crate. Das Engine-Repo ist öffentlich; Cargo holt es ohne Zugangsdaten, ein frischer Klon
+baut ohne Einrichtungsschritt.
 
 Die versionierte `.cargo/config.toml` des Spiel-Repos setzt `[net] git-fetch-with-cli = true`, damit
-Cargo wie in der CI über die git-CLI lädt. Zwingend ist das nicht: Am 2026-09-14 holte Cargo 1.98.1
-das Repo auch mit dem eingebauten Git-Client über den Credential-Helper der GitHub CLI. In diese
-Datei gehört **nie** ein `[patch]`. **Auch mit aktivem `[patch]`** muss Cargo das Original-Repo
-erreichen, solange es nicht im Cache liegt (am 2026-09-14 mit Cargo 1.98.1 nachgeprüft: `--offline`
-scheitert dann).
+Cargo lokal wie in der CI über die git-CLI lädt. Zwingend ist das nicht; der eingebaute Git-Client
+von Cargo holt ein öffentliches Repo genauso. In diese Datei gehört **nie** ein `[patch]`. **Auch mit
+aktivem `[patch]`** muss Cargo das Original-Repo erreichen, solange es nicht im Cache liegt (am
+2026-09-14 mit Cargo 1.98.1 nachgeprüft: `--offline` scheitert dann).
 
 Prüfen, dass der Pin greift:
 
@@ -340,8 +337,6 @@ erlaubt, solange kein veröffentlichtes Release zu dem Tag existiert.
 ## Versionen der GitHub Actions
 
 Actions sind gepinnt: `actions/checkout@v7`, `actions/upload-artifact@v7`,
-`actions/download-artifact@v8`, `Swatinem/rust-cache@v2`, `orhun/git-cliff-action@v4`,
-`webfactory/ssh-agent@v0.10.0`. Diese Action veröffentlicht keine Major-Tags, deshalb ist die
-Version exakt gepinnt. Aktuelle Stände prüfen mit
-`gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`. Ein Wechsel ist ein eigener
-`ci:`-Commit, nachdem die Release-Notes gelesen wurden.
+`actions/download-artifact@v8`, `Swatinem/rust-cache@v2`, `orhun/git-cliff-action@v4`. Aktuelle
+Stände prüfen mit `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`. Ein Wechsel ist ein
+eigener `ci:`-Commit, nachdem die Release-Notes gelesen wurden.

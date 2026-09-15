@@ -14,8 +14,9 @@ publish = false
 [workspace.dependencies]
 fnp_content = { path = "crates/fnp_content" }
 fnp_game = { path = "crates/fnp_game" }
-# Engine pin (ADR-0009): a release tag of the private Grimoire repository. Cargo.lock records the
-# tag commit; upgrades follow CONTRIBUTING.md, section "Engine-Upgrade".
+# Engine pin (ADR-0009): a release tag of the public Grimoire repository, fetched anonymously over
+# HTTPS (ADR-0013). Cargo.lock records the tag commit; upgrades follow CONTRIBUTING.md, section
+# "Engine-Upgrade".
 grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.1.0" }
 
 [workspace.lints.rust]

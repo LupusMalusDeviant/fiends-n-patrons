@@ -31,11 +31,10 @@ Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Rel
 
 ## Bauen und starten
 
-Die Engine liegt in einem privaten GitHub-Repo. Cargo holt sie über die git-CLI
-(`.cargo/config.toml` im Repo); die Zugangsdaten kommen einmalig von der GitHub CLI:
+Die Engine [Grimoire](https://github.com/LupusMalusDeviant/grimoire) ist ein öffentliches
+GitHub-Repo. Cargo holt sie ohne Zugangsdaten am gepinnten Tag, ein frischer Klon baut direkt:
 
 ```bash
-gh auth setup-git
 cargo build --workspace --locked
 cargo test --workspace --locked
 cargo run --release -p fnp_app -- --seed 42

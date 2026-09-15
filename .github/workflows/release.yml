@@ -18,6 +18,10 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  # The engine is a public repository fetched anonymously over HTTPS (ADR-0013); fail at once
+  # instead of waiting for a credential prompt if it is ever not publicly reachable.
+  GIT_TERMINAL_PROMPT: "0"
+  GCM_INTERACTIVE: never
 
 defaults:
   run:
@@ -81,17 +85,14 @@ jobs:
             platform: macos-aarch64
     steps:
       - uses: actions/checkout@v7
-      # A release without the engine cannot be built: missing key fails the job here.
-      - name: Engine access
-        uses: ./.github/actions/engine-access
-        with:
-          deploy-key: ${{ secrets.GRIMOIRE_DEPLOY_KEY }}
-          require: "true"
       - name: Install pinned toolchain (rust-toolchain.toml)
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: false
+      # Own step so that a failed engine fetch is told apart from a build failure.
+      - name: Fetch dependencies (engine anonymously over HTTPS)
+        run: cargo fetch --locked
       # The golden hash must hold under the release profile the binaries are built with.
       - name: Determinism gate (release profile)
         run: cargo test --release --locked -p fnp_sim_harness --test determinism
@@ -154,7 +155,7 @@ jobs:
             `CN=Lupus Malus Deviant` signiert und in diesem Release ersetzt. Die CI signiert nicht, weil die
             `.pfx` den Entwicklungsrechner nie verlässt. Solange dieses Release ein Entwurf ist, ist die
             angehängte Exe noch unsigniert.
-          - **macOS:** nicht notarisiert (privater Vertrieb ohne Developer-Account). Seit macOS 15 genügt
+          - **macOS:** nicht notarisiert (Vertrieb ohne Store und ohne Developer-Account). Seit macOS 15 genügt
             Rechtsklick > Öffnen nicht mehr: nach dem ersten blockierten Start unter Systemeinstellungen >
             Datenschutz & Sicherheit „Dennoch öffnen“ wählen, oder vorab im Terminal
             `xattr -d com.apple.quarantine ./fiends-n-patrons` ausführen.

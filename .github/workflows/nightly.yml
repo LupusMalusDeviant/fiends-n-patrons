@@ -19,6 +19,10 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  # The engine is a public repository fetched anonymously over HTTPS (ADR-0013); fail at once
+  # instead of waiting for a credential prompt if it is ever not publicly reachable.
+  GIT_TERMINAL_PROMPT: "0"
+  GCM_INTERACTIVE: never
 
 defaults:
   run:
@@ -100,29 +104,20 @@ jobs:
             platform: macos-aarch64
     steps:
       - uses: actions/checkout@v7
-      # Nightly runs only on schedule or by hand, never for untrusted code: a missing key fails.
-      - name: Engine access
-        id: engine
-        uses: ./.github/actions/engine-access
-        with:
-          deploy-key: ${{ secrets.GRIMOIRE_DEPLOY_KEY }}
-          require: "true"
       - name: Install pinned toolchain (rust-toolchain.toml)
-        if: steps.engine.outputs.cargo == 'true'
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        if: steps.engine.outputs.cargo == 'true'
+      # Own step so that a failed engine fetch is told apart from a build failure.
+      - name: Fetch dependencies (engine anonymously over HTTPS)
+        run: cargo fetch --locked
       # The shipped binary uses the release profile; CI tests only the dev profile. Optimisation
       # level must not change the golden hash on any platform.
       - name: Determinism gate (release profile)
-        if: steps.engine.outputs.cargo == 'true'
         run: cargo test --release --locked -p fnp_sim_harness --test determinism
       - name: Build fiends-n-patrons (release)
-        if: steps.engine.outputs.cargo == 'true'
         run: cargo build --release --locked -p fnp_app --bin fiends-n-patrons
       # upload-artifact drops the executable bit, so Unix binaries travel inside a tarball.
       - name: Package
-        if: steps.engine.outputs.cargo == 'true'
         env:
           PLATFORM: ${{ matrix.platform }}
         run: |
@@ -136,7 +131,6 @@ jobs:
           fi
           ls -l dist
       - name: Upload nightly artifact
-        if: steps.engine.outputs.cargo == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: fiends-n-patrons-nightly-${{ matrix.platform }}

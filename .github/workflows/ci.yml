@@ -29,6 +29,11 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
   RUST_BACKTRACE: "1"
+  # The engine is a public repository fetched anonymously over HTTPS (ADR-0013). No credentials
+  # exist in CI; if the engine ever stops being publicly reachable, git must fail at once instead of
+  # waiting for a credential prompt.
+  GIT_TERMINAL_PROMPT: "0"
+  GCM_INTERACTIVE: never
 
 defaults:
   run:
@@ -43,10 +48,12 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install pinned toolchain (rust-toolchain.toml)
         run: rustup toolchain install
-      # cargo fmt does not resolve dependencies, so it needs no engine access.
+      # cargo fmt does not resolve dependencies, so it needs no network access.
       - name: cargo fmt --check
         run: cargo fmt --all --check
 
+  # Runs for every trigger, including pull requests from forks and Dependabot: the engine needs no
+  # secret, so there is no skipped, green-but-empty variant of this job.
   test:
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -57,28 +64,21 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
-      # A missing deploy key fails the job. Only pull requests that receive no secrets (forks,
-      # Dependabot) skip the Cargo steps with a warning instead.
-      - name: Engine access
-        id: engine
-        uses: ./.github/actions/engine-access
-        with:
-          deploy-key: ${{ secrets.GRIMOIRE_DEPLOY_KEY }}
-          require: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
       - name: Install pinned toolchain (rust-toolchain.toml)
-        if: steps.engine.outputs.cargo == 'true'
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        if: steps.engine.outputs.cargo == 'true'
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Own step so that a failed engine fetch (visibility, missing tag, GitHub outage) is told apart
+      # from a compile or test failure. A no-op when the cache already holds the pinned sources.
+      - name: Fetch dependencies (engine anonymously over HTTPS)
+        run: cargo fetch --locked
       - name: Clippy
-        if: steps.engine.outputs.cargo == 'true'
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       # The engine contract keeps the facade's determinism lints identical in every simulation
       # crate; the game's copies must match the clippy.toml of the pinned engine tag.
       - name: Determinism lint copies match the pinned facade
-        if: steps.engine.outputs.cargo == 'true' && runner.os == 'Linux'
+        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           manifest=$(cargo metadata --format-version 1 --locked \
@@ -101,8 +101,6 @@ jobs:
           exit "$status"
       # --no-fail-fast: a red unit test must not stop the determinism gate of later test binaries.
       - name: Test
-        if: steps.engine.outputs.cargo == 'true'
         run: cargo test --workspace --locked --no-fail-fast
       - name: Build
-        if: steps.engine.outputs.cargo == 'true'
         run: cargo build --workspace --locked
