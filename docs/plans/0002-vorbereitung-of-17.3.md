@@ -75,7 +75,7 @@ Minutenangaben: „Linux-Minuten“ zählen einfach. Für Windows und macOS gelt
   2. **Duet (gleichzeitig):** Basis und Kandidat laufen parallel, je ein Prozess auf einer der 2 vCPUs (`taskset`), ausgewertet als Verhältnis. Das entspricht dem Verfahren, für das Bulej et al. in der Cloud eine Varianzminderung um den Faktor 2,3–12,5 (ScalaBench/DaCapo) bzw. 23,8–82,4 (SPEC CPU 2017) berichten [Q4]. Die Zahlen gelten für *gleichzeitige* Ausführung, nicht für Variante 1. Nur für einfädige Benches.
   3. **`tango-bench`:** Paired Benchmarking in einem Prozess, die Basis als dynamische Bibliothek. Das Projekt beansprucht, 1 % in 1 s in mindestens 9 von 10 Läufen zu erkennen — eine Herstellerangabe [Q5]. Läuft auf Linux, macOS und Windows.
   4. **`bench_diff`:** abwechselnde Paare, Welch-t-Test auf log-Latenzen, für µs–ms und nicht für ns [Q6]. Für Basis gegen Kandidat in einem Binary unhandlich.
-- **Erwartetes Rauschen:** kleiner als K1, weil langsame Drift beide Seiten trifft; die Höhe auf privaten 2-vCPU-Runnern ist offen.
+- **Erwartetes Rauschen:** kleiner als K1, weil langsame Drift beide Seiten trifft; die Höhe auf den gehosteten Runnern (in öffentlichen Repos 4 vCPUs) ist offen.
 - **Runner:** alle drei OS (Duet und `taskset` nur Linux).
 - **Einrichtung:** Varianten 1 und 2 ≈ 1 Tag; Variante 3 mittel bis hoch.
 - **Minuten je Lauf:** Linux ≈ 10–16 (zwei Builds, doppelte Messzeit).
@@ -131,7 +131,7 @@ Minutenangaben: „Linux-Minuten“ zählen einfach. Für Windows und macOS gelt
 - **Bencher** bringt Schwellenmodelle (Prozent, z-Score, t-Test, IQR, Delta-IQR) und „Relative Continuous Benchmarking“ [Q25][Q26].
 - **Drittanbieter-Runner** (z. B. Blacksmith, Namespace, RunsOn, WarpBuild) bieten gehostete Runner außerhalb von GitHub. Ob sie dedizierte Kerne und weniger Rauschen liefern, ist **nicht untersucht**. Sie brächten Engine-Code auf fremde Maschinen.
 
-Alle drei bringen Code oder Messdaten des privaten Engine-Repos zu Drittanbietern und brauchen neue Konten und OAuth-Rechte. Das ist eine PO-Frage und wird **nicht empfohlen**.
+Alle drei bringen Code oder Messdaten des Engine-Repos zu Drittanbietern und brauchen neue Konten und OAuth-Rechte. Das ist eine PO-Frage und wird **nicht empfohlen**.
 
 ### Übersicht
 

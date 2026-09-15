@@ -49,6 +49,8 @@ aber ebenfalls offen.
    grünes 3-OS-Hash-Gate (Engine-ADR-0006, Punkt 7) und damit CI-Minuten. Die Minutenfrage (OP-2,
    R-05 unten) steht deshalb in der Sitzung vor der Freigabe. `p1/wp1.0-scheduler` ist zum Prüfzeitpunkt
    **nicht** gepusht (kein Remote-Branch), der Workflow arbeitet noch.
+   *Nachtrag 2026-09-15: Seit der Veröffentlichung beider Repos kostet das 3-OS-Hash-Gate keine
+   Actions-Minuten; die Minutenfrage entfällt, das Gate selbst bleibt.*
 3. Plan 0002 trägt weiterhin den Status „Entwurf“. Das Gate nennt keine Planabnahme; ob der PO sie
    mit M0 verbinden will, ist seine Sache.
 
