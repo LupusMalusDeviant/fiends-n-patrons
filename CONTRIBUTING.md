@@ -107,14 +107,21 @@ Einrichtung muss deshalb **vor dem ersten Push** mit Engine-Pin laufen, einmalig
 Admin-Rechten auf beiden Repos:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-ci-deploy-key.ps1
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; & .\scripts\setup-ci-deploy-key.ps1
 ```
+
+Im offenen PowerShell-Fenster aufrufen, nicht über einen neuen `powershell -File`-Prozess: So
+gestartet blieb das Skript in einem Terminal ohne Ausgabe und ohne Wirkung. Die
+Ausführungsrichtlinie gilt nur für dieses Fenster.
 
 Das Skript prüft `gh auth status`, `ssh-keygen` und beide Repos, erzeugt ein frisches ed25519-Paar
 in einem temporären Ordner, hinterlegt den öffentlichen Teil als **Read-only-Deploy-Key** auf
-`grimoire`, speichert den privaten Teil als Secret `GRIMOIRE_DEPLOY_KEY` in `fiends-n-patrons` und
-löscht die Schlüsseldateien wieder. **Rotation:** dasselbe Skript mit `-ReplaceExisting`; es legt den
-neuen Key an, setzt das Secret und entfernt erst danach die alten Keys gleichen Titels. Von `gh`
+`grimoire`, speichert den privaten Teil als Secret `GRIMOIRE_DEPLOY_KEY` in `fiends-n-patrons`,
+prüft das Secret über die API und löscht die Schlüsseldateien wieder. Scheitert ein Schritt nach dem
+Anlegen des Keys, aber vor dem Speichern des Secrets, entfernt das Skript den neuen Key wieder, weil
+sein privater Teil verloren wäre. **Rotation** oder ein unbrauchbarer Key aus einem abgebrochenen
+Lauf: dasselbe Skript mit `-ReplaceExisting`; es legt den neuen Key an, setzt das Secret und
+entfernt erst danach die alten Keys gleichen Titels. Von `gh`
 angelegte Deploy-Keys hängen am Token der GitHub CLI: Wird diese Autorisierung widerrufen, entfernt
 GitHub den Key, und das Skript muss erneut laufen.
 

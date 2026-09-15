@@ -85,7 +85,7 @@ runs:
             echo "### Engine-Zugriff fehlt"
             echo
             echo "Cargo-Schritte wurden **uebersprungen**: Das Secret \`GRIMOIRE_DEPLOY_KEY\` ist nicht gesetzt."
-            echo "Einrichtung: \`powershell -ExecutionPolicy Bypass -File scripts/setup-ci-deploy-key.ps1\`"
+            echo "Einrichtung im offenen PowerShell-Fenster: \`& ./scripts/setup-ci-deploy-key.ps1\` (siehe CONTRIBUTING.md)"
           } >> "$GITHUB_STEP_SUMMARY"
           cargo=false
           use_key=false

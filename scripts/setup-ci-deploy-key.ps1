@@ -9,6 +9,14 @@
     geloescht; der private Schluessel wird nie ausgegeben und nie als Kommandozeilenargument
     uebergeben (gh liest ihn von stdin).
 
+    Schlaegt ein Schritt fehl, nachdem der neue Deploy-Key angelegt wurde, aber bevor das Secret
+    gespeichert ist, entfernt das Skript diesen Key wieder: Sein privater Teil wird am Ende
+    geloescht, der Key waere sonst unbrauchbar.
+
+    Deploy-Keys werden ueber die REST-API gelesen (gh api, Feld read_only). Die Ausgabe von
+    "gh repo deploy-key list --json" ist dafuer nicht verlaesslich: gh 2.88.1 akzeptiert das Feld
+    readOnly, gibt es aber als read_only aus.
+
     Voraussetzungen: GitHub CLI (gh) angemeldet mit Admin-Rechten auf beiden Repos, ssh-keygen
     (Windows-Feature "OpenSSH-Client" oder Git for Windows).
 
@@ -22,10 +30,17 @@
     neuen Keys entfernt. Ohne diesen Schalter bricht das Skript ab, wenn ein solcher Key existiert.
 
 .EXAMPLE
-    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-ci-deploy-key.ps1
+    & .\scripts\setup-ci-deploy-key.ps1
+
+    Im offenen PowerShell-Fenster aufrufen, nicht ueber einen neuen "powershell -File"-Prozess: So
+    gestartet blieb das Skript in einem Terminal ohne Ausgabe und ohne Wirkung. Blockiert die
+    Ausfuehrungsrichtlinie das Skript, vorher nur fuer dieses Fenster:
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 .EXAMPLE
-    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-ci-deploy-key.ps1 -ReplaceExisting
+    & .\scripts\setup-ci-deploy-key.ps1 -ReplaceExisting
+
+    Ersetzt einen vorhandenen Key mit demselben Titel, etwa aus einem abgebrochenen Lauf.
 #>
 [CmdletBinding()]
 param(
@@ -150,18 +165,32 @@ function Get-FirstLine([string]$Text) {
     return ($Text.Trim() -split "`r?`n")[0]
 }
 
+# Lists the deploy keys of a repository as objects with Id, Title, Key and ReadOnly.
+# Reads the REST API, whose field read_only is documented; gh repo deploy-key list --json names the
+# field readOnly on input but prints read_only (gh 2.88.1). jq's @json prints every key as one
+# compact JSON line, which Windows PowerShell 5.1 parses line by line without array unrolling.
+# ReadOnly is $true or $false as reported, or $null if the response carries no boolean.
 function Get-DeployKeys([string]$GhPath, [string]$Repository) {
-    $result = Invoke-Native $GhPath @('repo', 'deploy-key', 'list', '--repo', $Repository, '--json', 'id,title,key,readOnly')
+    $query = '.[] | {id: .id, title: .title, key: .key, read_only: .read_only} | @json'
+    $result = Invoke-Native $GhPath @('api', "repos/$Repository/keys?per_page=100", '--paginate', '--jq', $query)
     if ($result.ExitCode -ne 0) {
         throw "Deploy-Keys von $Repository konnten nicht gelesen werden: $(Get-FirstLine $result.StdErr)"
     }
     $keys = @()
-    if (-not [string]::IsNullOrWhiteSpace($result.StdOut)) {
-        $parsed = $result.StdOut | ConvertFrom-Json
-        foreach ($key in @($parsed)) {
-            if ($null -ne $key) {
-                $keys += $key
-            }
+    foreach ($line in ($result.StdOut -split "`r?`n")) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+            continue
+        }
+        $raw = $line | ConvertFrom-Json
+        $readOnly = $null
+        if ($raw.read_only -is [bool]) {
+            $readOnly = $raw.read_only
+        }
+        $keys += New-Object PSObject -Property @{
+            Id       = $raw.id
+            Title    = [string]$raw.title
+            Key      = [string]$raw.key
+            ReadOnly = $readOnly
         }
     }
     return , $keys
@@ -169,8 +198,12 @@ function Get-DeployKeys([string]$GhPath, [string]$Repository) {
 
 $engine = "$Owner/$EngineRepo"
 $game = "$Owner/$GameRepo"
+$gh = $null
 $tempDir = $null
 $privateKey = $null
+$keyAdded = $false
+$createdKeyId = $null
+$secretStored = $false
 $exitCode = 0
 
 try {
@@ -215,15 +248,15 @@ try {
 
     $existing = @()
     foreach ($key in (Get-DeployKeys $gh $engine)) {
-        if ($key.title -eq $KeyTitle) {
+        if ($key.Title -eq $KeyTitle) {
             $existing += $key
         }
     }
     if ($existing.Count -gt 0) {
         if (-not $ReplaceExisting) {
-            throw "Auf $engine existiert bereits ein Deploy-Key mit dem Titel '$KeyTitle' (Anzahl: $($existing.Count)). Zum Rotieren das Skript mit -ReplaceExisting starten."
+            throw "Auf $engine existiert bereits ein Deploy-Key mit dem Titel '$KeyTitle' (Anzahl: $($existing.Count)). Stammt er aus einem abgebrochenen Lauf, ist er unbrauchbar, weil sein privater Teil geloescht wurde. Zum Ersetzen das Skript mit -ReplaceExisting starten."
         }
-        Write-Hint "Vorhandene Keys mit Titel '$KeyTitle' werden nach erfolgreicher Einrichtung entfernt: $(($existing | ForEach-Object { $_.id }) -join ', ')"
+        Write-Hint "Vorhandene Keys mit Titel '$KeyTitle' werden nach erfolgreicher Einrichtung entfernt: $(($existing | ForEach-Object { $_.Id }) -join ', ')"
     }
 
     # ------------------------------------------------------------------ Schluessel erzeugen
@@ -249,23 +282,25 @@ try {
     if ($add.ExitCode -ne 0) {
         throw "Deploy-Key konnte nicht angelegt werden: $(Get-FirstLine $add.StdErr)"
     }
+    $keyAdded = $true
 
     $publicKeyParts = ([System.IO.File]::ReadAllText($publicKeyFile).Trim() -split '\s+')
     $publicKey = "$($publicKeyParts[0]) $($publicKeyParts[1])"
     $created = $null
     foreach ($key in (Get-DeployKeys $gh $engine)) {
-        $keyParts = ([string]$key.key).Trim() -split '\s+'
+        $keyParts = $key.Key.Trim() -split '\s+'
         if ($keyParts.Count -ge 2 -and "$($keyParts[0]) $($keyParts[1])" -eq $publicKey) {
             $created = $key
         }
     }
     if ($null -eq $created) {
-        throw "Der neue Deploy-Key ist in $engine nicht auffindbar. Bitte in den Repo-Einstellungen unter 'Deploy keys' pruefen."
+        throw "Der neue Deploy-Key ist in $engine nicht auffindbar."
     }
-    if ($created.readOnly -ne $true) {
-        throw "Der neue Deploy-Key (id $($created.id)) hat Schreibrechte. Bitte sofort in den Repo-Einstellungen von $engine entfernen."
+    $createdKeyId = $created.Id
+    if ($created.ReadOnly -ne $true) {
+        throw "Der neue Deploy-Key (id $($created.Id)) ist laut GitHub nicht nur lesend (read_only: $($created.ReadOnly))."
     }
-    Write-Ok "Deploy-Key angelegt (id $($created.id), nur lesen)."
+    Write-Ok "Deploy-Key angelegt (id $($created.Id), nur lesen)."
 
     # ------------------------------------------------------------------ Secret
     Write-Step "Speichere den privaten Schluessel als Secret $SecretName in $game"
@@ -273,34 +308,66 @@ try {
     $set = Invoke-Native $gh @('secret', 'set', $SecretName, '--repo', $game, '--app', 'actions') -StandardInput $privateKey
     $privateKey = $null
     if ($set.ExitCode -ne 0) {
-        throw "Secret konnte nicht gesetzt werden: $(Get-FirstLine $set.StdErr). Der neue Deploy-Key (id $($created.id)) existiert bereits; das Skript danach mit -ReplaceExisting erneut starten."
+        throw "Secret konnte nicht gesetzt werden: $(Get-FirstLine $set.StdErr)"
     }
-    Write-Ok "Secret $SecretName gesetzt."
+    $secretStored = $true
+
+    $check = Invoke-Native $gh @('api', "repos/$game/actions/secrets/$SecretName", '--jq', '.name')
+    if ($check.ExitCode -eq 0 -and $check.StdOut.Trim() -eq $SecretName) {
+        Write-Ok "Secret $SecretName gesetzt und in $game vorhanden."
+    }
+    else {
+        Write-Hint "Secret $SecretName wurde gesetzt, die Kontrolle ueber die API ist aber fehlgeschlagen: $(Get-FirstLine $check.StdErr). Bitte in $game unter Settings > Secrets and variables > Actions pruefen."
+    }
 
     # ------------------------------------------------------------------ Rotation
     if ($ReplaceExisting -and $existing.Count -gt 0) {
         Write-Step "Entferne alte Deploy-Keys mit Titel '$KeyTitle' aus $engine"
         foreach ($old in $existing) {
-            $delete = Invoke-Native $gh @('repo', 'deploy-key', 'delete', [string]$old.id, '--repo', $engine)
+            $delete = Invoke-Native $gh @('repo', 'deploy-key', 'delete', [string]$old.Id, '--repo', $engine)
             if ($delete.ExitCode -ne 0) {
-                Write-Hint "Alter Key id $($old.id) konnte nicht entfernt werden: $(Get-FirstLine $delete.StdErr) - bitte von Hand in den Repo-Einstellungen loeschen."
+                Write-Hint "Alter Key id $($old.Id) konnte nicht entfernt werden: $(Get-FirstLine $delete.StdErr) - bitte von Hand in den Repo-Einstellungen loeschen."
             }
             else {
-                Write-Ok "Alter Key id $($old.id) entfernt."
+                Write-Ok "Alter Key id $($old.Id) entfernt."
             }
         }
     }
 
     Write-Host ''
-    Write-Host 'Fertig. Die Spiel-CI kann die Engine jetzt lesend ueber SSH laden.' -ForegroundColor Green
-    Write-Host 'Naechster Schritt: einen CI-Lauf starten und bis zum Ende ueberwachen, z. B.'
-    Write-Host "  gh workflow run ci.yml --repo $game"
-    Write-Host "  gh run watch --repo $game --exit-status"
+    Write-Host 'Fertig: Deploy-Key (nur lesen) und Secret sind eingerichtet.' -ForegroundColor Green
+    Write-Host 'Bewiesen ist der Engine-Zugriff erst durch einen CI-Lauf auf einem Stand, der die Engine referenziert.'
+    Write-Host 'Naechster Schritt: die Commits mit der Engine-Abhaengigkeit pushen und diesen Lauf bis zum Ende ueberwachen:'
+    Write-Host '  git push'
+    Write-Host "  gh run list --repo $game --workflow ci.yml --limit 1"
+    Write-Host "  gh run watch <Lauf-ID> --repo $game --exit-status"
+    Write-Host "Im Log muss 'Engine-Git-Abhaengigkeit gefunden, Deploy-Key vorhanden' stehen; ein gruener Lauf ohne diese Zeile beweist nichts."
 }
 catch {
     Write-Host ''
     Write-Host "FEHLER: $($_.Exception.Message)" -ForegroundColor Red
     $exitCode = 1
+
+    # Roll back a key whose private part is about to be deleted: it could never be used.
+    if ($keyAdded -and -not $secretStored) {
+        if ($null -ne $createdKeyId) {
+            try {
+                $rollback = Invoke-Native $gh @('repo', 'deploy-key', 'delete', [string]$createdKeyId, '--repo', $engine)
+                if ($rollback.ExitCode -eq 0) {
+                    Write-Host "Der neue Deploy-Key (id $createdKeyId) wurde wieder entfernt. Nach Behebung der Ursache das Skript erneut starten." -ForegroundColor Yellow
+                }
+                else {
+                    Write-Host "WARNUNG: Der neue Deploy-Key (id $createdKeyId) konnte nicht entfernt werden: $(Get-FirstLine $rollback.StdErr). Bitte in $engine unter Settings > Deploy keys loeschen." -ForegroundColor Red
+                }
+            }
+            catch {
+                Write-Host "WARNUNG: Der neue Deploy-Key (id $createdKeyId) konnte nicht entfernt werden: $($_.Exception.Message). Bitte in $engine unter Settings > Deploy keys loeschen." -ForegroundColor Red
+            }
+        }
+        else {
+            Write-Host "WARNUNG: Ein neuer Deploy-Key '$KeyTitle' wurde angelegt, aber nicht wiedergefunden. Das Skript mit -ReplaceExisting erneut starten; dann wird er ersetzt." -ForegroundColor Red
+        }
+    }
 }
 finally {
     $privateKey = $null
