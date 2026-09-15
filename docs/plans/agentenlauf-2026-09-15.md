@@ -33,7 +33,7 @@ Zusammen 38 Fragen, jede mit Erklärung und Empfehlung; sie lassen sich auf mehr
 
 - Codex war zweimal nicht verfügbar. Dadurch fehlt nur noch der unabhängige Namens-Abgleich des Vertrags durch Codex; alle anderen Codex-Prüfungen wurden nachgeholt.
 - Befund zur Werkzeugkette: Ein gemeinsam genutztes Cargo-Target-Verzeichnis kann veraltete Artefakte liefern; Gates liefen danach mit frischem Target.
-- Letzter autonomer Schritt läuft noch: Projekt-ADR-Vorschläge 0010 (Sigil-Compiler-Hoheit) und 0011 (Schema-Codegen, OF-16.2) für Sammelsitzung B. Danach ist ohne deine Entscheidungen oder CI-Minuten nichts Sinnvolles mehr offen.
+- Als letzter autonomer Schritt entstanden die Projekt-ADR-Vorschläge [0010 „Sigil-Compiler-Hoheit“](../adr/0010-sigil-compiler-hoheit.md) und [0011 „Schema-Codegen aus einer Quelle“](../adr/0011-schema-codegen-aus-einer-quelle.md) für Sammelsitzung B. Ohne deine Entscheidungen oder CI-Minuten ist jetzt nichts Sinnvolles mehr offen.
 
 ## Bereits erledigt
 
@@ -160,6 +160,8 @@ Bericht mit Ergebnissen je Strang, allen vorläufigen Entscheidungen und der vor
 - [`0002-vertragsfreigabe-wp1.2.md`](0002-vertragsfreigabe-wp1.2.md): 23 Rohfragen aus Entwurf, Review, Codex und Kompilierprüfung, zusammengeführt zu 21 Fragen (V-1 bis V-20 plus eine Pauschalfrage) in sechs Runden; 116 vorläufige Entscheidungen einzeln aufgelistet. Eine zweite Prüfung gegen den Vertragstext korrigierte 14 Stellen; das Frageformat ist maschinell geprüft (keine Fehler).
 - Auswirkungen der Antworten aus Sammelsitzung A (P-3, P-7, P-8, P-9) auf einzelne Fragen sind vermerkt.
 
-### Anschlussarbeit — Projekt-ADR-Vorschläge 0010 und 0011 (läuft)
+### Anschlussarbeit — Projekt-ADR-Vorschläge 0010 und 0011 (fertig)
 
-- WP1.5: ADR 0010 „Sigil-Compiler-Hoheit“ und ADR 0011 „Schema-Codegen aus einer Quelle“ (OF-16.2) als Vorschläge mit neutralem Optionsvergleich und gegnerischer Prüfung; Entscheidung in Sammelsitzung B.
+- [ADR 0010 „Sigil-Compiler-Hoheit“](../adr/0010-sigil-compiler-hoheit.md), Status „Vorgeschlagen“: vier Optionen (Rust als einzige Implementierung; zwei Implementierungen mit Konformitätskorpus; C# als Compiler; Rust-Compiler als WebAssembly in den C#-Werkzeugen). Vorschlag des Autors: Rust als einzige Implementierung, mit Pflichtmessung der Vorschau-Latenz in WP10.4 und gestuften Gegenmaßnahmen; die Kosten einer Ablehnung sind eigens aufgeführt.
+- [ADR 0011 „Schema-Codegen aus einer Quelle“](../adr/0011-schema-codegen-aus-einer-quelle.md) (OF-16.2), Status „Vorgeschlagen“: Werkzeuge mit Quellen geprüft (typeshare ohne C#-Ziel; serde-generate, FlatBuffers, Cap'n Proto und Protocol Buffers treffen die Binärlayouts aus Vertrag §12/§13 nicht exakt). Vorschlag des Autors: eine eigene kleine Schema-Beschreibung mit Emittern für Rust, C# und Doku, generierte Dateien eingecheckt, handgeprüfte Golden-Fixtures bleiben Pflicht.
+- Beide ADRs wurden gegen Plan, PRDs, Vertragsentwurf und Webquellen gegengeprüft (je 20 Korrekturen). Entschieden wird in Sammelsitzung B (P-2, P-10).
