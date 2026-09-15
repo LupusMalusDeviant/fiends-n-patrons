@@ -90,6 +90,15 @@ Then vergleicht CI Zustands-Hashes alle 600 Ticks; bei Abweichung ab Tick 18.600
 
 - **OF-18.1:** Subsystem-Hash-Granularität (pro System pro Tick vs. alle N Ticks) — Kosten/Nutzen-Spike in P1.
 - **OF-18.2:** Render-Snapshot-Referenzen pro GPU-Treiber-Familie nötig (CI-Runner-Varianz)? Empirisch in P1 klären (koppelt OF-17.3).
+  *Erste Daten (Plan 0002, WP2.1, Engine-PR #5, CI-Lauf 35015614138, Stand 2026-09-15):* Die Offscreen-Tests melden den gewählten Adapter je Runner im Job-Summary.
+
+  | Runner | Adapter | Backend | Gerätetyp | Treiber | übersprungene GPU-Tests |
+  |--------|---------|---------|-----------|---------|--------------------------|
+  | ubuntu-latest | llvmpipe (LLVM 20.1.2, 256 bits) | Vulkan | Cpu | Mesa 25.2.8 (LLVM 20.1.2) | 0 |
+  | macos-latest | Apple Paravirtual device | Metal | IntegratedGpu | unbekannt | 0 |
+  | windows-latest | Microsoft Basic Render Driver (WARP) | Dx12 | Cpu | unbekannt | 0 |
+
+  Damit ist OP-3 aus Plan 0001 beantwortet: Der gehostete macOS-Runner stellt einen paravirtualisierten Metal-Adapter bereit, die GPU-Tests laufen dort und werden nicht übersprungen. Für OF-18.2 heißt das: drei Treiberfamilien (Software-Vulkan, paravirtualisiertes Metal, WARP), die Referenzbilder vermutlich je Plattform brauchen; entschieden wird mit den ersten Snapshot-Szenen (WP2.8).
 - **OF-18.3:** „Pattern-Kenner"-Bot: aufgezeichnete Lösungswege vs. einfacher Lookahead-Solver? Spike P3.
 
 ## Referenzen
