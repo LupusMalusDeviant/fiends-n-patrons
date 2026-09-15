@@ -1,6 +1,6 @@
 # ADR-0010: Sigil-Compiler-Hoheit in Rust (`grimoire_sigilc`), C#-Werkzeuge orchestrieren per CLI/JSON
 
-- **Status:** Vorgeschlagen (Nummer vorläufig: Plan 0002 vergibt ADR-Nummern erst beim Merge, WP1.5 und R17; parallel entsteht der Vorschlag 0011 zum Schema-Codegen)
+- **Status:** Akzeptiert (2026-09-15; PO-Entscheidung in Sammelsitzung B)
 - **Datum:** 2026-09-15
 - **Entscheider:** Lupus Malus Deviant (PO), Entscheidung ausstehend in Sammelsitzung B (Plan 0002, P-2); vorbereitet durch Claude
 - **Bezug:** [Plan 0002](../plans/0002-phase-p1-sichtbarer-kern.md) (WP1.5, WP4, WP5.6, WP7.4, WP8.5, WP9, WP10, P-2, P-10, R14, R20, M1), [PRD-0000](../prd/0000-index-fiends-n-patrons.md) (E07, E20, §6), [PRD-0002](../prd/0002-grimoire-engine-architektur.md) (FR-01), [PRD-0003](../prd/0003-rendering-und-art.md) (Lesbarkeitsregeln), [PRD-0004](../prd/0004-sigil-bullet-system.md) (FR-08, FR-10), [PRD-0016](../prd/0016-tooling-suite.md) (FR-01, FR-02, FR-04, FR-10, OF-16.1, OF-16.2), [PRD-0017](../prd/0017-plattform-ci-distribution.md), [PRD-0018](../prd/0018-teststrategie.md) (FR-04, FR-09), [ADR-0001](0001-rust-kern-csharp-tooling.md), [ADR-0005](0005-voll-deterministische-simulation.md), [ADR-0006](0006-sigil-daten-dsl-statt-scripting.md), [ADR-0007](0007-offline-asset-kompilierung.md), [ADR-0008](0008-avalonia-fuer-tooling.md), Projekt-ADR-0011 (Vorschlag, Schema-Codegen OF-16.2), [Dossier Sammelsitzung A](../plans/0002-sammelsitzung-a-dossier.md) (P-1, P-6, P-9, P-13), [Fragenrunde Vertragsfreigabe WP1.2](../plans/0002-vertragsfreigabe-wp1.2.md) (V-1, V-15), Engine-Vertrag [`crate-vertraege.md`](https://github.com/LupusMalusDeviant/grimoire/blob/p1/wp1.2-contracts-draft/docs/architektur/crate-vertraege.md) §1, §3, §11.1, §12, §13 und Engine-ADR-Vorschläge 0007 (Sigil-Quelltextsyntax v1) und 0008 (Crate-Map-Erweiterung P1)
@@ -221,7 +221,9 @@ Determinismus-Code und eine native JIT-Abhängigkeit im Werkzeugprozess mit (Aus
 
 ## Entscheidung
 
-**Gewählte Option:** offen — Vorschlag des Autors siehe oben; Entscheidung durch den PO in Sammelsitzung B
+**Gewählte Option:** 1 — Rust als einzige Implementierung, wie vom Autor vorgeschlagen.
+
+**Nachtrag (2026-09-15, PO-Entscheidung Sammelsitzung B):** Die Bausteine 1–7 des Vorschlags oben gelten wie beschrieben. Zu Baustein 2: Dieses ADR löst ADR-0007 nur teilweise ab, und zwar nur für Sigil (Validierung und Kompilierung); die übrigen Feststellungen von ADR-0007 bleiben unberührt. ADR-0007 erhält dazu einen Verweis in seiner Statuszeile.
 
 Bausteine des Vorschlags (Option 1), damit der PO den Umfang vollständig abnehmen kann:
 

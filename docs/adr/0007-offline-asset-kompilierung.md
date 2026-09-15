@@ -1,6 +1,6 @@
 # ADR-0007: Offline-Asset-Kompilierung in binäre Packs (mit Dev-Hot-Swap über den Live-Link)
 
-- **Status:** Akzeptiert
+- **Status:** Akzeptiert; für Sigil (Validierung und Kompilierung) teilweise abgelöst durch [ADR-0010](0010-sigil-compiler-hoheit.md) (2026-09-15)
 - **Datum:** 2026-09-14
 - **Entscheider:** Lupus Malus Deviant (PO)
 - **Bezug:** [PRD-0016](../prd/0016-tooling-suite.md), [PRD-0002](../prd/0002-grimoire-engine-architektur.md)

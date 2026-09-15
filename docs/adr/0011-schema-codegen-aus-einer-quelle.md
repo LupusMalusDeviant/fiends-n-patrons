@@ -1,6 +1,6 @@
 # ADR-0011: Schema-Codegen aus einer Quelle für Rust und C# (OF-16.2)
 
-- **Status:** Vorgeschlagen (Nummer vorläufig: Plan 0002 vergibt ADR-Nummern erst beim Merge; 0010 ist für „Sigil-Compiler-Hoheit“ vorgesehen)
+- **Status:** Akzeptiert (2026-09-15; PO-Entscheidung in Sammelsitzung B)
 - **Datum:** 2026-09-15
 - **Entscheider:** Lupus Malus Deviant (PO) in Sammelsitzung B (P-10), vorbereitet durch Claude (ohne Codex)
 - **Bezug:** [Plan 0002](../plans/0002-phase-p1-sichtbarer-kern.md) (WP1.5, WP1.6, WP8.1–WP8.3, WP9.1–WP9.3, WP10.2–WP10.4, P-1, P-9, P-10, P-13, R20), [PRD-0016](../prd/0016-tooling-suite.md) (FR-02, FR-03, FR-04, FR-10, OF-16.1, OF-16.2), [PRD-0000](../prd/0000-index-fiends-n-patrons.md) (E01, E07, E17, E20), [PRD-0004](../prd/0004-sigil-bullet-system.md), [PRD-0017](../prd/0017-plattform-ci-distribution.md), [PRD-0018](../prd/0018-teststrategie.md), [ADR-0001](0001-rust-kern-csharp-tooling.md), [ADR-0006](0006-sigil-daten-dsl-statt-scripting.md), [ADR-0007](0007-offline-asset-kompilierung.md), [ADR-0008](0008-avalonia-fuer-tooling.md), [ADR-0009](0009-engine-pin-ueber-git-tag.md), [ADR-0010](0010-sigil-compiler-hoheit.md) „Sigil-Compiler-Hoheit“ (Vorschlag, Nummer vorläufig; Baustein 6 überlässt die Aufnahme der `sigilc`-JSON-Schemata diesem ADR), [Dossier Sammelsitzung A](../plans/0002-sammelsitzung-a-dossier.md) (P-1, P-9, P-13), [Fragenrunde Vertragsfreigabe WP1.2](../plans/0002-vertragsfreigabe-wp1.2.md) (V-6, V-12, V-15), [Spiel-Verträge (Entwurf)](../architektur/spiel-vertraege-entwurf.md) §4; Engine-Repo `grimoire`, Branch `p1/wp1.2-contracts-draft`: `docs/architektur/crate-vertraege.md` §1, §2 (Regeln 9–11), §3, §11.1, §12, §13, §15 und Engine-ADR-0008 „Crate-Map-Erweiterung P1“ (Vorschlag, Option 4); Branch `p1/wp1.4-sigil-syntax-spike`: Engine-ADR-0007 „Sigil-Quelltextsyntax v1“ (Vorschlag)
@@ -272,7 +272,9 @@ C#-Seite.
 
 ## Entscheidung
 
-**Gewählte Option:** offen — Vorschlag des Autors siehe oben; Entscheidung durch den PO in Sammelsitzung B
+**Gewählte Option:** 2e — eigene, kleine Schema-Beschreibung mit Rust- und C#-Emitter, wie vom Autor vorgeschlagen.
+
+**Nachtrag (2026-09-15, PO-Entscheidung Sammelsitzung B):** Angenommen im Zuschnitt des Vorschlags oben (Punkte 1–5): In P1 werden die Nutzlasttypen des Debug-Protokolls v1 und das Pack-Manifest v1 generiert; Frame-Kopf, Handshake-Ablauf, Pack-Header, Inhaltsverzeichnis und SHA-256-Logik bleiben auf beiden Seiten handgeschrieben; die Golden-Fixtures aus WP8.2/WP8.3 bleiben Pflicht.
 
 ## Konsequenzen
 
