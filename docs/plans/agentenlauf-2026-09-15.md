@@ -108,4 +108,15 @@ Bericht mit Ergebnissen je Strang, allen vorläufigen Entscheidungen und der vor
 - Engine-ADR-Vorschlag 0008 „Crate-Map-Erweiterung P1“ (Status „Vorgeschlagen“).
 - Spielseitiger Entwurf `docs/architektur/spiel-vertraege-entwurf.md` (Szenen, Bot-Profile, Harness-Bericht).
 - Review mit vier Linsen: 21 Befunde bestätigt (drei hoch: `replace_unit` war aus der Fassade nicht erreichbar; der blockierende TCP-IO-Thread des Debug-Links konnte beim Beenden hängen; die Crate-Karte verbot die Kante, die `sigilc simulate` braucht), 4 widerlegt; alle bestätigten Befunde eingearbeitet.
-- 37 vorläufige Entscheidungen und 17 PO-Fragen für die Vertragsfreigabe nach WP1.7 (unter anderem Hot-Swap-Verhalten fliegender Bullets, Breite des Content-Manifest-Hashes, harter Abbruch im Debug-Handshake, Budget-Gate für die dichte Kollisionsszene). Ein Codex-Review steht noch aus.
+- 37 vorläufige Entscheidungen und 17 PO-Fragen für die Vertragsfreigabe nach WP1.7 (unter anderem Hot-Swap-Verhalten fliegender Bullets, Breite des Content-Manifest-Hashes, harter Abbruch im Debug-Handshake, Budget-Gate für die dichte Kollisionsszene).
+
+### Anschlussarbeit — Codex-Reviews und Sigil-Nachmessung (fertig)
+
+- **Scheduler-Branch:** Codex fand zwei Punkte, beide gegengeprüft und bestätigt (niedrig): Exklusive Systeme, die in einem parallelen System laufen, erbten dessen Debug-Zugriffskontext; die Prüfung der Thread-Quelle übersah rayon hinter optionalen Features. Beide behoben (Regressionstest bzw. Negativkontrolle), lokales Gate grün, Branch jetzt `548a30a`.
+- **Vertragsentwurf:** Codex fand 13 Punkte, 9 bestätigt und eingearbeitet (4 mittel): Im Golden-Master-Format fehlten Algorithmus-Versionen; Programmindex und Kaskadentiefe bei `BulletSpawn` waren unvalidiert; der Emitter-Index war nach einem Hot-Swap, der eine Unit verkleinert, unvalidiert; `PackReader::open` las die Datei vor der Größenprüfung. Drei neue PO-Fragen: verkleinernder Hot-Swap, Größenprüfung vor dem Laden über eine Ergänzung des P0-Traits `FileSystem`, Koordinatengrenze `MAX_COORD`. Der neue Scheduler-Stand ist in den Vertragsbranch gemergt (`5eebd0d`, ein Konflikt in §3 aufgelöst).
+- **Sigil-Spike:** Codex schrieb G1–G3 in beiden Syntaxen, ohne Claudes Fassungen zu sehen; alle sechs Dateien prüfen fehlerfrei und ergeben dasselbe Modell. Die blinde Zweitbewertung der Fehlermeldungen weicht in keinem Fall um 2 oder mehr Punkte ab. Die Empfehlung `sigil 1` bleibt; Branch `d5956ed`.
+- **Befund zur Werkzeugkette:** Das gemeinsame Target-Verzeichnis `grimoire/target` wurde auch von Scratch-Kopien genutzt, und Cargo hielt dadurch einmal ein fremdes Build-Artefakt für aktuell. Das Gate wurde nach erzwungenem Neubau wiederholt. Künftige Agentenläufe sollten eigene Target-Verzeichnisse verwenden.
+
+### Anschlussarbeit — Kompilierprüfung des Vertragsentwurfs (läuft)
+
+- Alle Rust-Signaturen aus `crate-vertraege.md` werden in einem eigenen Scratch-Workspace gegen die Crates des Vertragsbranches kompiliert; Codex listet unabhängig undefinierte oder widersprüchliche Namen. Bestätigte Widersprüche werden im Vertragstext korrigiert. Die WP1.3-Skelette selbst folgen erst nach der PO-Freigabe der Verträge, weil die offenen Fragen sie noch ändern können.

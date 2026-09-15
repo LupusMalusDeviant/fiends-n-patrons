@@ -177,8 +177,11 @@ pub struct HarnessReport {
 - **Abgleich:**
   - Spiel-CI pro Push auf Linux.
   - Plattformübergreifender Hash-Vergleich nightly auf 3 OS.
-  - `ContentChanged` und `Diverged` machen den Lauf rot (vorläufig; PO-Frage zur Behandlung von `ContentChanged`).
-    `NotEligible` ist ein Fehler der Suite, weil Standard-Szenen keine Swaps enthalten.
+  - Nur `Match` besteht. `ContentChanged` und `Diverged` machen den Lauf rot (vorläufig; PO-Frage zur Behandlung
+    von `ContentChanged`). `NotEligible` ist ein Fehler der Suite, weil Standard-Szenen keine Swaps enthalten.
+  - `ShapeMismatch` (geänderter Seed, Tick-Takt, Hash-Intervall, Tick-Liste oder Algorithmusversion) und jede
+    künftige Variante des `#[non_exhaustive]`-Enums `GoldenVerdict` machen den Lauf ebenfalls rot und stehen mit
+    Verdikt im Report.
 - **Erneuerung** nur per `fnp_sim_harness golden renew <scene> --reason "…"` in eigenem Commit nach CONTRIBUTING
   „Golden-Master und Referenzwerte“. Agenten erneuern nicht eigenmächtig.
 - Die bestehende Konstante `GOLDEN_FINAL_HASH` in `tests/determinism.rs` bleibt als P0-Gate erhalten.
