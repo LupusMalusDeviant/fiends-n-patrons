@@ -82,4 +82,14 @@ Bericht mit Ergebnissen je Strang, allen vorläufigen Entscheidungen und der vor
 
 - [`0002-vorbereitung-of-17.3.md`](0002-vorbereitung-of-17.3.md): Vorschlag (vorläufig) — das Regressions-Gate misst Instruktionszählungen mit Callgrind (über gungraun) auf `ubuntu-latest` für Single-Thread-Benches; Wanduhrzeiten nur als Trend. Die Minutenschätzung für den Spike wurde nach einer lokalen Zeitmessung nach oben korrigiert. Nichts wurde ausgeführt, keine CI.
 
+### Anschlussarbeit — M0-Eintritts-Check (WP1.1) und Gliederung WP1.2
+
+- [`0002-m0-eintritts-check.md`](0002-m0-eintritts-check.md): 10 von 12 M0-Bedingungen erfüllt und mit Belegen nachgeprüft (48 Prüfungen, sieben Korrekturen an Belegen, kein Status geändert). Offen sind nur die PO-Punkte P-1 und P-4 aus Sammelsitzung A. Das Determinismus-Kriterium gilt mit Einschränkung: plattformübergreifend belegt ist bisher nur das Debug-Profil.
+- Zehn P0-Reste als Issue-Entwürfe (nicht angelegt), sechs davon brauchen eine PO-Entscheidung: echter GPU-Fensterlauf, Branch-Schutz im Free-Tarif, Release-Profil-Nightlies beider Repos, Actions-Minuten, Windows-CI mit kaltem Cache über 15 Minuten, OP-6-Dokumentation, Doku-Abgleich, Lizenzentscheidung aus P0-WP1.4, veralteter Kommentar zu `GOLDEN_5EED`.
+- Gliederung für den Vertragsentwurf WP1.2 (14 Abschnitte) liegt als Arbeitsgrundlage vor. Wichtigste Befunde für die nächste PO-Sitzung:
+  - Der Entwurf muss auf dem Scheduler-Branch aufsetzen, weil beide die Abschnitte 3, 7, 8 und 9 von `crate-vertraege.md` ändern.
+  - Auf dem Scheduler-Branch können Ressourcen wie `BulletPool` und `SpatialGrid` weder parallel geschrieben noch blockweise bearbeitet werden. Für die Budgets der Bullets (1,0 ms) und der Kollision (1,5 ms) braucht es dafür voraussichtlich eine Ergänzung.
+  - Die Blockgröße ist vorläufig (1024). Goldene Hashes für Sigil und Kollision sollten erst nach dem Bench eingefroren werden.
+  - Weitere Punkte: `u64`-Hashes als JSON-Zahlen verlieren in C# und JavaScript Genauigkeit; die Thread-Regel aus ADR-0006 braucht eine Ausnahme für den IO-Thread des Debug-Links; `RenderFrame` ist nicht `#[non_exhaustive]`, neue Kanäle wären also nicht rein additiv.
+
 *(Strang B folgt)*
