@@ -29,6 +29,16 @@
 - **Codex** läuft nur mit Sandbox `read-only`; Claude prüft jede Codex-Aussage gegen den Code, bevor sie verwendet wird.
 - **CI-Pflicht:** Jeder Push mit CI wird bis zum Ende überwacht, ein roter Lauf mit `gh run view --log-failed` analysiert und die Ursache (Code, Vorrichtung, extern) benannt.
 
+## Änderung — Actions-Minuten fast aufgebraucht
+
+GitHub meldete: **1.832 von 2.000 Actions-Minuten** dieses Abrechnungszeitraums verbraucht (Rücksetzung am 1. Oktober 2026). Danach lief noch der Abschluss-Lauf 34905253693. Verbrauch über das Kontingent hinaus wird berechnet, sofern kein Budget von $0 gesetzt ist. Deshalb gilt ab sofort bis zur PO-Entscheidung:
+
+- **In diesem Lauf keine CI-Läufe mehr.** Über die Restminuten entscheidet der PO in der nächsten Sitzung.
+- **Strang B endet mit einem gepushten Branch, ohne Draft-PR** (ein PR würde die CI auslösen). Der Workflow wurde dafür angehalten und mit geändertem Abschlussschritt fortgesetzt; Entwurf, Umsetzung, Gate und Review bleiben unverändert.
+- **Nightlies:** Die geplanten Läufe (Engine 02:17 UTC, Spiel 02:47 UTC) werden gleich beim Start abgebrochen, solange nur der kurze `changes`-Job läuft. Die Workflows werden nicht deaktiviert, weil das eine Einstellung ist, die der PO selbst ändern soll.
+- Anschlussarbeit 2 und 3 unten entfallen, soweit sie CI-Minuten brauchen.
+- Neue PO-Frage für die nächste Sitzung: Umgang mit dem Kontingent (Budget $0, Bezahlung, Matrix verkleinern, eigener Runner ohne GPU).
+
 ## Zeitfenster und Anschlussarbeit
 
 Sind die Stränge fertig, bevor der PO wieder verfügbar ist, geht es ohne Rückfrage weiter, in dieser Reihenfolge und jeweils nur, soweit keine PO-Entscheidung nötig ist:
@@ -52,5 +62,24 @@ Bericht mit Ergebnissen je Strang, allen vorläufigen Entscheidungen und der vor
 - Engine-Zugriff belegt: Alle drei Test-Jobs melden „Engine-Git-Abhaengigkeit gefunden, Deploy-Key vorhanden: Zugriff ueber SSH.“, der SSH-Agent-Schritt endet jeweils mit `success`.
 - `golden_final_hash_for_seed_42` besteht auf allen drei Plattformen: Der goldene Endhash des Spiels ist plattformübergreifend identisch.
 - P0-WP6.3 und damit Phase P0 sind abgeschlossen; von M0 ist nur die PO-Sammelsitzung A offen.
+- Abschluss-Commit `8642f7d` (Plan-Status, Kommentar zum goldenen Hash): CI-Lauf [34905253693](https://github.com/LupusMalusDeviant/fiends-n-patrons/actions/runs/34905253693) grün auf allen drei Plattformen.
 
-*(weitere Stränge folgen)*
+### Strang C — Dossier Sammelsitzung A (fertig)
+
+- [`0002-sammelsitzung-a-dossier.md`](0002-sammelsitzung-a-dossier.md): zwölf Entscheidungen (P-7, P-1, P-3, P-8, P-4a/b, OP-2, OP-7, P-9, P-5, P-6, P-13, P-14) mit Kontext, Optionen, vorläufiger Empfehlung und Folgen; 13 Fragen in vier Runden als fertiger Fragenentwurf. Die Codex-Gegenprüfung lieferte 28 Punkte, alle gegen die Quellen geprüft und eingearbeitet (unter anderem der Minutenstand).
+- Offen: Der Abschnitt „Freigabe WP1.0“ wird nach Abschluss von Strang B ergänzt.
+- Auffälligkeiten: Der Entwicklungsrechner liegt weit über der PRD-Referenz; die SemVer-Regel der Engine vor 1.0 passt nicht zu `v0.2.0` (eine Zeile Ergänzung nötig); das Standalone-Gate prüft einen künftigen Ordner `tools/` noch nicht.
+
+### Strang D — Spike Sigil-Syntax OF-4.1 (fertig, Branch gepusht)
+
+- Branch `p1/wp1.4-sigil-syntax-spike` (`65e5288`), ohne PR und ohne CI-Lauf: Korpus mit fünf Patterns und zehn Fehlern je Syntax, handgeschriebene Prototyp-Parser für RON (ron 0.12.2 plus eigener verlustfreier Scanner) und `sigil 1`, alle Messungen reproduzierbar (`cargo test`, 7 von 7 grün).
+- Fehlermeldungen (je höchstens 30 Punkte, RON / `sigil 1`): Position 27 / 30, Knotenpfad 28 / 30 (automatisch gemessen); Ursache 22 / 30, Fix-Hinweis 19 / 29 (manuell bewertet, vorläufig).
+- Wert an einem Knotenpfad setzen: `sigil 1` behält alle Kommentare und ändert genau eine Zeile.
+- Vorschlag (vorläufig): eigene Grammatik `sigil 1`; Bericht `docs/spikes/of-4.1-sigil-quelltextsyntax.md` und Engine-ADR-0007 im Status „Vorgeschlagen“ auf dem Branch. Entschieden wird in Sammelsitzung B.
+- Lücken: Codex stand zeitweise nicht zur Verfügung. Korpus und Parser hatten deshalb keine Zweitmodell-Prüfung, der Generierbarkeitsvergleich fehlt zur Hälfte, und die manuellen Bewertungen stammen nur von Claude. Eine CI-Änderung (`spikes/**` in `paths-ignore`) bleibt dem PO überlassen.
+
+### Strang E — Vorbereitung Benchmark-Rauschen OF-17.3 (fertig)
+
+- [`0002-vorbereitung-of-17.3.md`](0002-vorbereitung-of-17.3.md): Vorschlag (vorläufig) — das Regressions-Gate misst Instruktionszählungen mit Callgrind (über gungraun) auf `ubuntu-latest` für Single-Thread-Benches; Wanduhrzeiten nur als Trend. Die Minutenschätzung für den Spike wurde nach einer lokalen Zeitmessung nach oben korrigiert. Nichts wurde ausgeführt, keine CI.
+
+*(Strang B folgt)*
