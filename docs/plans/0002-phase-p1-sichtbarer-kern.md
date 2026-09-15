@@ -21,16 +21,14 @@ der Nachweis ist Teil von M0, nicht vorausgesetzt. `grimoire_collide`, `grimoire
 `grimoire_assets` und `grimoire_debug` sind Platzhalter; std-Transzendentalfunktionen weichen zwischen
 den Plattformen ab, deshalb rechnet die Simulationsseite ausschließlich über `dmath` (Engine-ADR-0004).
 
-Stand 2026-09-14 (aktualisiert nach der Umsetzung von P0-WP6.3) ist P0 noch nicht abgeschlossen.
-Engine-`main` ist gepusht, der Engine-Tag `v0.1.0` existiert remote (Commit `93bed40`), und
-Engine-ADR-0004 ist nach einem grünen 3-OS-Lauf akzeptiert. OF-2.2 ist entschieden: Engine-ADR-0006
-(akzeptiert) ersetzt das abgelehnte ADR-0003 durch einen parallelen Scheduler, dessen Umsetzung als
-erster P1-Schritt WP1.0 ist. Das Spiel-Manifest pinnt `v0.1.0` über einen Git-Tag (ADR-0009), dieser Stand ist
-aber noch ungepusht. Der Nachweis in der Spiel-CI fehlt: Ohne Secret `GRIMOIRE_DEPLOY_KEY` und
-Deploy-Key auf `grimoire` hat noch kein Spiel-CI-Lauf Clippy, Tests und Build ausgeführt, und der
-goldene Endhash des Spiels ist nur lokal unter Windows erfasst. P0-WP6.3 gilt erst mit einem
-solchen grünen 3-OS-Lauf als erledigt. All das ist
-Eintrittsbedingung dieses Plans (M0).
+Stand 2026-09-15 ist P0 abgeschlossen. Engine-`main` ist gepusht, der Engine-Tag `v0.1.0` existiert
+remote (Commit `93bed40`), und Engine-ADR-0004 ist nach einem grünen 3-OS-Lauf akzeptiert. OF-2.2 ist
+entschieden: Engine-ADR-0006 (akzeptiert) ersetzt das abgelehnte ADR-0003 durch einen parallelen
+Scheduler, dessen Umsetzung als erster P1-Schritt WP1.0 ist. Das Spiel pinnt `v0.1.0` über einen
+Git-Tag (ADR-0009); Deploy-Key und Secret `GRIMOIRE_DEPLOY_KEY` sind eingerichtet, und der
+Spiel-CI-Lauf 34903989101 (Commit `00d6683`) ist auf Windows, Linux und macOS grün — mit Engine-Zugriff
+über SSH und identischem goldenem Endhash des Spiels auf allen drei Plattformen. Von der
+Eintrittsbedingung M0 ist damit nur noch die PO-Sammelsitzung A offen.
 
 Definition of Done aus PRD-0000 §5: *Toon-Renderer + Punktlichter + Kamera; 10k-Bullet-Stresstest
 @60 FPS; Sigil v1 (Parser + Interpreter + Hot-Reload via Dev-Link).* Dazu kommen die P1-Abnahmen

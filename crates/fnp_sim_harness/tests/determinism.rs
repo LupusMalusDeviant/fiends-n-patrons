@@ -18,10 +18,9 @@ const GOLDEN_TICKS: u64 = 3_600;
 /// Final state hash of `run_seed(GOLDEN_SEED, GOLDEN_TICKS)`.
 ///
 /// This is a frozen expectation (golden master). The value was captured locally on Windows (debug
-/// and release profile) and is NOT yet confirmed by CI on Linux and macOS: until the engine deploy
-/// key exists, the game CI skips every Cargo step. Once a CI run has executed this test on all
-/// three operating systems, a mismatch on a single platform is a determinism bug; even before
-/// that, a mismatch is never a reason to change the value.
+/// and release profile) and confirmed by CI on Windows, Linux and macOS in the debug profile (game
+/// CI run 34903989101); the nightly workflow repeats the check in the release profile. A mismatch
+/// on a single platform is a determinism bug and never a reason to change the value.
 ///
 /// Renew it only deliberately, following CONTRIBUTING.md ("Golden-Master und Referenzwerte"):
 /// understand and name the cause first (intended change to the demo scenario or the bot, or an

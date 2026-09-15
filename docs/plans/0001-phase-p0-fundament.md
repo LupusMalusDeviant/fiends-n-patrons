@@ -1,6 +1,6 @@
 # Plan-0001: Phase P0 — Fundament (Repos, CI, Grimoire-Grundgerüst)
 
-- **Status:** In Umsetzung
+- **Status:** Abgeschlossen (2026-09-15)
 - **Datum:** 2026-09-14
 - **Autor:** Lupus Malus Deviant (PO) / Claude (Ausarbeitung)
 - **Basis-PRD:** [PRD-0002 Grimoire Engine](../prd/0002-grimoire-engine-architektur.md), [PRD-0017 Plattform & CI](../prd/0017-plattform-ci-distribution.md); Phasendefinition: [PRD-0000 §5](../prd/0000-index-fiends-n-patrons.md)
@@ -19,7 +19,7 @@
 | WP3 | erledigt | Desktop- und Headless-Runner, atomares Dateisystem, Monitorwahl und Start ohne Fokus, Drosselung bei minimiertem Fenster, `shutdown` auch bei macOS-`Cmd+Q`; Fenster-Beispiel unter Windows auf Bildschirm 2 geprüft |
 | WP4 | erledigt | wgpu-Kontext, instanzierter Sprite-Pass mit einem Draw-Call; Offscreen-Tests rendern in CI auf WARP (Windows), lavapipe (Linux) und Metal (macOS). Der Fensterpfad mit echter GPU ist noch nie gelaufen und wartet auf eine Testsitzung mit dem PO |
 | WP5 | erledigt | Eigenes ECS, Fixed-Timestep-Simulation, Seed-RNG, Replays, Snapshots; Determinismus-Gate mit Golden-Hash identisch auf drei Plattformen; Fassade `grimoire` mit `App`, `GamePlugin` und Hauptschleife |
-| WP6 | in Arbeit | OF-2.1 entschieden (Engine-ADR-0004 **akzeptiert** mit CI-Nachweis), OF-2.2 entschieden (Engine-ADR-0006 **akzeptiert**: paralleler Scheduler als erster P1-Schritt; ersetzt das abgelehnte Engine-ADR-0003), OF-17.1 als ADR-0009 (akzeptiert). Release `Grimoire v0.1.0` veröffentlicht (Release-Lauf 34894065040). WP6.4: Engine-Tag `v0.1.0` existiert remote (Commit `93bed40`). WP6.3: Das Spiel pinnt `v0.1.0` lokal (Stand 2026-09-14 ungepusht). **Nicht erledigt**, bis ein Spiel-CI-Lauf auf Windows, Linux und macOS Clippy, Tests und Build tatsächlich ausgeführt hat. Dafür fehlen noch das Secret `GRIMOIRE_DEPLOY_KEY` und der Deploy-Key auf `grimoire` (`scripts/setup-ci-deploy-key.ps1`, PO). |
+| WP6 | erledigt | OF-2.1 entschieden (Engine-ADR-0004 **akzeptiert** mit CI-Nachweis), OF-2.2 entschieden (Engine-ADR-0006 **akzeptiert**: paralleler Scheduler als erster P1-Schritt; ersetzt das abgelehnte Engine-ADR-0003), OF-17.1 als ADR-0009 (akzeptiert). Release `Grimoire v0.1.0` veröffentlicht (Release-Lauf 34894065040). WP6.4: Engine-Tag `v0.1.0` existiert remote (Commit `93bed40`). WP6.3: Das Spiel pinnt `v0.1.0` über den Git-Tag; Deploy-Key (read-only) und Secret `GRIMOIRE_DEPLOY_KEY` eingerichtet am 2026-09-15; Spiel-CI-Lauf 34903989101 auf `00d6683` grün auf Windows, Linux und macOS, mit Engine-Zugriff über SSH in allen drei Jobs und bestandenem goldenem Endhash (`golden_final_hash_for_seed_42`) auf allen drei Plattformen. |
 
 **Abweichungen vom ursprünglichen Plan**
 
