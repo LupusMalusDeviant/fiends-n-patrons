@@ -117,6 +117,13 @@ Bericht mit Ergebnissen je Strang, allen vorläufigen Entscheidungen und der vor
 - **Sigil-Spike:** Codex schrieb G1–G3 in beiden Syntaxen, ohne Claudes Fassungen zu sehen; alle sechs Dateien prüfen fehlerfrei und ergeben dasselbe Modell. Die blinde Zweitbewertung der Fehlermeldungen weicht in keinem Fall um 2 oder mehr Punkte ab. Die Empfehlung `sigil 1` bleibt; Branch `d5956ed`.
 - **Befund zur Werkzeugkette:** Das gemeinsame Target-Verzeichnis `grimoire/target` wurde auch von Scratch-Kopien genutzt, und Cargo hielt dadurch einmal ein fremdes Build-Artefakt für aktuell. Das Gate wurde nach erzwungenem Neubau wiederholt. Künftige Agentenläufe sollten eigene Target-Verzeichnisse verwenden.
 
-### Anschlussarbeit — Kompilierprüfung des Vertragsentwurfs (läuft)
+### Anschlussarbeit — Kompilierprüfung des Vertragsentwurfs (fertig)
 
-- Alle Rust-Signaturen aus `crate-vertraege.md` werden in einem eigenen Scratch-Workspace gegen die Crates des Vertragsbranches kompiliert; Codex listet unabhängig undefinierte oder widersprüchliche Namen. Bestätigte Widersprüche werden im Vertragstext korrigiert. Die WP1.3-Skelette selbst folgen erst nach der PO-Freigabe der Verträge, weil die offenen Fragen sie noch ändern können.
+- Alle 33 Rust-Blöcke aus `crate-vertraege.md` wurden in einem eigenen Workspace (13 Crates, eigenes Target-Verzeichnis) gegen die Crates des Vertragsbranches kompiliert. Ergebnis nach den Korrekturen: `cargo check` und Clippy mit den Determinismus-Regeln fehlerfrei, alle Feature-Kombinationen grün, alle neuen Traits als `dyn` nutzbar, keine Crate-Kante verletzt §1. P0-Aufrufer (eigene `Renderer`- und `GamePlugin`-Implementierungen, `FileSystem`, Struct-Literale) kompilieren unverändert — die Erweiterungen sind additiv.
+- 12 Befunde, 11 bestätigt und im Vertrag korrigiert (4 mittel): `sample_aim` und der Kameratyp in §9 waren nirgends definiert; `AssetEntry`/`AssetSource` widersprachen den Regeln 12 und 13; `FrameProfile` passte nicht zu `SystemInfo`; Nachrichtentypen und `to_stats` im Debug-Protokoll fehlten. Zwei neue PO-Fragen: Dev-Kanten für das Hash-Gate (§11.7) und Sigil-Typen im Prelude (§9.2).
+- Die Prüfung liegt reproduzierbar als Spike `spikes/contract-check/` auf dem Branch (`f9765dd`). Sie prüft nur Signaturen und ist nicht WP1.3; die Skelette folgen erst nach der PO-Freigabe der Verträge.
+- Codex konnte nicht mitprüfen: erneut nicht verfügbar.
+
+### Anschlussarbeit — Fragenrunde zur Vertragsfreigabe (läuft)
+
+- Die rund 22 offenen PO-Fragen und 37 vorläufigen Entscheidungen des Vertragsentwurfs werden in eine fertige Fragenrunde im Format des Dossiers gebündelt.

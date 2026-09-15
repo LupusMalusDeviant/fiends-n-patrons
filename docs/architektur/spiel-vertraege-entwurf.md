@@ -182,6 +182,9 @@ pub struct HarnessReport {
   - `ShapeMismatch` (geänderter Seed, Tick-Takt, Hash-Intervall, Tick-Liste oder Algorithmusversion) und jede
     künftige Variante des `#[non_exhaustive]`-Enums `GoldenVerdict` machen den Lauf ebenfalls rot und stehen mit
     Verdikt im Report.
+- **Laufergebnis:** Die Harness baut es mit `GoldenRun::new(seed, tick_rate_hz, hash_every, content_manifest,
+  golden_eligible, checkpoints)` (Engine §15.2). `algorithms` setzt `new` aus `AlgorithmVersions::current()`; die
+  Harness trägt keine Algorithmusversionen von Hand ein. Abweichende Läufe für Tests entstehen per Feldzuweisung.
 - **Erneuerung** nur per `fnp_sim_harness golden renew <scene> --reason "…"` in eigenem Commit nach CONTRIBUTING
   „Golden-Master und Referenzwerte“. Agenten erneuern nicht eigenmächtig.
 - Die bestehende Konstante `GOLDEN_FINAL_HASH` in `tests/determinism.rs` bleibt als P0-Gate erhalten.
