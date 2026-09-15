@@ -1,6 +1,6 @@
 # Dossier Sammelsitzung A (Plan 0002, M0)
 
-- **Status:** Vorbereitet für die Fragenrunde, **nichts entschieden**; nach der Gegenprüfung überarbeitet (jeder Kritikpunkt gegen die Quellen geprüft)
+- **Status:** **Entschieden am 2026-09-15**, Antwort je Frage als „Entscheidung“ vermerkt (P-2, P-10, P-11 und P-12 waren nicht Teil der Sitzung); vorher für die Fragenrunde vorbereitet und nach der Gegenprüfung überarbeitet (jeder Kritikpunkt gegen die Quellen geprüft)
 - **Datum:** 2026-09-15 (Agentenlauf, Strang C)
 - **Autor:** Claude (Ausarbeitung), Gegenprüfung der Empfehlungen durch Codex (gpt-6-astra, read-only), jede übernommene Codex-Aussage gegen die Dateien geprüft
 - **Für:** Lupus Malus Deviant (PO) — nur auswählen, nichts schreiben
@@ -80,6 +80,8 @@ abgefragt, weil laufende Stränge daran hängen.
 
 **Konsequenzen:** A — Vertrag WP1.2 wie geplant; CHANGELOG-Eintrag als inkompatible Änderung; P1 endet nach SemVer-Politik mit `v0.2.0` (P-7). B — WP7.5 definiert ein Sidecar-Format; WP1.2 ohne Replay-Teil. C — WP7.1 ins P3-Backlog, Swap-Markierung entfällt in P1; WP11.4 (Red-Team) kann „Swap-Sessions nicht golden“ nicht prüfen.
 
+**Entscheidung (PO, 2026-09-15):** A — Replay v2 in P1, v1 bleibt lesbar. Abweichend von der Konsequenz oben stuft der PO Replay v2 nach der Nachfrage zu P-7 als Ergänzung ein (neuer Typ neben `InputLog` v1); P1 hebt deshalb nicht auf `v0.2.0`.
+
 ### P-7 — Pin- und Versionspolitik in P1
 
 **Frage:** Pinnt das Spiel während P1 Vorab-Tags `v0.2.0-alpha.N` (für WP1.0 und je Meilenstein), mit `v0.2.0` als Abschluss?
@@ -100,6 +102,8 @@ abgefragt, weil laufende Stränge daran hängen.
 **Empfehlung: A.** Vorabversionen kennzeichnen unfertige Zwischenstände ehrlich und geben den parallelen Worktrees feste gemeinsame Integrationspunkte, ohne dass ein lokaler Patch alle Stränge zugleich trifft. Mit P-8 = A passt `v0.2.0` ohne Regeländerung zur SemVer-Politik. „Bei Bedarf dazwischen“ fängt R23 ab: Überzieht WP1.0, bekommen Zugriffs-API und sequentieller Executor ihr eigenes Alpha-Tag. Die CI-Kosten je Tag gehören in die Minutenplanung (OP-2).
 
 **Konsequenzen:** A — WP1.0 kann nach Freigabe und grünem 3-OS-Hash-Gate `v0.2.0-alpha.1` taggen; keine Änderung der SemVer-Politik; jeder Alpha-Tag wird in der Minutenplanung (OP-2) eingeplant. B — Die Plan-Texte zu `v0.2.0-alpha.N` (WP1.0, WP11.1, M1–M3) werden auf `v0.1.N` umgestellt; setzt P-8 ≠ A voraus. C — Folge-ADR zu ADR-0009 vor dem ersten Pin-Wechsel. D — Parallele Stränge müssen serialisiert werden oder blockieren sich gegenseitig; mit der Strang-Organisation des Plans nicht vereinbar.
+
+**Entscheidung (PO, 2026-09-15):** B — Patch-Versionen `0.1.x` (abweichend von der Empfehlung), obwohl P-8 = A: Replay v2 gilt als Ergänzung, alles bleibt `0.1.x`, erst eine echte inkompatible Änderung hebt auf `0.2.0`. Der Scheduler aus WP1.0 wird `v0.1.1` statt `v0.2.0-alpha.1`; Plan 0002 ist auf `v0.1.x` umgestellt, die Engine-SemVer-Politik nennt die P1-Regel.
 
 ### P-1 — OF-16.1: Repo-Ort der C#-Tooling-Suite
 
@@ -122,6 +126,8 @@ abgefragt, weil laufende Stränge daran hängen.
 
 **Konsequenzen:** A — WP8.1 schreibt C# nach `grimoire/tools/`; Engine-CI bekommt einen .NET-Job mit Pfadfilter (WP9.1); Standalone-Gate um `tools/**` erweitern; ADR-0008 (Ort nachtragen) und PRD-0000 §4/§8 OF-2 in WP11.6 nachziehen. B — Neues Repo, Deploy-Key-Setup analog ADR-0009, Pin-Politik für drei Repos; +Aufwand in WP9.1. C — `grimoire-ac` liegt im Spiel-Repo, der zweite Engine-Checkout für `sigilc` in der Spiel-CI bleibt nötig (WP9.3); jede Protokolländerung braucht einen Alpha-Tag, bevor die Tools sie sehen. D — WP9/WP10 wandern ins P2-Backlog; M3 und M4 verlieren die C#-Kriterien (Plan 0002, M3 „sofern die C#-Seite in P1 ist“); die Ortsfrage wird in P2 erneut gestellt; P-6 und P-13 entfallen in Runde 3 (siehe Fragenentwurf).
 
+**Entscheidung (PO, 2026-09-15):** A — `grimoire/tools/`.
+
 ### P-3 — `grimoire_collide` v0 in P1
 
 **Frage:** Baut P1 die Kollision v0 (Grid, Kreis/Kapsel, Layer-Masken, Graze-Ring-Query) als Budget-Nachweis, ohne Gameplay-Anbindung?
@@ -141,6 +147,8 @@ abgefragt, weil laufende Stränge daran hängen.
 **Empfehlung: A.** Die P1-Abnahme verlangt den Nachweis, und ein Budget ohne Worst-Case-Szene verschiebt die unangenehme Überraschung nur. Die zusätzliche Szene ist ein Bench-Szenario, kein neues Feature.
 
 **Konsequenzen:** A — WP6.5 bekommt ein zweites Bench-Szenario (Cluster), sonst wie geplant. B — Plan unverändert. C — WP6.5 und **nur der Kollisionsteil von WP11.2** (Broadphase, Graze-Query) ins P2-Backlog; Extraktions- und Mauszielen-Adapter aus WP11.2 bleiben in P1, und die Abhängigkeit WP11.2 → WP11.3 gilt nur noch für diese Teile; `stress_10k` läuft ohne Broadphase, Erfolgskriterium „Kollision ≤ 1,5 ms“ wird als verschoben dokumentiert; WP1.2 schneidet trotzdem den Trait (kostet wenig, spart später einen Vertrags-PR).
+
+**Entscheidung (PO, 2026-09-15):** A — collide v0 in P1 ohne Gameplay, mit Worst-Case-Test (dichte Cluster-Szene).
 
 ---
 
@@ -186,6 +194,8 @@ abgefragt, weil laufende Stränge daran hängen.
 
 **Konsequenzen:** A — `ci.yml` beider Repos bekommt eine Matrix-Regel (macOS nur bei Schedule, Tag oder Label/Dispatch); WP4.4, WP9.1 und die GIF-Jobs werden nightly/meilensteinweise geplant; WP6.1 startet nach dem 1. Oktober; WP5.1 und WP5.7 („pro Push auf 3 OS“) werden zu „pro Push auf 2 OS, nightly auf 3 OS“, ebenso der M2-Gate-Text („goldene Pattern-Hashes pro Push auf 3 OS“) und das Erfolgskriterium „≥ 12 Referenz-Patterns laufen als goldene Tests auf 3 OS grün“ (präzisiert: 3 OS nightly); PRD-0017 (Ziele, US-01) erhält in WP11.6 eine P1-Anmerkung; jeder Alpha-Tag (P-7) wird eingeplant. B — Plan unverändert, Kostenposition außerhalb des Plans. C — Wie A, plus Einrichtungsaufgabe für den Runner (1–2 Tage) mit eigener Sicherheitsprüfung; Linux-Jobs wechseln auf `runs-on: self-hosted`. D — Plan unverändert, Risiko R21 steigt auf „hoch“.
 
+**Entscheidung (PO, 2026-09-15):** Über die Minuten war nicht mehr zu entscheiden: Der PO hat beide Repos öffentlich gemacht, dort kosten gehostete Standard-Runner keine Actions-Minuten; bis zur Veröffentlichung wurden keine Minuten mehr verbraucht. OP-2 ist geschlossen (Plan 0002).
+
 ### P-4 — Referenz-Hardware und Messsitzungen
 
 Zwei Fragen, die zusammenhängen: P-4a A, B und D brauchen Messsitzungen, P-4b legt fest, welche es gibt. „Keine Messsitzungen“ passt nur zu P-4a C (Referenz auf den Entwicklungsrechner geändert) oder macht P-4a gegenstandslos; diese Option wird daher im Fragenentwurf nicht angeboten.
@@ -221,6 +231,8 @@ Zwei Fragen, die zusammenhängen: P-4a A, B und D brauchen Messsitzungen, P-4b l
 
 **Konsequenzen:** P-4a A — WP6.7 bekommt eine Tabelle mit CPU- und GPU-Faktor, als Schätzung gekennzeichnet und mit ausgewiesener Unsicherheit; WP11.5 enthält den Entscheidungspunkt „Referenzmessung oder geändertes Abnahmekriterium“. B — Beschaffung als externe Abhängigkeit vor WP11.5; Messprotokoll nennt beide Geräte. C — PRD-0001/0002 NFR und PRD-0003 Budgets werden in WP11.6 umformuliert. D — M0 wird mit offenem Punkt übergeben. P-4b A — Plan unverändert. B — M1 und M2 bekommen geänderte Gate-Kriterien; WP8.4 bleibt lokal auf In-Process-Transport; WP3.3 und WP6.7 ohne Referenzfaktor bis zum Ende. C — P1-DoD „@60 FPS“ gilt als nicht belegt und wird nach E20 in P2 verschoben; M1/M2-Kriterien entfallen.
 
+**Entscheidung (PO, 2026-09-15):** P-4a D — bis Messsitzung 1 vertagt; M0 bleibt in diesem Punkt formal offen. P-4b A — Messsitzung 1 (nach WP3.3) und Abschluss-Messsitzung (WP11.5), Regeln wie im Plan.
+
 ### OP-7 — Signierpflicht für Windows-Binaries (Regelkonflikt)
 
 **Frage:** Welche Windows-Binaries werden mit dem Zertifikat `CN=Lupus Malus Deviant` signiert?
@@ -240,6 +252,8 @@ Zwei Fragen, die zusammenhängen: P-4a A, B und D brauchen Messsitzungen, P-4b l
 **Empfehlung: A.** Sie trifft die Absicht beider Regeln („was ausgeliefert oder gestartet wird, trägt die Signatur“) und entspricht der Anleitung zum Signier-Skript. Die Signierregel wird dabei **nicht** von Agenten geändert; der PO kann den Wortlaut selbst präzisieren. Wie Nightlies vor einer Weitergabe an Tester signiert werden, ist eine P3-Frage (OF-17.4) und wird hier nicht gestellt.
 
 **Konsequenzen:** A — PRD-0000 §6.6 wird in WP11.6 auf „jede Binary, die `target/` verlässt oder von einem Menschen gestartet wird, sowie jeder lokale Release-Build“ angeglichen; WP11.7 bleibt (lokale Werkzeug-Binaries signiert); Merkposten P3: Ablauf für weitergegebene Nightlies. B — Agenten-Aufträge müssen nach jedem Build Signaturschritte vorsehen; lokale Testläufe werden merklich langsamer. C — Die Signierregel des PO und das Projekt widersprechen sich dauerhaft; WP11.7 signiert nur beim Release.
+
+**Entscheidung (PO, 2026-09-15):** C — nur Release-Builds werden signiert (abweichend von der Empfehlung). PRD-0000 §6.6 ist angeglichen; WP11.7 signiert nur beim Release.
 
 ---
 
@@ -278,6 +292,8 @@ Entwicklungsrechner genügt dafür **nicht**; es ist Voraussetzung für Merge un
 Weil die Freigabe alle Stränge mit Simulationssystemen entblockt (WP1.3 Spieler-Proxy, WP5, WP6.5,
 WP11.2), wird sie direkt nach Runde 2 und vor Runde 3 gestellt.
 
+**Entscheidung (PO, 2026-09-15):** Freigegeben wie empfohlen, mit den vorläufigen Entscheidungen des Branches: Merge nach grüner 3-OS-CI im öffentlichen Repo und Tag `v0.1.1` (statt `v0.2.0-alpha.1`, siehe P-7). Blockgröße 1024 vorläufig bis zum P1-Benchmark; Executor an der Welt; strenge Abhängigkeitsregel, also auch keine Dev-Abhängigkeiten der Determinismus-Crates auf rayon oder `grimoire_exec`.
+
 ---
 
 ## Runde 3 — Nach WP1
@@ -302,6 +318,8 @@ WP11.2), wird sie direkt nach Runde 2 und vor Runde 3 gestellt.
 
 **Konsequenzen:** A — WP4.1/8.2/8.3 wie geplant; in WP11.6 ein Index `Prototype/docs/formats/README.md` mit Verweis auf den gepinnten Tag. B — Engine-Repo bekommt ab P2 spielbezogene Doku, das Standalone-Gate sollte `docs/formats/` auf `fnp_` prüfen. C — WP4.1/8.2/8.3 schreiben ins Spiel-Repo; jede Formatänderung braucht zwei PRs.
 
+**Entscheidung (PO, 2026-09-15):** A — beim Eigentümer des Formats.
+
 ### P-5 — Umfang der Referenz-Patterns
 
 **Frage:** Liefert P1 12 Referenz-Patterns (8 weitere in P2) oder alle 20, jeweils mit Abnahme über eine Abdeckungsmatrix?
@@ -320,6 +338,8 @@ WP11.2), wird sie direkt nach Runde 2 und vor Runde 3 gestellt.
 **Empfehlung: A.** Die Zahl 12 bleibt Planungsgröße, die Matrix macht die Abdeckung abnehmbar. Das kostet wenige Stunden und schützt WP5.7 vor Scheinabdeckung; weitere Patterns bringen in P1 vor allem Pflegeaufwand.
 
 **Konsequenzen:** A — WP4.5 erzeugt zusätzlich eine Abdeckungstabelle, WP11.4 prüft sie; Patterns 13–20 ins P2-Backlog. B — WP4.5 +≈ 1–2 Tage (Schätzung), Abdeckungstabelle wie A; mehr Master in WP7.5.
+
+**Entscheidung (PO, 2026-09-15):** A — 12 in P1, 8 in P2, Abnahme über die Abdeckungsmatrix.
 
 ### P-6 — Umfang des Sigil-Editor-MVP und Überzugsregel
 
@@ -341,6 +361,8 @@ WP11.2), wird sie direkt nach Runde 2 und vor Runde 3 gestellt.
 **Empfehlung: A.** Der Umfang ist gut begründet (kein zweiter Parser in C#, unter der Annahme P-2 = ja), es fehlte nur ein prüfbarer Auslöser. Der gemeinsame WP9+WP10-Auslöser fängt auch einen WP9-Überzug; die Frühwarnung nach WP10.3 greift früher, weil WP10.1–10.3 meist vor WP9 laufen.
 
 **Konsequenzen:** A — WP10.3 bekommt die Frühwarnung als Gate; der Rückfalltext in Plan 0002 („deutlich“) wird durch „Schätzung inklusive Reserve aufgebraucht“ ersetzt; R14-Mitigation wird konkret. B — WP10.3/WP10.4 schrumpfen, Scrubbing und Regler ins P2-Backlog. C — WP10 ins P2-Backlog, M4 ohne Editor-Kriterium (E20 dokumentiert). D — WP10 +mehrere Tage (nicht geschätzt), R14 steigt.
+
+**Entscheidung (PO, 2026-09-15):** A — MVP wie geplant, mit Frühwarnung nach WP10.3 und prüfbarem Auslöser.
 
 ### P-13 — .NET-SDK- und Avalonia-Version
 
@@ -367,6 +389,8 @@ WP11.2), wird sie direkt nach Runde 2 und vor Runde 3 gestellt.
 
 **Konsequenzen:** A — WP9.1/WP10.1 wie geplant mit festen Versionen; ein Upgrade ist ein eigener Commit (Muster aus den `CONTRIBUTING.md`); WP9.1 prüft den Headless-Lauf auf 3 OS früh. B — Start erst nach dem 10. November 2026; CI-Images müssen .NET 11 führen (nicht geprüft). C — Späterer Major-Umstieg als Backlog-Punkt.
 
+**Entscheidung (PO, 2026-09-15):** A — .NET 10 LTS und Avalonia 12.1.x, exakt gepinnt.
+
 ---
 
 ## Runde 4 — Abschluss
@@ -390,6 +414,8 @@ WP11.2), wird sie direkt nach Runde 2 und vor Runde 3 gestellt.
 **Empfehlung: A.** In P1 gibt es keinen Konsumenten außerhalb des Entwicklungsrechners. Die Distributionsfragen (Signatur, Hosting OF-17.4) gehören gebündelt in P3.
 
 **Konsequenzen:** A — Plan unverändert (WP11.7), Merkposten Engine-ADR in P3. B — WP11.1-Release-Ablauf bekommt Signier- und Upload-Schritt, `CONTRIBUTING.md` der Engine wird angepasst. C — `release.yml` bekommt eine Build-Matrix, Engine-ADR vor dem ersten Alpha-Tag mit Binaries.
+
+**Entscheidung (PO, 2026-09-15):** A — P1 bleibt quelltext-only; lokal genutzte Werkzeuge werden nach OP-7 = C nicht signiert.
 
 ---
 

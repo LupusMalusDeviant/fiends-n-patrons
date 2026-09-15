@@ -1,6 +1,6 @@
 # Fragenrunde Vertragsfreigabe WP1.2 (Plan 0002, WP1.7)
 
-- **Status:** Vorbereitet für die Fragenrunde, **nichts entschieden**
+- **Status:** **Entschieden am 2026-09-15:** V-1 bis V-21 wie empfohlen, Antwort je Frage als „Entscheidung“ vermerkt; Merge erst nach adversarialem Review und grüner 3-OS-CI
 - **Datum:** 2026-09-15 (Agentenlauf, Anschlussarbeit)
 - **Autor:** Claude (Ausarbeitung aus dem Branch-Text und den Agentenlauf-Ergebnissen; Codex nicht beteiligt)
 - **Für:** Lupus Malus Deviant (PO) — nur auswählen, nichts schreiben
@@ -140,6 +140,8 @@ Kombination ist über die freie Antwort wählbar. Option 4 (gemeinsame Format-Cr
 Compiler fallen lokal ohne CI-Minuten auf. Die Dev-Kanten liegen außerhalb der Determinismus-Menge und lassen die
 Szenarien ohne Fassade laufen.
 
+**Entscheidung (PO, 2026-09-15):** A — eigene Crates `grimoire_sigilc`, `grimoire_bench` und `grimoire_link` mit den Test-Kanten `grimoire_exec → grimoire_sigil` und `→ grimoire_collide`. Folge: ADR-Vorschlag 0008, Baustein 5, wird um diese Dev-Kanten ergänzt.
+
 ### V-2 — Zugriff auf konkrete Ressourcen
 
 **Frage:** Dürfen Spielsysteme den Kugel-Pool und das Kollisionsgitter direkt lesen, wenn sie den Zugriff anmelden?
@@ -160,6 +162,8 @@ Systemen, die sie selbst oder die Fassade registriert, oder über Anforderungen 
 
 **Empfehlung: A.** Sie passt zum Zugriffsmodell aus ADR-0006, kostet keine Kopien und hält trotzdem jede Mutation in
 einer Crate.
+
+**Entscheidung (PO, 2026-09-15):** A — lesen mit angemeldetem Zugriff über die API der besitzenden Crate; schreiben nur Systeme dieser Crate oder der Fassade.
 
 ### V-3 — Render-Kanal für Kugeln, Marker und Debug
 
@@ -182,6 +186,8 @@ Die Kompilierprüfung bestätigte, dass P0-Aufrufer unverändert kompilieren.
 **Empfehlung: A.** Sie hält die Plan-Zusage und ist nach SemVer additiv; B wäre einfacher, bricht aber bestehenden
 Code, C erzeugt versteckten Zustand.
 
+**Entscheidung (PO, 2026-09-15):** A — eigener `StageFrame` neben den unveränderten P0-Typen.
+
 ### V-4 — Vergabe der Zufallsstrom-Nummern
 
 **Frage:** Wird die Strom-Nummer so aufgeteilt, dass Engine-Teile und Spiel nie denselben Zufall ziehen?
@@ -202,6 +208,8 @@ unverändert.
 
 **Empfehlung: A.** Sie schließt Kollisionen konstruktiv aus, ist leicht zu prüfen und ändert keinen bestehenden Hash.
 Eine spätere Änderung wäre nach §2b inkompatibel, deshalb gehört die Entscheidung vor die Pattern-Goldens.
+
+**Entscheidung (PO, 2026-09-15):** A — Bitfelder 1/15/48 je Eigentümer.
 
 ---
 
@@ -226,6 +234,8 @@ nachträglich erweitert; der Eigentümer des Scheduler-Vertrags sollte zustimmen
 
 **Empfehlung: A.** Eine gemeinsame Implementierung verhindert abweichende Regeln und bleibt additiv.
 
+**Entscheidung (PO, 2026-09-15):** A — gemeinsamer Blockläufer aus dem ECS.
+
 ### V-6 — Content-Manifest-Hash der Sitzung
 
 **Frage:** Wie genau soll die Kennung des geladenen Contents sein?
@@ -245,6 +255,8 @@ sortierten Unit-Hashes. Der SHA-256-`ContentHash` eines Packs bleibt davon getre
 
 **Empfehlung: A.** 64 Bit genügen zur Identifikation von Content, und A hält die Determinismus-Crates schlank; C
 bleibt später additiv möglich.
+
+**Entscheidung (PO, 2026-09-15):** A — 64-Bit-Hash über den `StableHasher` der Engine.
 
 ### V-7 — Live-Tausch: fliegende Kugeln und entfallene Emitter
 
@@ -268,6 +280,8 @@ Tausch den Index zurückbringt (§11.4, von Codex gefunden und vorläufig einget
 **Empfehlung: A.** Sie ist die einzige Kombination, die weder alte Layouts im Speicher hält noch Bearbeitungen
 blockiert noch Spiel-Entities löscht.
 
+**Entscheidung (PO, 2026-09-15):** A — fliegende Kugeln werden entfernt, Emitter starten neu, entfallene Emitter ruhen.
+
 ### V-8 — Sigil-Typen im Prelude
 
 **Frage:** Welche Sigil-Typen soll ein Spiel ohne vollen Pfad nutzen können?
@@ -286,6 +300,8 @@ Merge auf Namenskollisionen mit Spiel-Crates.
 | **C: Alle öffentlichen Typen aus §11** | Bequem; größere Kollisionsprüfung |
 
 **Empfehlung: A.**
+
+**Entscheidung (PO, 2026-09-15):** A — kleine Auswahl an Sigil-Typen im Prelude.
 
 ---
 
@@ -311,6 +327,8 @@ Unit-Bytes. `is_golden_eligible()` ist genau dann wahr, wenn die Liste leer ist.
 **Empfehlung: A.** Sie kostet wenig, erfüllt die Markierung aus P-8 A und macht Tauschsitzungen nachvollziehbar; C
 wird zusammen mit dem Rewind-Spike in P2 neu bewertet.
 
+**Entscheidung (PO, 2026-09-15):** A — Replays halten je Live-Tausch Tick und Content-Hash fest.
+
 ### V-10 — Build-Hash in lokalen Builds
 
 **Frage:** Reicht es für das Erfolgskriterium „Replay-Header tragen Build-Hash und Engine-Pin“, wenn lokale Builds
@@ -332,6 +350,8 @@ in `Cargo.lock`. Den Engine-Pin schreibt das Spiel zusätzlich in die Anwendungs
 **Empfehlung: A.** Golden Master vergleichen ohnehin Checkpoint-Hashes und nie Replay-Bytes, deshalb schadet ein
 lokaler „unbekannter“ Build nichts.
 
+**Entscheidung (PO, 2026-09-15):** A — lokal „unbekannt“, die CI setzt den Build-Hash.
+
 ### V-11 — CI-Verhalten bei geändertem Content
 
 **Frage:** Wie reagiert die CI, wenn ein Golden-Master-Vergleich nur wegen geändertem Content abweicht?
@@ -350,6 +370,8 @@ Abweichungen nie still durchgehen; `CONTRIBUTING.md` erlaubt Erneuerungen nur pe
 
 **Empfehlung: A.**
 
+**Entscheidung (PO, 2026-09-15):** A — rot; Erneuerung über das Ein-Kommando-Werkzeug.
+
 ### V-12 — Harness-Bericht als konkreter Typ
 
 **Frage:** Darf der Harness-Bericht ein fester Datentyp mit JSON-Schema sein, obwohl der Plan von „Trait-Verträgen
@@ -367,6 +389,8 @@ ECS-Ressourcen in §2a). `Scene` und `BotProfile` bleiben Traits.
 | **B: Trait mit Null-Implementierung** (etwa eine Bericht-Senke) | Plan-Wortlaut erfüllt; das Schema braucht es trotzdem zusätzlich |
 
 **Empfehlung: A.**
+
+**Entscheidung (PO, 2026-09-15):** A — fester Datentyp mit JSON-Schema als dokumentierte Abweichung.
 
 ---
 
@@ -394,6 +418,8 @@ Engine-ADR „Debug-Link v1“ per Vertrags-PR fest.
 nicht. Hinweis: Mit Alpha-Tags (P-7 A) wechselt die Engine-Version je Tag; Werkzeuge müssen dann je Tag neu gebaut
 werden.
 
+**Entscheidung (PO, 2026-09-15):** A — abweisen, wo prüfbar: eine andere Engine-Version immer, einen anderen Build nur, wenn beide Build-Hashes bekannt sind; „unbekannt“ wird mit Warnung angenommen.
+
 ### V-14 — Debug-Link im Release-Build
 
 **Frage:** Darf die Debug-Verbindung für die Abschluss-Messsitzung auch in einem optimierten Release-Build laufen?
@@ -411,6 +437,8 @@ Feature ohne `compile_error!` im Release; Distributions-Builds eines Spiels scha
 | **C: Eigenes Profil `measure`** | Klare Trennung; ein weiteres Profil zu pflegen |
 
 **Empfehlung: A**, mit der Prüfung in der Release-Pipeline ab P3 (Merkposten für das Red-Team, R8).
+
+**Entscheidung (PO, 2026-09-15):** A — im lokalen Release-Build erlaubt, nie in ausgelieferten Builds.
 
 ### V-15 — Muster-Vorschau über den Debug-Link
 
@@ -430,6 +458,8 @@ Fixtures komplett sind, und lässt die Engine in P1 mit `Error(NotSupported)` an
 
 **Empfehlung: A**, solange P-2 in Sammelsitzung B bestätigt wird. Wird P-2 abgelehnt, ist B neu zu prüfen.
 
+**Entscheidung (PO, 2026-09-15):** A — Vorschau über `sigilc simulate`, die Engine antwortet „nicht unterstützt“; hängt an ADR-Vorschlag 0010 (P-2) in Sammelsitzung B.
+
 ### V-16 — Größenprüfung von Packs vor dem Laden
 
 **Frage:** Soll ein zu großes Content-Pack abgewiesen werden, bevor es in den Speicher geladen wird?
@@ -447,6 +477,8 @@ Implementierungen unverändert kompilieren; im lokalen Arbeitsordner gibt es nur
 | **B: §5 bleibt eingefroren** | Prüfung erst nach dem vollständigen Laden; §12 dokumentiert eine Ausnahme von Regel 9 |
 
 **Empfehlung: A.**
+
+**Entscheidung (PO, 2026-09-15):** A — Größenprüfung vor dem Laden über `read_limited` mit Standard-Implementierung am P0-Trait `FileSystem`.
 
 ---
 
@@ -472,6 +504,8 @@ laut Agentenlauf zusätzlich zum OF-17.3-ADR.
 **Empfehlung: A.** Der Worst Case soll sichtbar sein und P2 steuern, nicht P1 an einer bekannten Schwäche des
 uniformen Gitters anhalten.
 
+**Entscheidung (PO, 2026-09-15):** A — Cluster-Szene nur als Trend, die normale Szene bleibt hartes Gate.
+
 ### V-18 — Größte zulässige Koordinate für Kollisionsformen
 
 **Frage:** Reicht eine Welt von höchstens einer Milliarde Einheiten in jede Richtung für Kollisionsformen?
@@ -493,6 +527,8 @@ Zum Vergleich: Der Spieler-Proxy ist auf ±64 begrenzt, das Standard-Gitter umfa
 **Empfehlung: A** als eingetragener Wert. Die Optionen B und C sind hier aus dem Kontext abgeleitet und nicht Teil
 der ursprünglichen Frage.
 
+**Entscheidung (PO, 2026-09-15):** A — `MAX_COORD = 1.0e9` bestätigt.
+
 ### V-19 — Zielrichtung ohne Entfernung
 
 **Frage:** Reicht in P1 die Zielrichtung der Maus, ohne die Entfernung zum Ziel?
@@ -510,6 +546,8 @@ Eingabeformat hat vier Achsen; eine Entfernung auf eigener Achse bräuchte mehr.
 | **C: Richtung plus Entfernung auf eigenen Achsen** | Mehr als vier Achsen, also Änderung des `InputFrame`-Formats |
 
 **Empfehlung: A.** Entfernungsabhängige Skillshots sind P2-Gameplay; blockiert in P1 nichts.
+
+**Entscheidung (PO, 2026-09-15):** A — in P1 nur die Richtung.
 
 ### V-20 — Umfang der PO-Freigabe bei späteren Vertragsänderungen
 
@@ -530,6 +568,8 @@ Plan-Risiko R22 warnt vor Strängen, die auf Entscheidungen warten.
 **Empfehlung: A.** Du bleibst Torwächter für alles, was laufende Stränge in Code oder Daten sehen, und reine
 Wortlaut-Korrekturen warten nicht auf eine Sitzung (R22).
 
+**Entscheidung (PO, 2026-09-15):** A — additive und brechende Änderungen gebündelt zur Freigabe, Klarstellungen nach Review ohne Freigabe. Eine brechende Änderung hebt nach P-7 auf `0.2.0`.
+
 ---
 
 ## Vorläufige Entscheidungen
@@ -537,6 +577,8 @@ Wortlaut-Korrekturen warten nicht auf eine Sitzung (R22).
 Alle als vorläufig vermerkten oder im Entwurf ohne eigene Frage festgelegten Entscheidungen, je in einer Zeile.
 Punkte mit **→ V-n** werden oben einzeln gefragt; die Frage „Alle übrigen vorläufigen Entscheidungen übernehmen?“
 betrifft alle anderen. Punkte aus der WP1.0-Freigabe (Dossier) sind mit „(WP1.0)“ gekennzeichnet.
+
+**Entscheidung (PO, 2026-09-15, V-21):** Alle übrigen vorläufigen Entscheidungen übernommen (Empfehlung). WP1.3 beginnt; gemergt wird erst nach adversarialem Review und grüner CI auf Windows, Linux und macOS.
 
 **ADR-Vorschlag 0008 und §1 Crate-Karte**
 - Option 2 mit `grimoire_sigilc`, `grimoire_bench`, `grimoire_link` und der Kante `sigil → ecs` → V-1.
@@ -723,6 +765,8 @@ Fragen so:
   Grund „C#-Werkzeuge ohne Build-Hash“. P-2 abgelehnt (Sammelsitzung B) stellt V-15 neu und ergänzt V-1 um einen
   zweiten Unit-Erzeuger außerhalb der Determinismus-Menge. P-14 ≠ A ändert den Eintrag „`grimoire_link` kein
   Release-Artefakt“.
+
+*Nachtrag 2026-09-15 (Ergebnis):* P-3, P-8 und P-9 wurden wie empfohlen beantwortet, P-7 dagegen mit Patch-Versionen `0.1.x` bei P-8 = A. Der PO stuft Replay v2 als Ergänzung ein (neuer Typ neben `InputLog` v1). Damit gilt der Fall „P-7 = B“ oben nicht in voller Strenge: Replay v2 ist in §8.1 als additiv einzustufen, und eine brechende Änderung nach §2b-Stufe I hebt auf `0.2.0`.
 
 ---
 
@@ -1024,7 +1068,7 @@ Scheduler-Eigentümers (offener Punkt des Agentenlaufs).
 ## Nicht bestätigte Angaben
 
 - Optionen B und C in V-18 sind aus dem Kontext abgeleitet; die ursprüngliche Frage nennt nur den Wert 1.0e9 und bittet um Bestätigung. Die `f32`-Abstände (etwa 64 bzw. 0,06 Einheiten) sind aus der Größenordnung gerechnet, nicht gemessen.
-- Ob `option_env!` bei geänderter `GRIMOIRE_BUILD_HASH` zuverlässig neu baut, ob Cargo-git-Checkouts `.git` enthalten und ob Alpha-Tags die Cargo-Version auf `0.2.0-alpha.N` setzen: laut Agentenlauf nicht geprüft (V-10, V-13).
+- Ob `option_env!` bei geänderter `GRIMOIRE_BUILD_HASH` zuverlässig neu baut, ob Cargo-git-Checkouts `.git` enthalten und ob Alpha-Tags die Cargo-Version auf `0.2.0-alpha.N` setzen: laut Agentenlauf nicht geprüft (V-10, V-13). *(Nachtrag 2026-09-15: Der Teil zu Alpha-Tags ist gegenstandslos, P1 nutzt Patch-Versionen `0.1.x`.)*
 - Die Zustimmung des Scheduler-Eigentümers zu den Ergänzungen in §7.1–§7.3, §8.2 und §8.4 steht aus (offener Punkt des Agentenlaufs).
 - Die Kompilierprüfung deckt nur Signaturen ab; Verhalten, Leistung und die Ausführbarkeit von `mem::take` auf dem Pool oder `run_blocks` mit Nicht-ECS-Aufgaben sind nicht umgesetzt oder gemessen.
 - Das adversariale Review im Sinne des WP1.7-Gates bezieht sich auf den künftigen Vertrags-PR mit Skeletten und hat noch nicht stattgefunden; die Reviews des Laufs betrafen den Entwurf.

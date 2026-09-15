@@ -1,6 +1,6 @@
 # Plan-0002 · WP1.1: M0-Eintritts-Check, P0-Reste und Worktree-Konvention
 
-- **Status:** Entwurf aus dem Agentenlauf, nicht committet; **nichts entschieden**, keine Issues angelegt
+- **Status:** Entwurf aus dem Agentenlauf; Zeilen 11 und 12 nach Sammelsitzung A (2026-09-15) nachgetragen; keine Issues angelegt
 - **Datum:** 2026-09-15; unabhängig nachgeprüft (siehe „Nachprüfung“ am Ende)
 - **Autor:** Claude (Agentenlauf, WP1.1)
 - **Bezug:** [Plan 0002](0002-phase-p1-sichtbarer-kern.md) (WP1.1, „Meilensteine“ M0, „Abhängigkeiten“, „Arbeitsorganisation“, „Offene Punkte“), [Plan 0001](0001-phase-p0-fundament.md) („Umsetzungsstand“, „Abweichungen vom ursprünglichen Plan“, „Erfolgskriterien“), [Dossier Sammelsitzung A](0002-sammelsitzung-a-dossier.md), [Agentenlauf 2026-09-15](agentenlauf-2026-09-15.md), [CONTRIBUTING.md](../../CONTRIBUTING.md), grimoire `CONTRIBUTING.md`
@@ -29,8 +29,8 @@ Bedingungen. Links führen auf die GitHub-Läufe.
 | 8 | P0-Review-Befunde gemergt | erfüllt, Vollständigkeit nicht prüfbar | In beiden Repos gibt es keinen Pull Request (`gh pr list --state all` leer) und keinen weiteren Remote-Branch mit P0-Stand; die Review-Korrekturen liegen direkt auf `main`, etwa Engine `a9adcaa`, `caf1093`, `8ca6fff`, `44461ce`, `30a5981`, `3fff4c3`, `6d07f05`, `5f3af92` („address verifier findings“) und Spiel `42b10bc`. Eine Befundliste, gegen die sich „alle gemergt“ abhaken ließe, habe ich nicht gefunden. |
 | 9 | Engine-Tag `v0.1.0` remote | erfüllt | `git ls-remote`: `refs/tags/v0.1.0` (annotiert, `89e5aa4`) zeigt auf Commit `93bed40`; `gh release list`: „Grimoire v0.1.0“, *Latest*, 2026-09-14T20:39:26Z. `93bed40` unterscheidet sich vom CI-geprüften Release-Commit `b5ba0fe` nur in `README.md` und ADR-0004. |
 | 10 | Engine-Abhängigkeit im Spiel-Manifest gemergt und auf den Tag gepinnt (P0-WP6.3) | erfüllt | `Cargo.toml` Zeile 18: `grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.1.0" }`; `Cargo.lock`: Quelle `…grimoire?tag=v0.1.0#93bed40d501632f6c722b9eeb56b927ae3bf4cdc`; beides auf `origin/main`. `<Arbeitsordner>\.cargo\config.toml` existiert nicht, es ist also kein lokaler `[patch]` aktiv. |
-| 11 | **PO-Sammelsitzung A:** OF-16.1 entschieden (Ort der C#-Suite oder „C#-Seite nach P2“) = P-1 | **offen** | Vorbereitet im [Dossier](0002-sammelsitzung-a-dossier.md), Abschnitt „P-1“ (Empfehlung `grimoire/tools/`, vorläufig). Weder `grimoire/tools/` noch `Prototype/tools/` existiert. |
-| 12 | **PO-Sammelsitzung A:** Messsitzungs-Regeln und Referenz-Hardware abgestimmt = P-4 | **offen** | Vorbereitet im Dossier, Abschnitt „P-4“ (P-4a/P-4b). |
+| 11 | **PO-Sammelsitzung A:** OF-16.1 entschieden (Ort der C#-Suite oder „C#-Seite nach P2“) = P-1 | erfüllt (2026-09-15) | PO-Entscheidung in Sammelsitzung A: `grimoire/tools/` ([Dossier](0002-sammelsitzung-a-dossier.md), Abschnitt „P-1“; Plan 0002, P-1). Zum Prüfzeitpunkt existierte weder `grimoire/tools/` noch `Prototype/tools/`. |
+| 12 | **PO-Sammelsitzung A:** Messsitzungs-Regeln und Referenz-Hardware abgestimmt = P-4 | **teilweise** (2026-09-15) | P-4b entschieden: Messsitzung 1 nach WP3.3 und Abschluss-Messsitzung in WP11.5, Regeln wie im Plan. P-4a (Referenz-Hardware) bis Messsitzung 1 vertagt; M0 bleibt in diesem Punkt formal offen (Dossier, Abschnitt „P-4“). |
 
 **Hinweis zur Abgrenzung.** Die Abhängigkeitstabelle von Plan 0002 (erste Zeile) nennt für M0 nur
 „P0 gepusht, Tag `v0.1.0`, Pin, Engine-ADR-0004/0006 akzeptiert“; die Sammelsitzung A steht dort
@@ -45,12 +45,16 @@ aber ebenfalls offen.
 1. **PO-Sammelsitzung A** mit mindestens **P-1** und **P-4**. Danach kann M0 in Plan 0002 als
    erreicht vermerkt werden. Nach WP1.6 gehören in dieselbe Sitzung P-3, P-5 bis P-9, P-13, P-14
    sowie OP-2 und OP-7 (Fragenentwurf im Dossier).
+   *Nachtrag 2026-09-15: Sammelsitzung A ist durchgeführt; P-1 und P-4b sind entschieden, P-4a ist bis
+   Messsitzung 1 vertagt. Ebenfalls entschieden sind P-3, P-5 bis P-9, P-13, P-14 und OP-7; OP-2 ist durch
+   die Veröffentlichung geschlossen. M0 ist bis auf P-4a erreicht.*
 2. **Keine M0-Bedingung, aber unmittelbar danach blockierend:** Die Freigabe von WP1.0 braucht ein
    grünes 3-OS-Hash-Gate (Engine-ADR-0006, Punkt 7) und damit CI-Minuten. Die Minutenfrage (OP-2,
    R-05 unten) steht deshalb in der Sitzung vor der Freigabe. `p1/wp1.0-scheduler` ist zum Prüfzeitpunkt
    **nicht** gepusht (kein Remote-Branch), der Workflow arbeitet noch.
    *Nachtrag 2026-09-15: Seit der Veröffentlichung beider Repos kostet das 3-OS-Hash-Gate keine
-   Actions-Minuten; die Minutenfrage entfällt, das Gate selbst bleibt.*
+   Actions-Minuten; die Minutenfrage entfällt, das Gate selbst bleibt. WP1.0 ist freigegeben: Merge nach
+   grüner 3-OS-CI, Tag `v0.1.1`.*
 3. Plan 0002 trägt weiterhin den Status „Entwurf“. Das Gate nennt keine Planabnahme; ob der PO sie
    mit M0 verbinden will, ist seine Sache.
 
@@ -485,7 +489,7 @@ Beobachtete Branch-Namen folgen dem Muster `p1/wp<nr>-<thema>`.
 - **`[patch]` bleibt aus:** Ein aktiver `[patch]` in `<Arbeitsordner>\.cargo\config.toml`
   gilt für jeden Cargo-Aufruf unter `<Arbeitsordner>\`, also auch in **allen** Worktrees unter `_wt\`, und
   bricht dort `--locked` (beide `CONTRIBUTING.md`, ADR-0009). Zum Prüfzeitpunkt existiert die Datei
-  nicht. In P1 pinnt das Spiel stattdessen Alpha-Tags (P-7, noch nicht entschieden).
+  nicht. In P1 pinnt das Spiel stattdessen Engine-Tags; nach P-7 (entschieden 2026-09-15) sind das Patch-Versionen `v0.1.x`.
 - **Nur gegen gemergte Verträge bauen**; Vertragsänderungen als eigener Vertrags-PR (WP1.7).
 - **ADR-Nummern erst beim Merge** vergeben (Plan 0002, „Arbeitsorganisation“). Der Syntax-Spike trägt
   vorläufig „Engine-ADR-0007“.
