@@ -72,7 +72,7 @@ graph LR
 
 - **Budgets:** GPU-Frame ≤ 8 ms auf Referenz-Hardware bei Vollszene (10k Bullets, 256 Lichter, 100k Partikel, Post-Stack an). Mobile-Ziel (Phase 2): gleiche Szene mit Preset "Low" ≤ 16 ms auf Mittelklasse-SoC. Der GGX-Lichtterm ist je Fragment teurer als das frühere Toon-Shading (Entwurfsschätzung 1,6–2,0×); die P1-Messsitzung prüft das Budget früh.
 - **Skalierbarkeit nach unten:** Preset "Low" verzichtet auf Post-FX (außer Grading), reduziert Schatten (z. B. Blob-Schatten) und begrenzt Lichter (~32) — ohne Gameplay-Informationsverlust (Telegraphie/Bullets identisch).
-- **Konsistenz:** Ein Stil-Dokument (`docs/art/stilbibel.md`, entsteht in P1) definiert Paletten pro Biom/Patron, Materialwerte (Albedo- und Helligkeitsgrenzen, Rauheit, Metall), die Bullet-Licht-Obergrenze und Texturregeln — alle generierten Assets folgen ihm.
+- **Konsistenz:** Ein Stil-Dokument (`docs/art/stilbibel.md`, entsteht in P1) definiert Paletten pro Biom/Patron, Materialwerte (Albedo- und Helligkeitsgrenzen, Rauheit, Metall), die Bullet-Licht-Obergrenze und Texturregeln — alle generierten Assets folgen ihm. v0 vorläufig, siehe `docs/art/stilbibel.md`.
 
 ## User Stories
 
