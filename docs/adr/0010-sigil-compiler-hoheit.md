@@ -56,7 +56,8 @@ von WP4 fallen, also in Sammelsitzung B am Ende von WP1.
   abhängen, welches Werkzeug kompiliert (PRD-0004 FR-08, PRD-0016 FR-02).
 - **Determinismus.** Dieselbe Quelle ergibt auf Windows, Linux und macOS eine byte-identische Unit. Die Units
   gehen in Content-Hash, Golden Master und Replays ein (ADR-0005, PRD-0018 FR-04). Determinismusfehler sollen
-  möglichst lokal auffallen und nicht erst im 3-OS-Vergleich, der Actions-Minuten kostet (OP-2).
+  möglichst lokal auffallen und nicht erst im 3-OS-Vergleich, der einen vollen CI-Durchlauf auf drei
+  Plattformen braucht.
 - **ADR-0007 bleibt gewahrt.** Parser und Compiler liegen nicht im Laufzeitpfad; die Engine lädt nur Units und
   Packs.
 - **Vorschau zeigt, was die Engine tut.** Eine Vorschau, die anders rechnet als die Laufzeit, ist ein
@@ -176,8 +177,8 @@ von WP4 fallen, also in Sammelsitzung B am Ende von WP1.
      nennt als Quellen von Nichtdeterminismus NaN-Bitmuster (`cranelift_nan_canonicalization`), Relaxed SIMD
      (`relaxed_simd_deterministic`), das Wachsen von Speicher und Tabellen, Host-Funktionen wie Uhr und
      Dateisystem sowie epochenbasierte Unterbrechung; jede Quelle braucht eine Einstellung im Host. Gleiche
-     Ergebnisse aus nativem und Wasm-Build sind trotzdem ein eigenes Gate (Korpus nativ gegen Wasm), das Minuten
-     kostet (OP-2). Baut nur das native `sigilc` Units und dient Wasm allein dem Editor (Diagnosen, `parse`,
+     Ergebnisse aus nativem und Wasm-Build sind trotzdem ein eigenes Gate (Korpus nativ gegen Wasm), das
+     zusätzliche CI-Laufzeit kostet. Baut nur das native `sigilc` Units und dient Wasm allein dem Editor (Diagnosen, `parse`,
      `set`, Vorschau), entfällt der Unit-Vergleich; der Vergleich von Diagnosen und Vorschau bleibt.
    - (−) Eine native Laufzeitbibliothek mit JIT als Abhängigkeit der C#-Suite auf drei Betriebssystemen. Welche
      Plattformen das NuGet-Paket nativ mitbringt und ob es unter .NET 10 (P-13) läuft, ist nicht geprüft.

@@ -82,8 +82,10 @@ Option 2 für beide Repos.
 - (−) Außer dem Rechteinhaber darf niemand Engine oder Spiel nutzen, bearbeiten oder
   weiterverbreiten. Forks auf GitHub bleiben nach den Nutzungsbedingungen möglich, räumen aber keine
   Nutzungsrechte ein.
-- (−) Ein externer Pull Request bringt ohne Vereinbarung keine Rechteeinräumung mit. Wie mit
-  Beiträgen von außen umgegangen wird, ist vor der ersten Übernahme zu klären (offen).
+- (−) Ein externer Pull Request bringt ohne Vereinbarung keine Rechteeinräumung mit. Deshalb werden
+  Pull Requests von außen derzeit nicht angenommen; Issues für Hinweise und Fehlerberichte bleiben
+  offen (PO-Entscheidung vom 2026-09-15, [CONTRIBUTING.md](../../CONTRIBUTING.md), „Beiträge von
+  außen“). Eine spätere Öffnung braucht eine Beitragsvereinbarung.
 - (−) Öffentliche Binaries räumen ebenfalls keine Rechte ein; ob Spieler dafür eigene Nutzungsbedingungen
   brauchen, ist vor dem ersten veröffentlichten Release zu klären (offen). Die gelinkten Fremd-Crates
   (MIT, BSD, ISC, Apache-2.0, Unicode-3.0) verlangen, dass ihre Lizenzhinweise den Binaries beiliegen.

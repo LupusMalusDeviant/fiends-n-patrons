@@ -61,7 +61,7 @@ ausdrücklich bis zu diesem ADR zurückgestellt.
 - **CI-Check:** „Generierter Code aktuell“ als einfacher, auf allen Plattformen gleicher Vergleich (WP8.1). Der
   C#-Build (WP9.1) nutzt dieselben Dateien.
 - **Toolchain:** Windows, Linux und macOS lokal und in CI, möglichst ohne neue Laufzeitumgebung neben `cargo` und
-  `dotnet` (PRD-0017; CI-Minuten knapp, OP-2).
+  `dotnet` (PRD-0017; jede weitere Laufzeitumgebung verlängert die CI auf drei Plattformen).
 - **Determinismus-Menge unberührt:** Keine neue Abhängigkeit in Crates mit `clippy.toml` (§3). `grimoire_debug` und
   `grimoire_assets` liegen außerhalb der Menge (§1).
 - **Aufwand passend zu P1:** WP8 ist mit 13 Tagen geschätzt, darin WP8.1 ohne eigene Zahl. Zu synchronisieren sind

@@ -45,6 +45,11 @@ abgefragt, weil laufende Stränge daran hängen.
 
 ## Ausgangslage
 
+> **Nachtrag 2026-09-15 (nach der Sitzung):** Der PO hat entschieden, beide Repos öffentlich zu machen.
+> Gehostete Standard-Runner verbrauchen dann keine Actions-Minuten. Die Angaben unten zu Kontingent,
+> Restminuten, Free-Plan, Kosten je Lauf und „Beide Repos sind privat“ beschreiben nur den Stand vor der
+> Veröffentlichung. Die Spiel-CI holt die Engine seitdem ohne Deploy-Key.
+
 - **P0** ist auf der Engine-Seite abgeschlossen (Tag `v0.1.0`, Engine-ADR-0004 akzeptiert). Das Spiel pinnt `v0.1.0`; seine CI hat seit dem 2026-09-15 Engine-Zugriff über den Deploy-Key ([Agentenlauf](agentenlauf-2026-09-15.md), „Bereits erledigt“).
 - **Engine-ADR-0006** (paralleler Scheduler, akzeptiert 2026-09-14) macht den Scheduler zum ersten P1-Schritt WP1.0. Er wird im Agentenlauf umgesetzt und endet als **gepushter Branch mit lokalem Gate und Review, ohne Draft-PR und ohne CI-Lauf**, ohne Merge und ohne Tag ([Agentenlauf](agentenlauf-2026-09-15.md), „Änderung — Actions-Minuten fast aufgebraucht“).
 - **GitHub-Actions-Minuten:** GitHub meldete **1.832 von 2.000 Minuten** dieses Abrechnungszeitraums verbraucht, **Rücksetzung am 1. Oktober 2026**; danach lief noch der Abschluss-Lauf 34905253693 (3 OS). Bis zum 1. Oktober bleiben also **höchstens 168 Minuten**, tatsächlich weniger. Ein Kontingent von 2.000 Minuten entspricht laut GitHub-Doku dem **Free-Plan** (Pro: 3.000). Seit dem Abschluss-Lauf gilt: in diesem Lauf keine CI-Läufe mehr (ebd.).
@@ -142,6 +147,11 @@ abgefragt, weil laufende Stränge daran hängen.
 ## Runde 2 — CI-Minuten, M0-Gate-Rest und laufende Stränge
 
 ### OP-2 — GitHub-Actions-Minuten
+
+> **Nachtrag 2026-09-15:** Durch die Veröffentlichung beider Repos überholt; keine der Optionen A–D
+> wurde umgesetzt, und bis zur Veröffentlichung wurden keine weiteren Minuten verbraucht. Die Auflage
+> „nur private Repos“ für einen eigenen Runner gilt so nicht mehr, weil das Engine-Repo öffentlich ist;
+> sie wird mit P-12 neu bewertet.
 
 **Frage:** Wie werden die restlichen Actions-Minuten bis zum 1. Oktober 2026 verteilt, wie wird ab Oktober mit dem 2.000-Minuten-Kontingent geplant, und was soll bei Überschreitung passieren?
 

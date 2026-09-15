@@ -6,6 +6,14 @@
 - **Nicht getan:** kein CI-Lauf, kein Push, kein Code, keine Runner-Messung. Gemessen wurde nur eine lokale Zeitprobe der vorhandenen P0-Tests auf dem Entwicklerrechner (§3.2, Grundlage der Richtwerte). Die Minutenangaben sind Schätzungen, die der erste Lauf ersetzen muss (OP-5).
 - **Gegenprüfung:** Codex (gpt-6-astra, read-only) hat einen ersten Entwurf geprüft (§9.1). Eine zweite Prüfung auf Werkzeugfakten, Schätzungen, fehlende Kandidaten und flatternde Gate-Regeln steht in §9.2. Codex stand dabei zweimal nicht zur Verfügung; die Prüfung lief ohne Codex, mit Belegen aus dem Netz.
 
+> **Nachtrag 2026-09-15 (Veröffentlichung):** Beide Repos sind öffentlich. Für diesen Vorschlag heißt
+> das: Gehostete Standard-Runner verbrauchen keine Actions-Minuten; Minutenschätzungen und die Faktoren
+> ×2/×10 sind nur noch als Laufzeitangaben zu lesen, die Kontingentgrenzen (OP-2, R21) entfallen. Die
+> Runner öffentlicher Repos haben unter Linux und Windows 4 vCPUs mit 16 GB statt 2 vCPUs mit 8 GB;
+> Rauschannahmen für 2-vCPU-Runner muss der Spike neu bestätigen. Actions-Artefakte werden höchstens
+> 90 Tage aufbewahrt, GitHub Pages ist ohne Pro verfügbar, und alle Trenddaten sind öffentlich. Ein
+> Self-Hosted-Runner hinge an einem öffentlichen Repo (§6.2).
+
 ## 1. Ausgangslage
 
 **Anforderung.** PRD-0017 FR-03 verlangt Benchmark-Jobs mindestens auf Linux: Ergebnisse als Trend, und eine Regression über 10 % bricht den Lauf. Plan 0002 zieht das in WP6 zusammen:
@@ -30,7 +38,7 @@ R10 benennt die Gefahr: Fehlalarme führen dazu, dass das Gate abgeschaltet wird
 
 **Randbedingungen der Runner.**
 
-- **Hardware:** Private Repos bekommen auf `ubuntu-latest` und `windows-latest` 2 vCPUs mit 8 GB, auf `macos-latest` 3 Kerne M1 (arm64). Öffentliche Repos bekommen 4 vCPUs. `ubuntu-latest` entspricht Ubuntu 24.04; `ubuntu-26.04` ist als Public Preview gelistet [Q1]. Ein späterer Wechsel von `ubuntu-latest` tauscht glibc und das Valgrind-Paket aus. Windows- und Ubuntu-Runner laufen in Azure [Q1]. Der Pool mischt CPU-Modelle; ein Bericht nennt AMD EPYC 7763 (nur AVX2), Intel Xeon Platinum 8573C und AMD EPYC 9V45 (AVX-512) [Q37].
+- **Hardware:** Seit der Veröffentlichung (2026-09-15) laufen die Jobs auf den Runnern öffentlicher Repos: `ubuntu-latest` und `windows-latest` mit 4 vCPUs und 16 GB, `macos-latest` mit 3 Kernen M1 (arm64) und 7 GB. Private Repos bekämen unter Linux und Windows nur 2 vCPUs mit 8 GB. `ubuntu-latest` entspricht Ubuntu 24.04; `ubuntu-26.04` ist als Public Preview gelistet [Q1]. Ein späterer Wechsel von `ubuntu-latest` tauscht glibc und das Valgrind-Paket aus. Windows- und Ubuntu-Runner laufen in Azure [Q1]. Der Pool mischt CPU-Modelle; ein Bericht nennt AMD EPYC 7763 (nur AVX2), Intel Xeon Platinum 8573C und AMD EPYC 9V45 (AVX-512) [Q37].
 - **Toolchain:** Die Engine pinnt Rust `1.98.1`.
 - **Trigger:** Die Engine-CI (`ci.yml`) startet nur bei Pushes auf `main`, bei PRs und bei `workflow_dispatch`. `workflow_dispatch` greift nur, wenn die Workflow-Datei auf dem Standard-Branch liegt. `push`-Workflows laufen dagegen auch von nicht gemergten Branches [Q33]. Der Spike-Workflow bekommt deshalb einen eigenen `push`-Trigger auf seinen Branch und löst `ci.yml` nicht aus.
 
@@ -143,7 +151,7 @@ Der Spike ist eine **Pilot-Qualifikation**: Er zeigt, ob eine Metrik taugt und w
 
 ### 3.0 Voraussetzungen und Abbruchregeln
 
-1. **OP-2 zuerst:** Der PO liest das Minutenkontingent in der Abrechnungsübersicht ab; dem `gh`-Token fehlt der Scope `user`. Ohne diese Angabe startet kein Lauf.
+1. **OP-2:** geschlossen (2026-09-15, Repos öffentlich). Gehostete Standard-Runner verbrauchen keine Actions-Minuten; vor dem ersten Lauf ist keine Kontingentangabe mehr nötig.
 2. **Ort:** Wegwerf-Code auf einem eigenen Engine-Branch `spike/of-17.3-bench-noise` in eigenem Worktree. Er berührt nie den Worktree `p1-scheduler` und nie `crate-vertraege.md`.
    - Das Spike-Crate liegt unter `spikes/of-17.3/` als **eigener Mini-Workspace** mit Pfadabhängigkeiten auf `grimoire_core`, `grimoire_ecs` und `grimoire_sim` (Stand `v0.1.0`).
    - `Cargo.lock` und `[workspace.dependencies]` der Engine bleiben unberührt. `gungraun` kommt erst in WP6.2 nach Vertrag §2 Regel 4 in `grimoire_bench`.
@@ -157,7 +165,7 @@ Der Spike ist eine **Pilot-Qualifikation**: Er zeigt, ob eine Metrik taugt und w
    - `cargo clippy` für Linux;
    - **Kalibrierung der Einspeisung festschreiben**, bevor gemessen wird (§3.1).
    - Valgrind-Teile lassen sich lokal nur unter Linux prüfen. Ob WSL dafür genutzt wird, entscheidet der Tagbetrieb.
-5. **Minutenschutz:**
+5. **Laufzeitschutz:**
    - eigener Smoke-Job (§3.2), von dem die Matrix per `needs` abhängt;
    - `timeout-minutes: 45` je Job und `timeout-minutes` je Messschritt (Richtwerte §3.2); die teuren Wanduhr-Schritte laufen zuletzt, damit ein Zeitlimit die `Ir`-Daten nicht mitreißt;
    - Upload der Rohdaten mit `if: always()`;
@@ -330,9 +338,9 @@ Exitcode 2 ist kein Regressionsbefund. Er wird wie jeder rote Lauf analysiert (U
 
 - **`Ir`-Gate:** fängt *relative* Mehrarbeit in einfädigem Code. Cache-, Sprung- und SIMD-Effekte sieht es nur als simulierte Werte und Parallelisierungsverluste gar nicht.
 - **Wanduhr-Trend (K3, nightly, Linux):** dieselben Benches plus alle N-Thread-Benches und die Budget-Szenarien (WP6.5 Kollision ≤ 1,5 ms, WP6.6 „Vollvorhang“). Stuft der Spike K3 als warn-fähig ein, gibt es eine Warnung ab > 10 % gegenüber der akzeptierten Wanduhr-Basis.
-- **Absolute Budgets** (ms pro Tick) sind auf 2-vCPU-Runnern kein verlässliches hartes Gate. Sie werden als Trend mit Budgetlinie geführt und laut WP6.7 mit dem Faktor aus Messsitzung 1 auf Referenz-Hardware umgerechnet.
+- **Absolute Budgets** (ms pro Tick) sind auf geteilten gehosteten Runnern (in öffentlichen Repos 4 vCPUs) kein verlässliches hartes Gate. Sie werden als Trend mit Budgetlinie geführt und laut WP6.7 mit dem Faktor aus Messsitzung 1 auf Referenz-Hardware umgerechnet.
 - **Plan-Konflikt:** WP6.5 formuliert „≤ 1,5 ms im Regressions-Gate“. Das ADR muss das auflösen — Vorschlag: Budget als Trend mit Warnung, harte Budgetaussage nur aus Messsitzungen. Das ist vorbereitet, nicht entschieden (§8).
-- Windows und macOS messen die Wanduhr höchstens nightly und nur bei ausreichendem Kontingent (R21).
+- Windows und macOS messen die Wanduhr höchstens nightly (R21: keine Minutenkosten mehr, aber begrenzte Zahl gleichzeitiger Jobs).
 
 ### 4.5 Warnmodus und Schärfung
 
@@ -383,7 +391,7 @@ Exitcode 2 ist kein Regressionsbefund. Er wird wie jeder rote Lauf analysiert (U
 - Der Selbsttest schreibt nie in die akzeptierte Basis.
 - Ein roter Selbsttest heißt „das Gate ist kaputt“ und wird wie ein roter CI-Lauf behandelt.
 
-**Kosten:** ≈ 6–12 Linux-Minuten je Nacht mit Änderungen; bei etwa 20 solchen Nächten 120–240 Minuten im Monat. Reicht das Kontingent nicht: wöchentlich und an Meilensteinen (R21; Meldung an den PO).
+**Laufzeit:** ≈ 6–12 Linux-Minuten je Nacht mit Änderungen; bei etwa 20 solchen Nächten 120–240 Minuten im Monat, seit der Veröffentlichung ohne Minutenkosten. Staut sich die Warteschlange: wöchentlich und an Meilensteinen (R21; Meldung an den PO).
 
 ## 6. Trendablage und P-12-Rückfall
 
@@ -392,8 +400,8 @@ Exitcode 2 ist kein Regressionsbefund. Er wird wie jeder rote Lauf analysiert (U
 | Option aus P-12 | Eigenschaften | Bewertung |
 |---|---|---|
 | **Datenzweig** `bench-data` im Engine-Repo | Zwei Dateiarten: Messhistorie (JSON-Lines) und akzeptierte Basis je Bench. Pushes mit `GITHUB_TOKEN` erzeugen keine neuen Workflow-Läufe [Q32]; `ci.yml` reagiert ohnehin nur auf `main`. Unbegrenzt aufbewahrt, diff- und lokal auswertbar. Details unten. | **empfohlen** (vorläufig) |
-| **Actions-Artefakte** | Keine Einrichtung; Aufbewahrung standardmäßig 90 Tage, bei privaten Repos höchstens 400 Tage [Q27]. Als Trend nur über Download-Skripte nutzbar. | **ergänzend** für Rohdaten (Callgrind-Ausgaben, Wanduhr-Rohwerte) und als Zwischenpuffer für den Datenzweig |
-| **GitHub Pages** | Bei GitHub Free nur für öffentliche Repos; private Repos brauchen Pro. Die veröffentlichte Seite wäre ohne Enterprise Cloud öffentlich [Q28]. Die 403-Antwort „Upgrade to GitHub Pro“ aus P0 (Plan 0001, WP2.4) spricht für den Free-Tarif. | **derzeit nicht verfügbar**; zudem würden Leistungsdaten öffentlich |
+| **Actions-Artefakte** | Keine Einrichtung; Aufbewahrung standardmäßig und in öffentlichen Repos höchstens 90 Tage (private Repos: bis 400 Tage) [Q27]. Als Trend nur über Download-Skripte nutzbar. | **ergänzend** für Rohdaten (Callgrind-Ausgaben, Wanduhr-Rohwerte) und als Zwischenpuffer für den Datenzweig |
+| **GitHub Pages** | Bei GitHub Free nur für öffentliche Repos [Q28]; seit der Veröffentlichung (2026-09-15) also für das Engine-Repo verfügbar. Die Seite ist öffentlich, ebenso Datenzweig und Artefakte eines öffentlichen Repos. | **verfügbar, nicht bewertet**; mit P-12 neu einzuordnen |
 
 **Schreibsemantik des Datenzweigs:**
 
@@ -419,7 +427,7 @@ Exitcode 2 ist kein Regressionsbefund. Er wird wie jeder rote Lauf analysiert (U
 
 | Option | Wirkung auf das Rauschen | Kosten | Risiken und Voraussetzungen |
 |---|---|---|---|
-| **Eigener Server ohne GPU** als Self-Hosted-Runner (nie der Entwicklungsrechner) | Bare Metal oder dedizierte Kerne. Dazu CPU-Governor `performance`, SMT aus, ASLR aus für Benchmarks (Vorbild Rustls [Q11]). Hardware-Zähler (K5) werden möglich. | Actions-Nutzung auf Self-Hosted-Runnern ist laut Abrechnungsseite kostenlos [Q14]; eine im Dezember 2025 angekündigte Plattformgebühr von 0,002 $/Min für Self-Hosted-Runner wurde verschoben, nicht aufgehoben [Q36]; 1–2 Tage Einrichtung plus Wartung | Nur privates Engine-Repo, nur `push` auf `main` und `workflow_dispatch`, nie Fork-PRs. Ephemerer Runner, ein Job gleichzeitig. Andere Dienste erzeugen Rauschen, daher feste Ruhefenster. Vor Übernahme dasselbe Protokoll (§3) dort fahren. Auswahl des Servers: PO. |
+| **Eigener Server ohne GPU** als Self-Hosted-Runner (nie der Entwicklungsrechner) | Bare Metal oder dedizierte Kerne. Dazu CPU-Governor `performance`, SMT aus, ASLR aus für Benchmarks (Vorbild Rustls [Q11]). Hardware-Zähler (K5) werden möglich. | Actions-Nutzung auf Self-Hosted-Runnern ist laut Abrechnungsseite kostenlos [Q14]; eine im Dezember 2025 angekündigte Plattformgebühr von 0,002 $/Min für Self-Hosted-Runner wurde verschoben, nicht aufgehoben [Q36]; 1–2 Tage Einrichtung plus Wartung | Das Engine-Repo ist seit 2026-09-15 öffentlich: nur `push` auf `main` und `workflow_dispatch`, nie Pull Requests. GitHub rät von Self-Hosted-Runnern an öffentlichen Repos ab; diese Option braucht deshalb eine eigene Sicherheitsprüfung. Ephemerer Runner, ein Job gleichzeitig. Andere Dienste erzeugen Rauschen, daher feste Ruhefenster. Vor Übernahme dasselbe Protokoll (§3) dort fahren. Auswahl des Servers: PO. |
 | **Größerer kostenpflichtiger Runner** | 4 bzw. 8 Kerne; weiterhin eine VM, geringeres Rauschen nicht belegt. Nützt vor allem N-Thread-Benches. | Linux 4-Core 0,012 $/Min, 8-Core 0,022 $/Min; **nie** aus dem Inklusivkontingent [Q14][Q30]. Beispiel: 100 Läufe × 15 Min × 0,012 $ ≈ 18 $/Monat | Zahlungsentscheidung PO; Rauschgewinn vorher mit §3 messen |
 
 **Empfehlung (vorläufig):** Der eigene Server ist der erste Rückfall, der größere Runner nur Übergang. Bis zur Umsetzung bleibt das Gate begründet im Warnmodus (M2-Kriterium).
@@ -427,13 +435,13 @@ Exitcode 2 ist kein Regressionsbefund. Er wird wie jeder rote Lauf analysiert (U
 ## 7. Abgleich mit R10, R21 und OP-5
 
 - **R10:** `Ir` schließt die bekannten Umgebungsstörungen strukturell aus; die akzeptierte Basis verhindert, dass rote Pushes zur neuen Norm werden. Schwelle mit Rauschband und Maskierungsgrenze, Warnmodus mit messbarem Schärfungskriterium und Selbsttest sind wie im Plan vorgesehen. Die Wanduhr bleibt Trend. Restrisiko: Pilotdaten aus 10 Wiederholungen beweisen keine Quoten; die Bestätigung kommt aus dem Warnmodus.
-- **R21/OP-2:** Der Spike braucht ≈ 190–370 Linux-Minuten, nur Linux, in zwei Blöcken, mit Smoke-Job und Zeitlimits. Der Selbsttest läuft nur in Nächten mit Änderungen, bei Engpass wöchentlich.
+- **R21/OP-2:** Der Spike braucht ≈ 190–370 Linux-Minuten Laufzeit, nur Linux, in zwei Blöcken, mit Smoke-Job und Zeitlimits; seit der Veröffentlichung (2026-09-15) ohne Minutenkosten. Der Selbsttest läuft nur in Nächten mit Änderungen, bei Engpass wöchentlich.
 - **OP-5:** Der Spike liefert die tatsächliche Minutenzahl. Der Gate-Job kommt als eigener Job mit Pfadfilter, nicht in die 3-OS-Standardmatrix.
 
 ## 8. Offene Punkte (vorbereitet, nicht entschieden)
 
-1. **OP-2 (PO):** Minutenkontingent ablesen und den Spike freigeben (≈ 190–370 Linux-Minuten).
-2. **P-12, Teil Ablage (PO):** Datenzweig plus Artefakte bestätigen, oder Pro-Tarif mit Pages (Daten wären öffentlich).
+1. **Freigabe (PO):** den Spike freigeben (≈ 190–370 Linux-Minuten Laufzeit); die Kontingentfrage OP-2 ist seit der Veröffentlichung geschlossen.
+2. **P-12, Teil Ablage (PO):** Datenzweig plus Artefakte bestätigen, oder GitHub Pages (seit der Veröffentlichung ohne Pro möglich; alle Varianten sind öffentlich).
 3. **P-12, Teil Rückfall (PO):** Server für einen möglichen Self-Hosted-Runner benennen, bzw. Budget für größere Runner.
 4. **Plan 0002, WP6.5 (Planpflege, im ADR aufzulösen):** „≤ 1,5 ms im Regressions-Gate“ gegenüber der Trennung in relatives `Ir`-Gate und Budget-Trend (§4.4).
 5. **Ausdrücklich nicht empfohlen:** externe Dienste (K7). Falls gewünscht, ist das eine eigene PO-Entscheidung.
@@ -551,10 +559,10 @@ Abgerufen am 2026-09-15.
 
 1. Alle Minutenschätzungen je Kandidat, Spike, Gate- und Selbsttest-Job (§2–§5); der erste Lauf ersetzt sie.
 2. Die Faktoren ×2 (Windows) und ×10 (macOS) gegen das Inklusivkontingent: Die offizielle Abrechnungsseite nennt nur Minutenpreise (Verhältnis ≈ 1,7 und ≈ 10,3); die Faktoren stammen aus Drittquellen [Q15].
-3. Dass der PO-Account im Free-Tarif mit 2.000 Inklusivminuten ist (abgeleitet aus der 403-Antwort in P0; das Kontingent ist nicht lesbar).
+3. Dass der PO-Account im Free-Tarif mit 2.000 Inklusivminuten ist (abgeleitet aus der 403-Antwort in P0; das Kontingent ist nicht lesbar). *(Nachtrag 2026-09-15: für die öffentlichen Repos ohne Belang.)*
 4. Rauscharmut von `Ir` für *unsere* Benches, insbesondere über verschiedene Azure-CPU-Modelle und Build-Verzeichnisse hinweg.
 5. Dass Valgrind (vorgebaut über `setup-gungraun` oder 3.22.0 aus Ubuntu 24.04) die Debuginfo von Rust 1.98.1 fehlerfrei liest.
-6. Die Größe des Rauschbands von K3 (sequentiell und Duet) auf privaten 2-vCPU-Runnern; die Duet-Zahlen [Q4] stammen aus anderen Umgebungen.
+6. Die Größe des Rauschbands von K3 (sequentiell und Duet) auf den 4-vCPU-Runnern der öffentlichen Repos; die Duet-Zahlen [Q4] stammen aus anderen Umgebungen.
 7. Ob gehostete Linux-Runner generell keine Hardware-PMU bieten; belegt ist ein Einzelbericht [Q21].
 8. Dass die Umgebungsvariablen `ImageOS`/`ImageVersion` auf den Runnern gesetzt sind.
 9. Dass größere gehostete Runner nicht rauschärmer sind.

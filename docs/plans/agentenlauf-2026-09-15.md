@@ -4,6 +4,11 @@
 - **Auftrag des PO:** Deploy-Key einrichten und prüfen, danach die nächsten Schritte autonom; Last über Codex (gpt-6-astra) verteilen; bis zur nächsten PO-Sitzung keine PO-Entscheidungen.
 - **Bezug:** [Plan 0002](0002-phase-p1-sichtbarer-kern.md), Engine-ADR-0006
 
+> **Nachtrag 2026-09-15:** Beide Repos sind inzwischen öffentlich. Der CI-Stillstand wegen der
+> Actions-Minuten, das Abbrechen geplanter Nightlies und die Verhaltensregel „Actions-Minuten sparen“
+> gelten nicht mehr; die Spiel-CI holt die Engine ohne Deploy-Key
+> ([ADR-0013](../adr/0013-oeffentliche-repos-anonymer-engine-abruf.md)).
+
 ## Abschlussbericht
 
 **Kurzfassung**
@@ -61,6 +66,10 @@ Zusammen 38 Fragen, jede mit Erklärung und Empfehlung; sie lassen sich auf mehr
 - **CI-Pflicht:** Jeder Push mit CI wird bis zum Ende überwacht, ein roter Lauf mit `gh run view --log-failed` analysiert und die Ursache (Code, Vorrichtung, extern) benannt.
 
 ## Änderung — Actions-Minuten fast aufgebraucht
+
+> **Nachtrag 2026-09-15:** Diese Regelung galt nur bis zur Veröffentlichung beider Repos. Seitdem
+> verbrauchen gehostete Standard-Runner keine Actions-Minuten; CI-Läufe, Pull Requests und geplante
+> Nightlies laufen wieder normal und werden wie jeder Lauf bis zum Ende überwacht.
 
 GitHub meldete: **1.832 von 2.000 Actions-Minuten** dieses Abrechnungszeitraums verbraucht (Rücksetzung am 1. Oktober 2026). Danach lief noch der Abschluss-Lauf 34905253693. Verbrauch über das Kontingent hinaus wird berechnet, sofern kein Budget von $0 gesetzt ist. Deshalb gilt ab sofort bis zur PO-Entscheidung:
 

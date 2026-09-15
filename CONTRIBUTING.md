@@ -5,6 +5,13 @@ Entscheidungen: [README](README.md), [docs/prd/](docs/prd/), [docs/adr/](docs/ad
 auf der Engine **Grimoire**, die als eigenes Repo mit gepinnten Tags eingebunden wird
 ([ADR-0002](docs/adr/0002-engine-eigenes-repo.md), [ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)).
 
+## Beiträge von außen
+
+Pull Requests von außen werden **derzeit nicht angenommen**. Das Repo steht unter „Alle Rechte
+vorbehalten“ ([LICENSE](LICENSE), [ADR-0012](docs/adr/0012-lizenz-alle-rechte-vorbehalten.md)); ohne
+eine Beitragsvereinbarung können an einem Beitrag keine Rechte eingeräumt werden. **Issues bleiben
+offen:** Hinweise und Fehlerberichte sind willkommen.
+
 ## Grundsätze
 
 - **Engine nur über Tags:** Das Spiel baut gegen einen getaggten Grimoire-Stand. Lokale Engine-Arbeit
@@ -92,8 +99,9 @@ ein aktiver Patch lässt jeden `--locked`-Aufruf scheitern. Vor dem Commit zusä
 - **Kosten:** Das Repo ist öffentlich; die gehosteten Standard-Runner (Linux, Windows, macOS)
   verbrauchen keine Actions-Minuten. Größere Runner sind kostenpflichtig und werden nicht genutzt.
   Maßstab bleibt die Laufzeit: Standard-Push unter 15 Minuten pro Plattform (PRD-0017).
-- **Pull Requests von außen** laufen erst, nachdem ein Maintainer den Workflow freigegeben hat
-  (Repository-Einstellung). Danach bauen und testen sie wie jeder andere Lauf.
+- **Pull Requests von außen** werden derzeit nicht angenommen (siehe „Beiträge von außen“). Ihre
+  Workflows laufen trotzdem erst, nachdem ein Maintainer sie freigegeben hat (Repository-Einstellung),
+  damit fremde Pull Requests keine Runner-Zeit binden.
 
 ### Engine-Zugriff der CI
 

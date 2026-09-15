@@ -32,6 +32,7 @@
 - WP3.1 nennt die Traits `EventPump` und `RawInputSource`. Umgesetzt wurde stattdessen das Callback-Modell `AppHandler`/`PlatformContext` mit den Enums `PlatformEvent`/`RawInputEvent`, weil winit 0.30 den Event-Loop über `ApplicationHandler` treibt (Engine-ADR-0001).
 - WP2.4 Branch-Schutz ist nicht umsetzbar: Die GitHub-API antwortet für beide privaten Repos mit 403 „Upgrade to GitHub Pro or make this repository public“. Ersatzregel bis zur PO-Entscheidung (OP-1): lokale Pflichtprüfungen vor jedem Push und `gh run watch --exit-status` für jeden Push. Derselbe Befund deutet auf den Free-Tarif; ein Engine-Push kostet dort rund 80 abrechenbare Actions-Minuten (macOS zählt zehnfach).
 - Der Nightly-Workflow ist noch nie gelaufen; der plattformübergreifende Vergleich im Release-Profil ist deshalb noch nicht belegt. Der Debug-Vergleich läuft in jeder CI.
+- *Nachtrag 2026-09-15 (Veröffentlichung):* Beide Repos sind jetzt öffentlich und unter denselben Namen neu angelegt; die bisherigen privaten Repos sind archiviert. Damit sind Rulesets verfügbar (WP2.4): `main` ist in beiden Repos gegen Force-Push und Löschen geschützt, direkte Pushes bleiben erlaubt, Pflicht-Checks gibt es nicht. Die Ersatzregel (lokale Pflichtprüfungen vor jedem Push, `gh run watch --exit-status` für jeden Push) gilt deshalb weiter. Gehostete Standard-Runner verbrauchen keine Actions-Minuten mehr, die Minutenangabe zum Engine-Push oben ist gegenstandslos. Die Spiel-CI holt die Engine anonym über HTTPS; Deploy-Key und Secret aus WP6.3 sind gelöscht, und die Unterscheidung nach vorhandenem Secret entfällt.
 
 ## Kontext / Motivation
 
@@ -186,7 +187,7 @@ Parallelisierbar: WP2 ∥ WP3/WP4; WP5 (ECS-Kern) ∥ WP4; WP6.1-Spike sollte **
 
 ## Meilensteine
 
-- **M1 „Es existiert":** WP1+WP2 fertig — beide Repos remote, CI-Matrix grün auf leeren Workspaces, Branch-Schutz aktiv.
+- **M1 „Es existiert":** WP1+WP2 fertig — beide Repos remote, CI-Matrix grün auf leeren Workspaces, Branch-Schutz aktiv. *(Nachtrag 2026-09-15: seit der Veröffentlichung Ruleset auf `main` ohne Pflicht-Checks, siehe „Abweichungen“.)*
 - **M2 „Es ist sichtbar":** WP3+WP4 fertig — Fenster + 10k instanzierte Sprites auf allen 3 Plattformen (erstes zeigbares GIF).
 - **M3 „Es ist deterministisch":** WP5 fertig — Determinismus-Test (Doppellauf, 10k Ticks) grün in CI auf 3 Plattformen; integriertes Beispiel läuft.
 - **M4 „Es ist ein Produkt":** WP6 fertig — 3 ADRs entschieden, Engine `v0.1.0` getaggt, Spiel pinnt den Tag. **= P0 Definition of Done.**
@@ -209,7 +210,7 @@ Parallelisierbar: WP2 ∥ WP3/WP4; WP5 (ECS-Kern) ∥ WP4; WP6.1-Spike sollte **
 
 ## Offene Punkte
 
-- **OP-1:** GitHub-Plan des PO: private Repos mit ausreichend Actions-Minuten für macOS-Matrix? In Woche 1 klären (R3).
+- **OP-1:** GitHub-Plan des PO: private Repos mit ausreichend Actions-Minuten für macOS-Matrix? In Woche 1 klären (R3). *Geschlossen 2026-09-15:* Beide Repos sind öffentlich; gehostete Standard-Runner verbrauchen auch für die macOS-Matrix keine Actions-Minuten.
 - **OP-2:** Namenskonvention der Engine-ADRs: eigener Zähler im `grimoire`-Repo (Empfehlung: ja, `grimoire/docs/adr/0001-…`) — beim ersten WP6-ADR festlegen.
 - **OP-3:** Werden WP4-Beispiele schon mit Kamera-Kipp (2.5D-Vorgriff) gebaut oder strikt 2D-ortho? Empfehlung: strikt 2D in P0, Kipp kommt mit Toon-Pass in P1 (R5).
 

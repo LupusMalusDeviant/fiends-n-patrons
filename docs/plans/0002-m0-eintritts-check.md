@@ -76,6 +76,14 @@ doppeltes `docs` entsteht.
 | R-09 | Record the licence decision from P0-WP1.4 in both repositories | `fiends-n-patrons` (betrifft beide Repos) | `p0-rest`, `needs-po`, `documentation` | ja (Bestätigung); **erledigt** am 2026-09-15, [ADR-0012](../adr/0012-lizenz-alle-rechte-vorbehalten.md) |
 | R-10 | Update the stale cross-platform note on the RNG golden test | `grimoire` | `p0-rest`, `documentation` | nein |
 
+> **Nachtrag 2026-09-15 (Veröffentlichung):** Beide Repos sind inzwischen öffentlich. Dadurch sind R-02
+> (Branch-Schutz im Free-Tarif), R-05 (Actions-Minuten) und R-07 (Deploy-Key in ADR-0009) in der
+> beschriebenen Form überholt, und R-03/R-04 brauchen keine Minutenfreigabe mehr. R-08 Punkt 1
+> (`webfactory/ssh-agent` in der Composite-Action) entfällt, weil die Action gelöscht ist
+> ([ADR-0013](../adr/0013-oeffentliche-repos-anonymer-engine-abruf.md)); R-09 ist mit
+> [ADR-0012](../adr/0012-lizenz-alle-rechte-vorbehalten.md) erledigt. Die Texte unten bleiben als
+> Stand der Prüfung erhalten.
+
 ---
 
 ### R-01 — Run the window examples with a real GPU in a PO test session
@@ -116,6 +124,10 @@ Meilenstein P0-M2 „Fenster + 10k instanzierte Sprites auf allen 3 Plattformen�
 
 - **Repo:** `fiends-n-patrons` (betrifft `grimoire` gleichermaßen) · **Labels:** `p0-rest`, `needs-po`, `ci` · **PO-Entscheidung:** ja
 
+> *Nachtrag 2026-09-15:* Seit der Veröffentlichung antwortet GitHub nicht mehr mit 403. Entschieden:
+> Ruleset auf `main` beider Repos gegen Force-Push und Löschen; direkte Pushes bleiben erlaubt, es gibt
+> keine Pflicht-Checks, und die Ersatzregel gilt weiter.
+
 **Kontext.** P0-WP2.4 und P0-M1 verlangen Branch-Schutz mit CI-Pflicht auf `main` in beiden Repos.
 Plan 0001, „Abweichungen“: nicht umsetzbar, Ersatzregel „lokale Pflichtprüfungen vor jedem Push und
 `gh run watch --exit-status` für jeden Push“ bis zur PO-Entscheidung. Im Lauf erneut geprüft:
@@ -142,6 +154,9 @@ davon ab: P0-M1 nennt „Branch-Schutz aktiv“ ohne Vermerk.
 ### R-03 — Engine nightly: release-profile cross-platform comparison has never run
 
 - **Repo:** `grimoire` · **Labels:** `p0-rest`, `needs-po`, `ci` · **PO-Entscheidung:** ja (CI-Minuten)
+
+> *Nachtrag 2026-09-15:* Die Minutenfrage entfällt mit der Veröffentlichung, und geplante Nightlies
+> werden nicht mehr abgebrochen. Offen bleibt der erste vollständige, überwachte Lauf.
 
 **Kontext.** P0-WP5.6 und das P0-Erfolgskriterium verlangen den Cross-Plattform-Hash-Vergleich als
 Nightly („Ergebnis dokumentiert, ggf. Fallback-ADR“); PRD-0018 FR-04 (b) verlangt ihn ausdrücklich
@@ -174,6 +189,11 @@ hinter Engine-ADR-0004 für Release-Binaries.
 
 - **Repo:** `fiends-n-patrons` · **Labels:** `p0-rest`, `needs-po`, `ci` · **PO-Entscheidung:** ja (CI-Minuten)
 
+> *Nachtrag 2026-09-15:* Die Minutenfrage entfällt mit der Veröffentlichung, und geplante Nightlies
+> werden nicht mehr abgebrochen. Die Log-Zeile „Deploy-Key vorhanden“ im Akzeptanzkriterium gibt es
+> nicht mehr, weil die Spiel-CI die Engine ohne Deploy-Key holt. Offen bleibt der erste vollständige,
+> überwachte Lauf.
+
 **Kontext.** Plan 0001, „Abweichungen“: „Der Determinismus-Test läuft zusätzlich im Release-Profil in
 Nightly und Release.“ `nightly.yml` des Spiels führt je Plattform `cargo test --release --locked -p
 fnp_sim_harness --test determinism` aus und baut danach `fiends-n-patrons` als 7-Tage-Artefakt. Es
@@ -201,6 +221,11 @@ statt Commit-Datum) und der Artefakt-Pakete.
 ### R-05 — Decide how to handle the GitHub Actions minutes quota
 
 - **Repo:** `fiends-n-patrons` (Kontofrage, betrifft beide Repos) · **Labels:** `p0-rest`, `needs-po`, `ci` · **PO-Entscheidung:** ja
+
+> *Nachtrag 2026-09-15:* Überholt. Der PO hat entschieden, beide Repos öffentlich zu machen; gehostete
+> Standard-Runner verbrauchen dann keine Actions-Minuten. Nightlies werden nicht mehr manuell
+> abgebrochen, und die Absätze „Kosten“ in beiden `CONTRIBUTING.md` sind angepasst. Plan 0002 schließt
+> OP-2 und entschärft R21.
 
 **Kontext.** P0-OP-1 („ausreichend Actions-Minuten für macOS-Matrix? In Woche 1 klären“, P0-R3) wurde
 in P0 nicht abgeschlossen und lebt als Plan 0002 OP-2/R21 weiter. Stand laut GitHub-Meldung: 1.832
@@ -266,6 +291,10 @@ häufiger und teurer.
 ### R-07 — Document the engine checkout via the deploy key in ADR-0009
 
 - **Repo:** `fiends-n-patrons` · **Labels:** `p0-rest`, `documentation` · **PO-Entscheidung:** nein
+
+> *Nachtrag 2026-09-15:* Überholt. Das Engine-Repo ist öffentlich, Deploy-Key und Secret sind gelöscht;
+> der Engine-Checkout in WP9.3 braucht keine Zugangsdaten (Plan 0002, OP-6;
+> [ADR-0013](../adr/0013-oeffentliche-repos-anonymer-engine-abruf.md)).
 
 **Kontext.** Plan 0002 OP-6: Die Spiel-CI soll das Engine-Repo am gepinnten Tag über den vorhandenen
 Deploy-Key auschecken (für `sigilc` im Asset-Compiler-Gate, WP9.3). ADR-0009 beschreibt den Key bisher
@@ -395,6 +424,7 @@ Golden-Wert selbst bleibt unverändert (grimoire `CONTRIBUTING.md`, „Golden-Ma
   gepflegt; kein Rest.
 - **Deploy-Key hängt am Token der GitHub CLI:** bekanntes, in `CONTRIBUTING.md` und ADR-0009
   dokumentiertes Verhalten mit Wiederherstellungsweg (`setup-ci-deploy-key.ps1 -ReplaceExisting`).
+  *Nachtrag 2026-09-15: entfällt, der Deploy-Key ist gelöscht.*
 - **Spiel-Release und `release.yml` des Spiels nie gelaufen:** kein P0-Ziel (Spiel-Releases sind P3,
   PRD-0017).
 - **TODO/FIXME-Kommentare:** `git grep -E "TODO|FIXME|XXX|HACK|todo!\(|unimplemented!\("` findet in

@@ -12,7 +12,8 @@ Zwei Repos, drei Desktop-Plattformen, später zwei Mobile-Plattformen, ein Engin
 SemVer und ein Spiel, das Versionen pinnt: Ohne automatisierte Build-/Test-/Release-Maschinerie
 frisst Plattformpflege das Hobby-Zeitbudget. Zudem gilt die Arbeitsregel des PO:
 **Ein Push ohne Nachsehen zählt nicht als fertig** — CI ist Teil des Workflows, nicht Beiwerk.
-Verteilt wird zunächst **privat an Freunde**; Steam und Mobile-Stores sind spätere Phasen mit
+Verteilt wird zunächst **an Freunde, ohne Store**; die Builds sind öffentlich abrufbar
+(PO-Entscheidung 2026-09-15). Steam und Mobile-Stores sind spätere Phasen mit
 heute schon absehbaren Schnittstellen.
 
 ## Ziele
@@ -24,7 +25,7 @@ heute schon absehbaren Schnittstellen.
 
 ## Non-Goals
 
-- Kein Steam-/Store-Release in v1.0 (privater Vertrieb); Steamworks-Integration (Achievements, Cloud) nur als Interface-Tür dokumentiert.
+- Kein Steam-/Store-Release in v1.0 (Vertrieb an Freunde ohne Store); Steamworks-Integration (Achievements, Cloud) nur als Interface-Tür dokumentiert.
 - Keine Telemetrie-/Crash-Server: Crash-Reports bleiben lokal (Dump + Session-Log als Datei, Spieler teilt manuell).
 - Kein itch.io-Kanal (bewusst abgewählt).
 - Keine Konsolen-Ziele (nie Teil dieser Planung gewesen; erst recht kein v1.0-Thema).
@@ -43,7 +44,7 @@ graph TD
         STAG[Tag vX.Y.Z] --> SREL[Release: Binaries 3 Plattformen,<br/>Windows signiert, Changelog]
     end
     GREL -.Spiel pinnt Tag.-> SCI
-    SREL --> DIST[Privater Vertrieb:<br/>GitHub-Release privat / direkter Link]
+    SREL --> DIST[Vertrieb an Freunde:<br/>öffentliches GitHub-Release / direkter Link]
 ```
 
 ## Funktionale Anforderungen
@@ -58,7 +59,7 @@ graph TD
 | FR-06 | Nightly-Builds: automatischer Dev-Build von main (3 Plattformen) mit Kurz-Changelog seit letzter Nightly. | Must |
 | FR-07 | Versionsschema: SemVer beide Repos; Spiel-Version im Titel-/Todesscreen sichtbar; Build-Metadaten (git-Hash, Engine-Pin) im Log und in Save-/Replay-Headern (PRD-0015 FR-04). | Must |
 | FR-08 | Crash-Handling: Panic-Hook + Minidump/Backtrace + Session-Log in lokalen Crash-Ordner; Spiel zeigt beim Neustart Hinweis mit Pfad. | Must |
-| FR-09 | macOS: ad-hoc-Signierung + Anleitung für Gatekeeper (privater Vertrieb ohne Developer-Account dokumentiert); Linux: AppImage oder tar.gz (Entscheidung OF-17.2). | Must |
+| FR-09 | macOS: ad-hoc-Signierung + Anleitung für Gatekeeper (Vertrieb ohne Store und ohne Developer-Account dokumentiert); Linux: AppImage oder tar.gz (Entscheidung OF-17.2). | Must |
 | FR-10 | Mobile-Kompilierfähigkeit: ab P4 CI-Job, der `grimoire_platform`/`grimoire_gpu` für Android (und iOS soweit ohne Mac-Signing möglich) kompiliert — Ehrlichkeits-Gate für Phase 2. | Should |
 | FR-11 | Steam-Tür: Plattform-Dienste (Achievements, Cloud-Save, ggf. Steam-Input) als Trait definiert, Implementierung „None" in v1.0. | Should |
 
@@ -67,7 +68,7 @@ graph TD
 - **CI-Laufzeit:** Standard-Push-Pipeline < 15 Min pro Plattform (Cache-Strategie für Cargo + Assets); Nightly darf länger.
 - **Workflow-Regel (PO-global):** Jeder Push mit CI wird bis zum Ende überwacht (`gh run watch --exit-status`); rote Läufe werden vor jeder weiteren Arbeit analysiert (`gh run view --log-failed`) und die Ursache benannt (Code/Vorrichtung/extern).
 - **Reproduzierbarkeit:** Toolchain-Versionen gepinnt (rust-toolchain.toml, .NET SDK-Version, Blender-Version); Builds aus sauberem Checkout reproduzierbar.
-- **Sicherheit:** Keine Secrets im Repo; Signing-Zertifikat bleibt lokal/als geschütztes Secret; private Releases nur für eingeladene Accounts.
+- **Sicherheit:** Keine Secrets im Repo; Signing-Zertifikat bleibt lokal/als geschütztes Secret; Nightly- und Release-Binaries sind öffentlich abrufbar (PO-Entscheidung 2026-09-15) und dürfen deshalb nichts enthalten, was nicht öffentlich sein darf.
 
 ## User Stories
 
@@ -86,10 +87,10 @@ graph TD
 
 ## Offene Fragen
 
-- ~~**OF-17.1:** Engine-Pin technisch: git-Tag-Dependency vs. eigene private Registry vs. git-Submodule?~~ **Entschieden** durch [ADR-0009](../adr/0009-engine-pin-ueber-git-tag.md) (akzeptiert, 2026-09-14): Cargo-git-Dependency mit Tag, Read-only-Deploy-Key für die CI, lokaler `[patch]` für die Engine-Iteration.
+- ~~**OF-17.1:** Engine-Pin technisch: git-Tag-Dependency vs. eigene private Registry vs. git-Submodule?~~ **Entschieden** durch [ADR-0009](../adr/0009-engine-pin-ueber-git-tag.md) (akzeptiert, 2026-09-14): Cargo-git-Dependency mit Tag, lokaler `[patch]` für die Engine-Iteration; die CI nutzte bis zur Veröffentlichung der Repos (2026-09-15) einen Read-only-Deploy-Key und holt die Engine seitdem anonym ([ADR-0013](../adr/0013-oeffentliche-repos-anonymer-engine-abruf.md)).
 - **OF-17.2:** Linux-Paketformat (AppImage vs. tar.gz vs. beides)? Entscheidung vor ersten Nightlies (P3).
 - **OF-17.3:** Benchmark-Stabilität auf geteilten CI-Runnern (Rauschen) — dedizierte Schwellen/Median-Strategie oder Self-Hosted-Runner? Spike P1.
-- **OF-17.4:** Wo werden private Releases gehostet (privates GitHub-Release + Invite vs. eigener Server auf eigener Server-Infrastruktur)? PO-Entscheidung P3.
+- **OF-17.4:** Wo werden Releases für den Freundeskreis gehostet? Seit dem 2026-09-15 sind beide Repos öffentlich und öffentliche Nightly- und Release-Builds erlaubt; ein privates GitHub-Release mit Einladung ist im Spiel-Repo damit nicht mehr möglich. Offen bleibt, ob GitHub-Releases der Vertriebsweg sind oder ein eigener Server dazukommt. PO-Entscheidung P3.
 
 ## Referenzen
 

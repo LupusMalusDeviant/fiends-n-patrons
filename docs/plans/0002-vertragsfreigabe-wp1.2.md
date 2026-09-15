@@ -37,6 +37,8 @@ Fragen unten.
    CI aus). Das Gate verlangt ein adversariales Review dieses PR, die PO-Freigabe und eine **überwachte, grüne
    CI auf Windows, Linux und macOS**. Diesen 3-OS-Lauf gibt es erst, wenn Actions-Minuten dafür frei sind
    (OP-2; laut Dossier bis zum 1. Oktober höchstens 168 Minuten, vorrangig für das WP1.0-Hash-Gate).
+   *Nachtrag 2026-09-15: Seit der Veröffentlichung beider Repos kostet der 3-OS-Lauf keine
+   Actions-Minuten; die Minutenbedingung entfällt, das Gate selbst bleibt.*
 3. **Danach die parallelen Stränge**, die nur gegen gemergte Verträge bauen: Render-A (WP2.2 ff.), Sigil-Laufzeit
    (WP5), Messung und Kollision (WP6), Replay und Harness (WP7), Dev-Link und Pack (WP8), später die C#-Seite.
 
@@ -1026,4 +1028,4 @@ Scheduler-Eigentümers (offener Punkt des Agentenlaufs).
 - Die Zustimmung des Scheduler-Eigentümers zu den Ergänzungen in §7.1–§7.3, §8.2 und §8.4 steht aus (offener Punkt des Agentenlaufs).
 - Die Kompilierprüfung deckt nur Signaturen ab; Verhalten, Leistung und die Ausführbarkeit von `mem::take` auf dem Pool oder `run_blocks` mit Nicht-ECS-Aufgaben sind nicht umgesetzt oder gemessen.
 - Das adversariale Review im Sinne des WP1.7-Gates bezieht sich auf den künftigen Vertrags-PR mit Skeletten und hat noch nicht stattgefunden; die Reviews des Laufs betrafen den Entwurf.
-- Das Restkontingent an Actions-Minuten ist aus dem Dossier übernommen und nicht erneut gelesen.
+- Das Restkontingent an Actions-Minuten ist aus dem Dossier übernommen und nicht erneut gelesen. *(Nachtrag 2026-09-15: gegenstandslos, die Repos sind öffentlich.)*

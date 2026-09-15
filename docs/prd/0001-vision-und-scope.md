@@ -26,7 +26,7 @@ Motivationsverlust. Deshalb: klare Phasen, früh Sichtbares, ein unverhandelbare
 
 ## Non-Goals
 
-- **Kein kommerzieller Launch-Druck:** Verkauf (Steam/Mobile-Stores) ist Phase-2+-Option, kein v1.0-Ziel; zunächst private Builds für Freunde.
+- **Kein kommerzieller Launch-Druck:** Verkauf (Steam/Mobile-Stores) ist Phase-2+-Option, kein v1.0-Ziel; zunächst Builds für Freunde, ohne Store (öffentlich abrufbar).
 - **Kein Multiplayer in v1.0:** Lokaler Co-op später denkbar, Online-Co-op nur Fernziel (E16). Es wird keine Netzwerk-Schicht vor P7 gebaut — nur die Determinismus-Tür offen gehalten.
 - **Keine Fremd-Engine, kein Fertig-ECS, keine Physik-Lib:** Lerneffekt ist Produktbestandteil (E02, E04, E10).
 - **Kein Editor-im-Spiel:** Alle Werkzeuge leben in der C#-Tooling-Suite (PRD-0016).
@@ -39,7 +39,7 @@ Motivationsverlust. Deshalb: klare Phasen, früh Sichtbares, ein unverhandelbare
 - Pain Point: Fertig-Engines verstecken die interessanten Probleme; Tutorials enden vor der Ziellinie.
 
 ### Persona B: „Der Freundeskreis-Tester"
-- Bekommt Nightly-/Release-Builds privat; spielt Sessions von 20–40 Minuten, kennt Roguelites (Hades, Gungeon), nicht zwingend Danmaku.
+- Bekommt Nightly-/Release-Builds über einen direkten Link (öffentlich abrufbar, ohne Store); spielt Sessions von 20–40 Minuten, kennt Roguelites (Hades, Gungeon), nicht zwingend Danmaku.
 - Pain Point: Unfaire, unlesbare Bullet-Hells frustrieren; braucht faire Telegraphie und den „noch ein Run"-Sog.
 
 ### Persona C: „Der Coding-Agent"
