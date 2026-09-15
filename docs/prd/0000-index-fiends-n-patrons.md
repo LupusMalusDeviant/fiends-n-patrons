@@ -199,7 +199,7 @@ Nie rückwärts. Die Engine kennt das Spiel nicht. Content-Crates registrieren s
 3. **PRDs leben:** Erkenntnisse beim Bauen ⇒ PRD aktualisieren + bei Richtungswechseln ADR ergänzen.
 4. **Konventionen:** Code + Kommentare Englisch; Commits konventionell (`feat:`, `fix:` …); Docs Deutsch. Determinismus-Regeln aus PRD-0002 sind in jedem System-Code einzuhalten (kein `HashMap`-Iterationsleak in die Sim, kein Wallclock in Gameplay, RNG nur über `grimoire_sim`).
 5. **Jeder Push mit CI wird überwacht** bis der Lauf durch ist (`gh run watch --exit-status`); rote Läufe werden sofort analysiert (Arbeitsregel des PO).
-6. **Windows-Binaries** werden nach jedem Release-Build mit dem vorhandenen Zertifikat signiert (Signier-Skript des PO).
+6. **Windows-Binaries:** Nur Release-Builds werden mit dem vorhandenen Zertifikat signiert (Signier-Skript des PO); CI-, Nightly-, Test- und sonstige Entwicklungs-Builds bleiben unsigniert (PO-Entscheid OP-7, 2026-09-15, [Plan-0002](../plans/0002-phase-p1-sichtbarer-kern.md)).
 7. **Tests sind Teil jedes Features:** siehe PRD-0018; ein Feature ohne Headless-Testpfad gilt als unfertig.
 
 ## 7. Glossar

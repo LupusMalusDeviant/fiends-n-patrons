@@ -21,6 +21,9 @@ offen:** Hinweise und Fehlerberichte sind willkommen.
 - **Keine Secrets im Repo.** Die Engine ist öffentlich; CI und lokale Builds holen sie ohne
   Zugangsdaten ([ADR-0013](docs/adr/0013-oeffentliche-repos-anonymer-engine-abruf.md)). Das
   Code-Signing-Zertifikat bleibt auf dem Entwicklungsrechner.
+- **`main` ist geschützt:** Ein Ruleset verhindert Force-Push und Löschen von `main`. Direkte Pushes
+  bleiben erlaubt; Pflicht-Checks gibt es nicht, deshalb gelten die lokalen Pflichtprüfungen vor jedem
+  Push und die CI-Überwachung weiter.
 
 ## Commits
 
