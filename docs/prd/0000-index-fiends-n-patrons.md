@@ -15,7 +15,7 @@
 ## 1. Was gebaut wird (Elevator Pitch)
 
 **Fiends n Patrons** ist ein 2D-Topdown-**Bullet-Hell-Roguelite** im **Dark-Fantasy/Okkult**-Setting
-mit 2.5D-Optik (3D-Toon-Modelle, gekippte Topdown-Kamera). Der Spieler ist eine **verdammte Seele
+mit 2.5D-Optik (realistische 3D-Modelle, gekippte Topdown-Kamera). Der Spieler ist eine **verdammte Seele
 im Aufstieg**, kämpft mit **Melee-Primärwaffe**, Magie-Skillshot und Graze-geladenem Ultimate durch
 **prozedurale Runs** (2–3 Stages, ~20 Min) und schließt **Pakte mit einem von 5 Patronen** — auf
 Kosten des **Zorns der übrigen vier**, der sich physisch in die Stages frisst.
@@ -110,7 +110,7 @@ graph TD
 |-----|-------|-----------------|
 | [0001](0001-vision-und-scope.md) | Vision & Scope | Spielidee, Zielgruppe, Run-Struktur, Phasenplan, Scope-Politik |
 | [0002](0002-grimoire-engine-architektur.md) | Grimoire Engine | Standalone-Engine: Layer, Subsysteme, ECS, Determinismus, Crate-Map |
-| [0003](0003-rendering-und-art.md) | Rendering & Art | Toon-2.5D, Clustered Lights, Kamera, VFX-Stack, Lesbarkeits-Regeln |
+| [0003](0003-rendering-und-art.md) | Rendering & Art | Realistischer 2.5D-3D-Look (PBR, ADR-0014), Clustered Lights, Kamera, VFX-Stack, Lesbarkeits-Regeln |
 | [0004](0004-sigil-bullet-system.md) | Sigil Bullet-System | Pattern-DSL, 10k-Bullets, Verhaltens-Features, Kollision, Graze |
 | [0005](0005-kampfsystem-spieler.md) | Kampfsystem | Bewegung, Melee, Skillshot, Ultimate, Defensive, Items, Charaktere |
 | [0006](0006-patron-und-pakt-system.md) | Patron & Pakt | 5 Patrone, Pakt/Altäre, Zorn-System, Welt-Einfluss |
@@ -153,7 +153,7 @@ Zwei Repos. Das Spiel pinnt Engine-Versionen (SemVer-Tags).
         ├── grimoire_core\      ← Blatt-Crate: stabiles Hashing, deterministische Mathematik (Engine-ADR-0005)
         ├── grimoire_platform\  ← Traits + Impl: Fenster, Input-Rohdaten, FS, Zeit, Audio-Out
         ├── grimoire_gpu\       ← wgpu-Wrapper, Ressourcen, Frame-Graph
-        ├── grimoire_render\    ← 2.5D-Renderer: Toon, Clustered Lights, Instancing, Post-FX
+        ├── grimoire_render\    ← 2.5D-Renderer: PBR, Schatten, Clustered Lights, Instancing, Post-FX
         ├── grimoire_ecs\       ← eigenes ECS (Welt, Archetypen, Scheduler)
         ├── grimoire_sim\       ← Fixed-Timestep, deterministisches RNG, Snapshots, Replay
         ├── grimoire_collide\   ← 2D-Kollision: Kreise/Kapseln, Spatial Grid, Graze-Queries
@@ -184,7 +184,7 @@ Nie rückwärts. Die Engine kennt das Spiel nicht. Content-Crates registrieren s
 | Phase | Name | Ergebnis (Definition of Done) |
 |-------|------|-------------------------------|
 | P0 | Fundament | Beide Repos + CI-Matrix grün; Grimoire öffnet Fenster, rendert instanzierte Sprites, fixed-timestep ECS-Loop mit Determinismus-Test |
-| P1 | Sichtbarer Kern | Toon-Renderer + Punktlichter + Kamera; 10k-Bullet-Stresstest @60FPS; Sigil v1 (Parser + Interpreter + Hot-Reload via Dev-Link) |
+| P1 | Sichtbarer Kern | PBR-Renderer + Punktlichter + Kamera; 10k-Bullet-Stresstest @60FPS; Sigil v1 (Parser + Interpreter + Hot-Reload via Dev-Link) |
 | P2 | Kampf-Kern | Spieler-Kit komplett (Melee, Skillshot, Dash, Graze, Ulti, Items); 3 Gegner-Archetypen; Kollision + Game-Feel (Hitstop/Shake) |
 | P3 | **Vertical Slice „Mini-Run"** | 1 komplette Stage: Raum-Kette, Wellen+Director light, Upgrades, Shop, 1 Altar, 1 Boss mit Phasen; Todesscreen mit Nachruf; Saves |
 | P4 | Systemvollausbau | 5 Patrone + Zorn, 3 Biome + Zwillinge, Mutations-Events, 8–12 Archetypen, Elites/Minibosse, 3 Bosse, 2 Charaktere |

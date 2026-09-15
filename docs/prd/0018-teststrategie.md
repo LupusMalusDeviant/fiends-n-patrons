@@ -82,7 +82,7 @@ Then vergleicht CI Zustands-Hashes alle 600 Ticks; bei Abweichung ab Tick 18.600
 
 - P0: Unit-Standard + Doppellauf-Determinismus-Gate aktiv; Null-Implementierungen vorhanden.
 - P1: Sim-Harness v1 (Szenen), erste Golden-Master, Benchmark-Trends (PRD-0017 FR-03).
-- P3: Bot spielt den kompletten Mini-Run; Crash-Injection-Suite; Render-Snapshots für Toon/Lights/Bullets.
+- P3: Bot spielt den kompletten Mini-Run; Crash-Injection-Suite; Render-Snapshots für Materialien/Schatten/Lights/Bullets.
 - P5: Balancing-Report-Pipeline in Nutzung (nachweislich ≥ 1 Tuning-Entscheidung pro Woche datengestützt in dieser Phase).
 - Dauerkriterium: main ist nie länger als 24 h rot (Prozess-Metrik, koppelt an PO-CI-Regel).
 

@@ -94,7 +94,7 @@ sequenceDiagram
         S->>S: Systeme: Sigil→Bullets→Bewegung→Kollision→Graze→Damage→Events
     end
     S-->>R: Sim-State (Snapshot-Referenz t, t-1)
-    R->>R: Interpolation α, Toon-Pass, Lights, Bullets-Layer, Post-FX, UI
+    R->>R: Interpolation α, PBR-Pass, Schatten, Lights, Bullets-Layer, Post-FX, UI
 ```
 
 ## Funktionale Anforderungen

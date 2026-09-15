@@ -1,6 +1,6 @@
 # Fiends n Patrons
 
-2D-Topdown-Bullet-Hell-Roguelite im Dark-Fantasy-Setting mit 2.5D-Toon-Optik: eine verdammte
+2D-Topdown-Bullet-Hell-Roguelite im Dark-Fantasy-Setting mit 2.5D-Optik im realistischen 3D-Look: eine verdammte
 Seele im Aufstieg, Melee-Kampf zwischen Bullet-Vorhängen und Pakte mit einem von fünf Patronen —
 auf Kosten des Zorns der übrigen vier.
 
