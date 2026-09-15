@@ -1,6 +1,6 @@
 # Plan-0002 · WP1.1: M0-Eintritts-Check, P0-Reste und Worktree-Konvention
 
-- **Status:** Entwurf aus dem Agentenlauf; Zeilen 11 und 12 nach Sammelsitzung A (2026-09-15) nachgetragen; keine Issues angelegt
+- **Status:** Entwurf aus dem Agentenlauf; Zeilen 11 und 12 nach Sammelsitzung A (2026-09-15) nachgetragen; WP1.0-Abschluss in „Was bis M0 bleibt“ nachgetragen; keine Issues angelegt
 - **Datum:** 2026-09-15; unabhängig nachgeprüft (siehe „Nachprüfung“ am Ende)
 - **Autor:** Claude (Agentenlauf, WP1.1)
 - **Bezug:** [Plan 0002](0002-phase-p1-sichtbarer-kern.md) (WP1.1, „Meilensteine“ M0, „Abhängigkeiten“, „Arbeitsorganisation“, „Offene Punkte“), [Plan 0001](0001-phase-p0-fundament.md) („Umsetzungsstand“, „Abweichungen vom ursprünglichen Plan“, „Erfolgskriterien“), [Dossier Sammelsitzung A](0002-sammelsitzung-a-dossier.md), [Agentenlauf 2026-09-15](agentenlauf-2026-09-15.md), [CONTRIBUTING.md](../../CONTRIBUTING.md), grimoire `CONTRIBUTING.md`
@@ -55,6 +55,13 @@ aber ebenfalls offen.
    *Nachtrag 2026-09-15: Seit der Veröffentlichung beider Repos kostet das 3-OS-Hash-Gate keine
    Actions-Minuten; die Minutenfrage entfällt, das Gate selbst bleibt. WP1.0 ist freigegeben: Merge nach
    grüner 3-OS-CI, Tag `v0.1.1`.*
+   *Nachtrag 2026-09-15 (später): WP1.0 ist abgeschlossen und blockiert nichts mehr. Engine-PR #1 ist nach
+   grünem Pull-Request-Lauf 34970030661 (3 OS, Thread-Hash-Gate mit 1, 2 und N Threads) als `8eea39f`
+   gemergt; Release-Commit `cee0308`, Tag und Release `v0.1.1` (Läufe 34975697800 und 34976051627 grün).
+   Das Spiel pinnt `v0.1.1` (`3df1cb9`) und prüft den goldenen Hash mit 1, 2 und 4 Threads (`95ba4b3`,
+   Lauf 34976845473 grün auf 3 OS). Offen bleiben der Vertrags-PR aus WP1.2 (adversariales Review und
+   3-OS-CI; `p1/wp1.2-contracts-draft` muss erst auf den `main` mit Scheduler nachgezogen werden), die
+   Skelette aus WP1.3, Sammelsitzung B (ADR-Vorschläge 0007, 0010, 0011) und P-4a.*
 3. Plan 0002 trägt weiterhin den Status „Entwurf“. Das Gate nennt keine Planabnahme; ob der PO sie
    mit M0 verbinden will, ist seine Sache.
 

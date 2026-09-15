@@ -294,6 +294,8 @@ WP11.2), wird sie direkt nach Runde 2 und vor Runde 3 gestellt.
 
 **Entscheidung (PO, 2026-09-15):** Freigegeben wie empfohlen, mit den vorläufigen Entscheidungen des Branches: Merge nach grüner 3-OS-CI im öffentlichen Repo und Tag `v0.1.1` (statt `v0.2.0-alpha.1`, siehe P-7). Blockgröße 1024 vorläufig bis zum P1-Benchmark; Executor an der Welt; strenge Abhängigkeitsregel, also auch keine Dev-Abhängigkeiten der Determinismus-Crates auf rayon oder `grimoire_exec`.
 
+**Ergebnis (2026-09-15):** Gemergt (Engine-PR #1, `8eea39f`, nach grüner 3-OS-CI 34970030661), als `v0.1.1` veröffentlicht (Tag auf `cee0308`, Release-Lauf 34976051627 grün); Spiel-Pin `v0.1.1` und Spiel-Gate mit 1, 2 und 4 Threads grün (`95ba4b3`, Lauf 34976845473).
+
 ---
 
 ## Runde 3 — Nach WP1
