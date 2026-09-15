@@ -4,6 +4,37 @@
 - **Auftrag des PO:** Deploy-Key einrichten und prüfen, danach die nächsten Schritte autonom; Last über Codex (gpt-6-astra) verteilen; bis zur nächsten PO-Sitzung keine PO-Entscheidungen.
 - **Bezug:** [Plan 0002](0002-phase-p1-sichtbarer-kern.md), Engine-ADR-0006
 
+## Abschlussbericht
+
+**Kurzfassung**
+
+- **P0 ist abgeschlossen.** Spiel-CI grün auf Windows, Linux und macOS, Engine-Zugriff über den Deploy-Key belegt, goldener Spiel-Hash auf allen drei Plattformen identisch.
+- **CI steht still.** GitHub meldete 1.832 von 2.000 Actions-Minuten. Nach dem Abschluss-Lauf 34905253693 wurde nichts mehr ausgelöst; alle Ergebnisse des Laufs sind **nur lokal** geprüft (inklusive Clippy für Linux und macOS). Die Nightlies sind gar nicht gestartet, verbraucht wurde nichts; eine Überwachung bricht verspätete Starts ab.
+- **Engine-Branches** (gepusht, ohne PR):
+
+  | Branch | Stand | Inhalt |
+  |--------|-------|--------|
+  | `p1/wp1.0-scheduler` | `548a30a` | Paralleler Scheduler nach ADR-0006 vollständig; lokales Gate grün mit 1, 2 und N Threads; 7 Review- und Codex-Befunde behoben |
+  | `p1/wp1.2-contracts-draft` | `f9765dd` | P1-Vertragsentwurf (§1–§16) und ADR-Vorschlag 0008 „Crate-Map-Erweiterung P1“; eingearbeitet: 21 Review-, 9 Codex- und 11 Kompilierprüfungs-Befunde |
+  | `p1/wp1.4-sigil-syntax-spike` | `d5956ed` | Syntax-Spike mit Prototyp-Parsern; Empfehlung `sigil 1`; ADR-Vorschlag 0007 |
+
+- **Spiel-Repo (`main`):** Dossier Sammelsitzung A, M0-Eintritts-Check (10 von 12 erfüllt), OF-17.3-Vorbereitung, spielseitiger Vertragsentwurf, Fragenrunde zur Vertragsfreigabe.
+
+**Was von dir gebraucht wird, in dieser Reihenfolge**
+
+1. **CI-Minuten** — erste Frage in Runde 2 des [Dossiers](0002-sammelsitzung-a-dossier.md). Ohne diese Entscheidung kann kein Gate (Scheduler, Verträge, Nightlies) nachgewiesen werden.
+2. **Sammelsitzung A** — 13 Fragen in vier Runden ([Dossier](0002-sammelsitzung-a-dossier.md)); schließt M0.
+3. **Freigabe WP1.0** — 4 Fragen, direkt nach Runde 2 des Dossiers.
+4. **Vertragsfreigabe WP1.2** — 21 Fragen in sechs Runden ([Fragenrunde](0002-vertragsfreigabe-wp1.2.md)); die letzte Frage übernimmt 116 vorläufige Entscheidungen pauschal.
+
+Zusammen 38 Fragen, jede mit Erklärung und Empfehlung; sie lassen sich auf mehrere Sitzungen verteilen. Sagst du „los“, stelle ich sie per Auswahl.
+
+**Hinweise**
+
+- Codex war zweimal nicht verfügbar. Dadurch fehlt nur noch der unabhängige Namens-Abgleich des Vertrags durch Codex; alle anderen Codex-Prüfungen wurden nachgeholt.
+- Befund zur Werkzeugkette: Ein gemeinsam genutztes Cargo-Target-Verzeichnis kann veraltete Artefakte liefern; Gates liefen danach mit frischem Target.
+- Letzter autonomer Schritt läuft noch: Projekt-ADR-Vorschläge 0010 (Sigil-Compiler-Hoheit) und 0011 (Schema-Codegen, OF-16.2) für Sammelsitzung B. Danach ist ohne deine Entscheidungen oder CI-Minuten nichts Sinnvolles mehr offen.
+
 ## Bereits erledigt
 
 - Deploy-Key auf `grimoire` angelegt (id 163303281, nur lesen), Secret `GRIMOIRE_DEPLOY_KEY` in `fiends-n-patrons` gesetzt und über die API bestätigt, der unbrauchbare Key 163301443 entfernt (`scripts/setup-ci-deploy-key.ps1 -ReplaceExisting`).
@@ -124,6 +155,11 @@ Bericht mit Ergebnissen je Strang, allen vorläufigen Entscheidungen und der vor
 - Die Prüfung liegt reproduzierbar als Spike `spikes/contract-check/` auf dem Branch (`f9765dd`). Sie prüft nur Signaturen und ist nicht WP1.3; die Skelette folgen erst nach der PO-Freigabe der Verträge.
 - Codex konnte nicht mitprüfen: erneut nicht verfügbar.
 
-### Anschlussarbeit — Fragenrunde zur Vertragsfreigabe (läuft)
+### Anschlussarbeit — Fragenrunde zur Vertragsfreigabe (fertig)
 
-- Die rund 22 offenen PO-Fragen und 37 vorläufigen Entscheidungen des Vertragsentwurfs werden in eine fertige Fragenrunde im Format des Dossiers gebündelt.
+- [`0002-vertragsfreigabe-wp1.2.md`](0002-vertragsfreigabe-wp1.2.md): 23 Rohfragen aus Entwurf, Review, Codex und Kompilierprüfung, zusammengeführt zu 21 Fragen (V-1 bis V-20 plus eine Pauschalfrage) in sechs Runden; 116 vorläufige Entscheidungen einzeln aufgelistet. Eine zweite Prüfung gegen den Vertragstext korrigierte 14 Stellen; das Frageformat ist maschinell geprüft (keine Fehler).
+- Auswirkungen der Antworten aus Sammelsitzung A (P-3, P-7, P-8, P-9) auf einzelne Fragen sind vermerkt.
+
+### Anschlussarbeit — Projekt-ADR-Vorschläge 0010 und 0011 (läuft)
+
+- WP1.5: ADR 0010 „Sigil-Compiler-Hoheit“ und ADR 0011 „Schema-Codegen aus einer Quelle“ (OF-16.2) als Vorschläge mit neutralem Optionsvergleich und gegnerischer Prüfung; Entscheidung in Sammelsitzung B.
