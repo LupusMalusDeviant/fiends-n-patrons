@@ -92,4 +92,15 @@ Bericht mit Ergebnissen je Strang, allen vorläufigen Entscheidungen und der vor
   - Die Blockgröße ist vorläufig (1024). Goldene Hashes für Sigil und Kollision sollten erst nach dem Bench eingefroren werden.
   - Weitere Punkte: `u64`-Hashes als JSON-Zahlen verlieren in C# und JavaScript Genauigkeit; die Thread-Regel aus ADR-0006 braucht eine Ausnahme für den IO-Thread des Debug-Links; `RenderFrame` ist nicht `#[non_exhaustive]`, neue Kanäle wären also nicht rein additiv.
 
-*(Strang B folgt)*
+### Strang B — WP1.0 Paralleler Scheduler (fertig, Branch gepusht)
+
+- Branch `p1/wp1.0-scheduler` (`f5c9bf5`, aufbauend auf `70a7fb0`), gepusht ohne PR und ohne CI-Lauf. Die PR-Beschreibung liegt bereit unter `<Arbeitsordner>\_wt\wp1.0-pr-body.md`.
+- Entwurf: Drei unabhängige Entwürfe (zwei von Claude, einer von Codex) wurden bewertet; Grundlage ist der Entwurf mit der kleinsten Schnittstelle, ergänzt um die besten Teile der anderen (Panic-Behandlung je Aufgabe, Referenzmodus, `CommandBuffer::set`, feste Thread-Zahl N = 4 im Gate).
+- Umgesetzt: Zugriffsdeklaration; `ParallelSystem` mit `parallel_system_fn`; Stufenplanung mit Diagnose `Schedule::stages()` und dem Referenzmodus `StageMode::Isolated`; Befehlspuffer je System (neu: `set`, Ressourcenbefehle, `append`); bei einem Panic wird die ganze Stufe verworfen und der Panic mit dem niedrigsten Index weitergereicht; `Executor`-Trait mit sequentieller und permutierter Implementierung; `World::par_blocks`/`par_blocks_mut` mit `QUERY_BLOCK_SIZE = 1024`; `derive_block_rng`; neue Crate `grimoire_exec` (rayon mit eigenem Pool); `AppBuilder::executor` in der Fassade; CI-Prüfung, dass keine Determinismus-Crate von rayon abhängt; Vertragstext in §1, §3 und §7–§10.
+- Lokales Gate zweimal grün (vor und nach dem Review): fmt, Clippy für Windows, Linux und macOS, alle Tests mit Software-Adapter, rustdoc, Standalone-Gate, identische `clippy.toml`, unveränderte goldene Hashes, Hash-Gate mit 1, 2 und N Threads, kein neues `unsafe`, keine rayon-Abhängigkeit in Determinismus-Crates, goldener Spiel-Hash mit der Branch-Engine.
+- Review: vier Linsen, sechs Befunde bestätigt (einer mittel — die Debug-Zugriffsprüfung beschuldigte bei zwei Welten auf einem Pool das falsche System —, fünf niedrig), alle behoben. Das Codex-Review fiel aus und wird nachgeholt.
+- Offen: CI auf drei Plattformen (Minuten); der neue Golden `GOLDEN_PARALLEL_FINAL_HASH` ist nur lokal unter Windows gemessen; Timing-Schranken sind ungemessen (nur in einer Messsitzung); das Spiel-Harness-Gate mit 1, 2 und N Threads folgt erst nach dem Alpha-Tag. Acht vorläufige Entscheidungen und sieben PO-Fragen stehen im Dossier-Abschnitt „Freigabe WP1.0“.
+
+### Anschlussarbeit — Vertragsentwurf WP1.2 (läuft)
+
+- Workflow auf Branch `p1/wp1.2-contracts-draft` (aufbauend auf dem Scheduler-Branch): fünf parallele Abschnittsentwürfe nach der Gliederung, Integration in `crate-vertraege.md`, Engine-ADR-Vorschlag „Crate-Map-Erweiterung P1“, Review mit Gegenprüfung, Push ohne PR und ohne CI.

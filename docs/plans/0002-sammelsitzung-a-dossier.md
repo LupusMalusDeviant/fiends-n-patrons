@@ -24,7 +24,7 @@
 | P-4a | Welche Referenz-Hardware gilt für die Budgets? | Eigener Rechner mit geschätztem Faktor als vorläufige Einordnung; Abnahme nur mit Referenzmessung oder geändertem Kriterium | M0-Gate, WP3.3, WP6.7, WP11.5 | 2 |
 | P-4b | Zustimmung zu den Messsitzungen? | Ja, Sitzung 1 und Abschluss, Regeln wie im Plan | WP3.3, WP8.4 (lokale Socket-Tests), WP11.5, M1/M2-Gates | 2 |
 | OP-7 | Welche Windows-Binaries werden signiert? | Jede Binary, die `target/` verlässt oder von einem Menschen gestartet wird, plus jeder lokale Release-Build | Jeder lokale Build der Agenten | 2 |
-| — | Freigabe WP1.0 (gepushter Branch paralleler Scheduler) | *folgt nach Strang B*; zuerst CI-Minuten für das 3-OS-Hash-Gate | alle Stränge mit Simulationssystemen | nach Runde 2 |
+| — | Freigabe WP1.0 (gepushter Branch paralleler Scheduler) | Nach grüner 3-OS-CI freigeben, vorläufige Entscheidungen wie umgesetzt | alle Stränge mit Simulationssystemen | nach Runde 2 |
 | P-9 | Wo liegt die Format-Dokumentation? | Beim Eigentümer des Formats | WP4.1, WP8.2, WP8.3 | 3 |
 | P-5 | Wie viele Referenz-Patterns in P1? | 12 in P1, 8 in P2, Abnahme über Abdeckungsmatrix | WP4.5, WP5.7 | 3 |
 | P-6 | Umfang Sigil-Editor-MVP und Rückfall? | Wie geplant, Frühwarnung nach WP10.3, Auslöser WP9+WP10 | WP10, E20-Rückfall | 3 (entfällt bei P-1 = D) |
@@ -235,11 +235,23 @@ Zwei Fragen, die zusammenhängen: P-4a A, B und D brauchen Messsitzungen, P-4b l
 
 ## Freigabe WP1.0 (paralleler Scheduler, gepushter Branch)
 
-*Platzhalter.* Dieser Abschnitt wird **nach Abschluss aus den Ergebnissen des Agentenlaufs (Strang B)
-ergänzt**: Name und Stand des gepushten Branches, Ergebnis des lokalen Hash-Gates (1, 2 und N
-Threads), Review-Befunde und offene Punkte. Einen Draft-PR und einen CI-Lauf gibt es nicht; beides
-wurde wegen des Minutenkontingents gestrichen ([Agentenlauf](agentenlauf-2026-09-15.md),
-„Änderung — Actions-Minuten fast aufgebraucht“).
+**Stand nach dem Agentenlauf (Strang B):**
+
+- **Branch:** `p1/wp1.0-scheduler` in `grimoire`, Kopf `f5c9bf5`, 19 Commits auf `70a7fb0`, 45 Dateien (+6.290 / −327 Zeilen). Gepusht ohne PR und ohne CI-Lauf. Die fertige PR-Beschreibung liegt unter `<Arbeitsordner>\_wt\wp1.0-pr-body.md`.
+- **Umgesetzt** sind alle sieben Bausteine von Engine-ADR-0006: Zugriffsdeklaration, `ParallelSystem` mit `parallel_system_fn`, Stufenplanung mit Diagnose `Schedule::stages()` und dem Referenzmodus `StageMode::Isolated`, Befehlspuffer je System (neu `set`, Ressourcenbefehle, `append`), Panic-Regel (Stufe verworfen, niedrigster Index gewinnt), `Executor`-Trait mit sequentieller und permutierter Implementierung, `World::par_blocks`/`par_blocks_mut`, `derive_block_rng`, die neue Crate `grimoire_exec` (rayon 1.12.0, eigener Pool) und `AppBuilder::executor`. Die P0-API bleibt unverändert. Der Vertrag ändert sich in §1, §3, §7, §8, §9 und einem neuen §10.
+- **Lokales Gate** (Windows x86_64, zweimal grün, zuletzt in einem frischen Target-Verzeichnis): fmt; Clippy für Windows, Linux und macOS; alle Tests mit Software-Adapter; rustdoc; Standalone-Gate; identische `clippy.toml`; kein neues `unsafe`; keine rayon-Abhängigkeit in Determinismus-Crates; das P0-Szenario erreicht `GOLDEN_FINAL_HASH` mit sequentiellem, isoliertem, permutiertem und umgekehrtem Executor sowie mit Pools aus 1, 2, 4 und 6 Threads; der goldene Spiel-Hash besteht mit der Branch-Engine.
+- **Review:** Determinismus, Vertrag, Sicherheit/Performance: fünf Befunde bestätigt, alle mit Regressionstests behoben (einer mittel: die Debug-Zugriffsprüfung beschuldigte bei zwei Welten auf einem Pool das falsche System). Das Codex-Review fiel aus und wird nachgeholt.
+- **Offen:** der CI-Lauf auf drei Betriebssystemen; der neue Golden `GOLDEN_PARALLEL_FINAL_HASH` (bisher nur unter Windows gemessen); der Thread-Source-Check mit `--target all`; die Timing-Schranken (nur in einer Messsitzung messbar); das Spiel-Harness-Gate mit 1, 2 und N Threads (erst nach Alpha-Tag und Pin-Hebung).
+
+**Vorläufige Entscheidungen auf dem Branch** (je mit Empfehlung, sie beizubehalten):
+
+1. **Zugriffsmengen:** schedule-lokale Registrierungsnummern, `ComponentId` bleibt privat. Alternative: öffentliche Welt-IDs, deren Registrierung die gehashten Zählwerte ändert.
+2. **Executor auf `World`:** ein Feld außerhalb des Zustands (nicht gehasht, nicht im Snapshot, bleibt bei `restore`). Alternative: explizite Übergabe an `Schedule::run_with`, exklusive Systeme und Blockabfragen — bricht keine P0-Signatur, macht aber jedes schwere System umständlicher.
+3. **Blockgröße:** `QUERY_BLOCK_SIZE = 1024` je Archetyp bis zum P1-Benchmark. Eine spätere Änderung erneuert die blockabhängigen Goldens; der endgültige Wert blockiert `v0.2.0`, nicht das Alpha.
+4. **Zufallsströme:** Engine-Ströme setzen Bit 63, Spiel-Ströme nicht.
+5. **Abhängigkeitsregel streng:** Auch Dev-Abhängigkeiten von Determinismus-Crates auf rayon oder `grimoire_exec` sind verboten; die Gate-Tests liegen in `grimoire_exec/tests`.
+6. **Thread-Einstellung der Fassade:** nur Injektion über `AppBuilder::executor`; ein Feature `parallel` oder eine feste Abhängigkeit würde Baustein 6 widersprechen.
+7. **Namen und Gate-Umfang:** Crate `grimoire_exec` mit `ThreadPoolExecutor`, Gate mit N = 4; das Gate deckt das P0-Szenario in paralleler Form, das neue parallele Szenario und die Fassaden-Szenarien ab, nicht die ecs- und core-Goldens (die keinen Schedule ausführen). Name und Kanten gehören ins Crate-Map-ADR (WP1.3).
 
 **Release-Gate (Engine-ADR-0006, Entscheidung Punkt 7):** Die goldenen Determinismus-Tests der Engine
 **und** die Spiel-Harness laufen mit **1, 2 und N Threads (N ≥ 3)** auf **Windows, Linux und macOS**.
@@ -490,9 +502,57 @@ Dossiertext.
 
 ### Freigabe WP1.0 — nach Runde 2
 
-Wird nach Abschluss von Strang B formuliert (siehe Abschnitt „Freigabe WP1.0“): zuerst CI-Minuten für das
-3-OS-Hash-Gate (1, 2 und N ≥ 3 Threads, Engine-Goldens und Spiel-Harness), dann Merge,
-`v0.2.0-alpha.1` und Pin-Hebung nach grünem Gate.
+Setzt die Antwort zu den CI-Minuten aus Runde 2 voraus. Merge, `v0.2.0-alpha.1` und Pin-Hebung
+folgen in jedem Fall erst nach grünem 3-OS-Gate.
+
+```json
+{
+  "questions": [
+    {
+      "header": "Scheduler",
+      "question": "Darf der parallele Scheduler (Branch p1/wp1.0-scheduler) mit allen vorläufigen Entscheidungen gemergt und als v0.2.0-alpha.1 getaggt werden, sobald die CI auf Windows, Linux und macOS grün ist?",
+      "multiSelect": false,
+      "options": [
+        {"label": "Nach grüner CI freigeben (Empfohlen)", "description": "PR öffnen, CI-Lauf abwarten, bei Grün mergen und taggen; danach hebt das Spiel den Pin und prüft seinen Hash mit 1, 2 und 4 Threads."},
+        {"label": "Freigeben, Einzelpunkte ändern", "description": "Wie empfohlen, aber die in den folgenden Fragen gewählten Änderungen werden vorher eingebaut."},
+        {"label": "Erst nach Benchmark", "description": "Merge wartet, bis der P1-Benchmark die Blockgröße festlegt; alle Stränge mit Simulationssystemen warten mit."}
+      ]
+    },
+    {
+      "header": "Blockgröße",
+      "question": "Welche Blockgröße sollen parallele Abfragen bis zum P1-Benchmark verwenden (eine spätere Änderung erneuert die blockabhängigen goldenen Hashes)?",
+      "multiSelect": false,
+      "options": [
+        {"label": "1024 vorläufig (Empfohlen)", "description": "So umgesetzt und getestet; der Benchmark bestätigt oder ändert den Wert vor v0.2.0."},
+        {"label": "256 vorläufig", "description": "Feinere Aufteilung wie im Codex-Entwurf; Umbau und neuer paralleler Golden nötig."},
+        {"label": "Wert erst nach Benchmark", "description": "Parallele Abfragen bleiben bis zur Messsitzung ungenutzt."}
+      ]
+    },
+    {
+      "header": "Executor",
+      "question": "Soll der Thread-Pool an der Spielwelt hängen, sodass normale Systeme ohne zusätzliche Parameter parallel rechnen können?",
+      "multiSelect": false,
+      "options": [
+        {"label": "Ja, an der Welt (Empfohlen)", "description": "So umgesetzt; der Pool gehört nicht zum gehashten Zustand und bleibt bei Snapshots außen vor."},
+        {"label": "Nein, explizit übergeben", "description": "Sauberer getrennt, aber jedes schwere System braucht einen zusätzlichen Parameter; Umbau vor dem Merge."}
+      ]
+    },
+    {
+      "header": "Abhängigk.",
+      "question": "Dürfen die Determinismus-Crates die Thread-Bibliothek wenigstens in ihren Tests benutzen?",
+      "multiSelect": false,
+      "options": [
+        {"label": "Nein, auch Tests nicht (Empfohlen)", "description": "So umgesetzt; die Thread-Tests liegen in grimoire_exec und binden die Szenarien ein, die Regel aus ADR-0006 gilt ohne Auslegung."},
+        {"label": "In Tests erlaubt", "description": "Thread-Tests liegen direkt bei den Crates; die CI-Prüfung erfasst dann nur normale Abhängigkeiten."}
+      ]
+    }
+  ]
+}
+```
+
+Zugriffsmengen, Stromkonvention, Crate-Name und Gate-Umfang (vorläufige Entscheidungen 1, 4, 6 und 7)
+sind in der ersten Frage mit freigegeben; wählt der PO „Freigeben, Einzelpunkte ändern“, werden sie bei
+Bedarf einzeln nachgefragt.
 
 ### Runde 3 — Nach WP1
 
