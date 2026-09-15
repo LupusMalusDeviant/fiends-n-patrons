@@ -5,8 +5,11 @@
 //!
 //! **Status:** P0. [`run_seed`] runs the [`FiendsGame`] plugin through the facade's
 //! `App::run_headless` with the scripted [`bot_input`]; [`simulate`] drives the same run on a
-//! bare [`Simulation`] so tests can inspect game state. The integration tests in
-//! `tests/determinism.rs` prove determinism and freeze a golden final hash.
+//! bare [`Simulation`] so tests can inspect game state. [`run_seed_with_executor`] repeats the
+//! headless run on a given executor. The integration tests in `tests/determinism.rs` prove
+//! determinism, freeze a golden final hash and check it with 1, 2 and N threads.
+
+use std::sync::Arc;
 
 use fnp_game::{FiendsGame, GAME_TITLE, TICK_RATE_HZ};
 use grimoire::HeadlessReport;
@@ -54,6 +57,27 @@ pub fn run_with_input(
     ticks: u64,
     input: &mut dyn FnMut(u64) -> TickInput,
 ) -> HeadlessReport {
+    game_app(seed).run_headless(ticks, input)
+}
+
+/// Runs [`run_seed`] with `executor` installed on the simulation's world through
+/// `AppBuilder::executor` (engine ADR-0006).
+///
+/// The game's systems are exclusive, so the report must not depend on the executor or its thread
+/// count; `tests/determinism.rs` checks the golden run with 1, 2 and N threads.
+#[must_use]
+pub fn run_seed_with_executor(
+    seed: u64,
+    ticks: u64,
+    executor: Arc<dyn Executor>,
+) -> HeadlessReport {
+    game_app(seed)
+        .executor(executor)
+        .run_headless(ticks, &mut bot_input)
+}
+
+/// The headless game app with `seed`, shared by every harness run.
+fn game_app(seed: u64) -> AppBuilder {
     App::new(WindowConfig {
         title: String::from(GAME_TITLE),
         ..WindowConfig::default()
@@ -63,7 +87,6 @@ pub fn run_with_input(
     .tick_rate(TICK_RATE_HZ)
     .hash_every(HASH_EVERY)
     .plugin(FiendsGame::new())
-    .run_headless(ticks, input)
 }
 
 /// Builds the game into a fresh [`Simulation`] with `seed` and steps it `ticks` times.

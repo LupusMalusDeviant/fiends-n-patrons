@@ -18,6 +18,8 @@ fnp_game = { path = "crates/fnp_game" }
 # HTTPS (ADR-0013). Cargo.lock records the tag commit; upgrades follow CONTRIBUTING.md, section
 # "Engine-Upgrade".
 grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.1.1" }
+# Thread-pool executor of the same engine tag (engine ADR-0006); keep the tag equal to `grimoire`.
+grimoire_exec = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.1.1" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

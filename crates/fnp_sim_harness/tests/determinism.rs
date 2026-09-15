@@ -1,13 +1,17 @@
 //! Determinism gate of the game (PRD-0018 FR-04a): identical runs, seed and input sensitivity and
-//! a golden final hash through the facade's headless path.
+//! a golden final hash through the facade's headless path, also on thread pools with 1, 2 and N
+//! threads (engine ADR-0006, building block 7).
 //!
 //! Seed and input sensitivity compare game state (positions and the circle centre), never state
 //! hashes: the hash also covers the seed and the stored `TickInput`, so it differs between seeds
 //! or inputs even if the game ignored them.
 
 use fnp_game::{Player, Position, RitualCircle};
-use fnp_sim_harness::{HASH_EVERY, bot_input, run_seed, run_with_input, simulate};
+use fnp_sim_harness::{
+    HASH_EVERY, bot_input, run_seed, run_seed_with_executor, run_with_input, simulate,
+};
 use grimoire::prelude::*;
+use grimoire_exec::gate_executors;
 
 /// Seed of the golden run.
 const GOLDEN_SEED: u64 = 42;
@@ -138,4 +142,33 @@ fn golden_final_hash_for_seed_42() {
             .collect::<Vec<_>>()
             .join("\n")
     );
+}
+
+/// Hash gate of engine ADR-0006, building block 7: the golden run on real thread pools with 1, 2
+/// and N threads (`gate_executors`, N = 4 or `GRIMOIRE_GATE_THREADS`).
+///
+/// Every executor must reproduce the unchanged golden final hash and every checkpoint of the run
+/// on the default sequential executor. A mismatch is a determinism bug, never a reason to renew
+/// the golden master.
+#[test]
+fn golden_final_hash_for_seed_42_with_1_2_and_n_threads() {
+    let sequential = run_seed(GOLDEN_SEED, GOLDEN_TICKS);
+    for (label, executor) in gate_executors() {
+        let threads = executor.threads();
+        let report = run_seed_with_executor(GOLDEN_SEED, GOLDEN_TICKS, executor);
+        assert_eq!(
+            report.final_tick, GOLDEN_TICKS,
+            "{threads} threads ({label})"
+        );
+        assert_eq!(
+            report.final_hash, GOLDEN_FINAL_HASH,
+            "golden final hash with {threads} threads ({label}): expected \
+             {GOLDEN_FINAL_HASH:#018x}, got {:#018x}",
+            report.final_hash
+        );
+        assert_eq!(
+            report.hashes, sequential.hashes,
+            "checkpoints with {threads} threads ({label}) differ from the sequential run"
+        );
+    }
 }
