@@ -6,7 +6,7 @@ auf Kosten des Zorns der übrigen vier.
 
 Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Release-Tags).
 
-> Status: **Phase P0 — Fundament**. Das Spiel pinnt Grimoire `v0.1.0` über einen Git-Tag
+> Status: **Phase P0 — Fundament**. Das Spiel pinnt Grimoire `v0.1.1` über einen Git-Tag
 > ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Die P0-Demo „Beschwörungskreis“ belegt die
 > Engine-Anbindung (Fenster, Eingabe, Fixed-Timestep-Simulation, interpolierte Sprites), noch kein
 > Gameplay. Ein Determinismus-Test friert den Endhash für Seed 42 über 3.600 Ticks ein.

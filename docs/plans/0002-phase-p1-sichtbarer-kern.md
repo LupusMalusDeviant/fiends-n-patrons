@@ -25,8 +25,8 @@ den Plattformen ab, deshalb rechnet die Simulationsseite ausschließlich über `
 Stand 2026-09-15 ist P0 abgeschlossen. Engine-`main` ist gepusht, der Engine-Tag `v0.1.0` existiert
 remote (Commit `93bed40`), und Engine-ADR-0004 ist nach einem grünen 3-OS-Lauf akzeptiert. OF-2.2 ist
 entschieden: Engine-ADR-0006 (akzeptiert) ersetzt das abgelehnte ADR-0003 durch einen parallelen
-Scheduler, dessen Umsetzung als erster P1-Schritt WP1.0 ist. Das Spiel pinnt `v0.1.0` über einen
-Git-Tag (ADR-0009); der Spiel-CI-Lauf 34903989101 (Commit `00d6683`) ist auf Windows, Linux und macOS
+Scheduler, dessen Umsetzung als erster P1-Schritt WP1.0 ist. Das Spiel pinnte `v0.1.0` über einen
+Git-Tag (ADR-0009) und pinnt seit dem Engine-Upgrade aus WP1.0 den Tag `v0.1.1`; der Spiel-CI-Lauf 34903989101 (Commit `00d6683`) ist auf Windows, Linux und macOS
 grün — damals mit Engine-Zugriff über einen Read-only-Deploy-Key und mit identischem goldenem Endhash
 des Spiels auf allen drei Plattformen. Von der Eintrittsbedingung M0 ist damit nur noch die
 PO-Sammelsitzung A offen. Sammelsitzung A hat am 2026-09-15 stattgefunden; seitdem ist M0 bis auf die vertagte

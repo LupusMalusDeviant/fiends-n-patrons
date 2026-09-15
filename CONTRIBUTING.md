@@ -180,11 +180,11 @@ Die Engine steht als git-Dependency mit Tag im Workspace-Manifest (seit P0/WP6.3
 
 ```toml
 [workspace.dependencies]
-grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.1.0" }
+grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.1.1" }
 ```
 
 `Cargo.lock` hält den Commit-Hash des Tags (Quelle
-`git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.1.0#<commit>`) für jedes bezogene
+`git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.1.1#<commit>`) für jedes bezogene
 Engine-Crate. Das Engine-Repo ist öffentlich; Cargo holt es ohne Zugangsdaten, ein frischer Klon
 baut ohne Einrichtungsschritt.
 
@@ -197,7 +197,7 @@ aktivem `[patch]`** muss Cargo das Original-Repo erreichen, solange es nicht im 
 Prüfen, dass der Pin greift:
 
 ```bash
-cargo tree -i grimoire --locked   # genau ein grimoire, Quelle ...grimoire?tag=v0.1.0#<commit>
+cargo tree -i grimoire --locked   # genau ein grimoire, Quelle ...grimoire?tag=v0.1.1#<commit>
 ```
 
 ## Lokale Engine-Entwicklung mit `[patch]`
