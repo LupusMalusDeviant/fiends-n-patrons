@@ -27,13 +27,14 @@ use serde_json::Value;
 /// See `assets_src/figure_pack/pack_payloads.py`'s module docstring for why these are not the
 /// engine-reserved `AssetKind::MESH`/`MATERIAL` (2/3): `PackWriter::add` rejects raw kind values
 /// `2..=5` unconditionally (`grimoire_assets::pack::classify_kind`), so the spec's literal
-/// assignment cannot work against the actual v0.1.1 crate. These live in the same
-/// `0x8000..=0xFFFF` application range the spec already uses for the other three kinds.
+/// assignment cannot work against the actual crate. `0x8000`/`0x8004` match the engine side's own
+/// (authoritative, ships as release v0.2.0) choice -- Strang A independently picked
+/// `0x8004`/`0x8005` first; the PO resolved the mismatch in the engine's favour.
 const FNP_TEXTURE_RAW: u16 = 0x8001;
 const FNP_SKELETON: u16 = 0x8002;
 const FNP_FIGURE: u16 = 0x8003;
-const FNP_MESH: u16 = 0x8004;
-const FNP_MATERIAL: u16 = 0x8005;
+const FNP_MESH: u16 = 0x8000;
+const FNP_MATERIAL: u16 = 0x8004;
 
 const COMPILER_NAME: &str = "fnp_figure_pack_builder";
 
@@ -527,6 +528,9 @@ fn validate_texture(bytes: &[u8]) -> Result<(), String> {
 
 const MAX_JOINT_COUNT: u32 = 256;
 
+/// Two passes over all joints (engine's own, authoritative reading -- see the module docstring
+/// on `FNP_MESH`/`FNP_MATERIAL` for the same kind of spec-ambiguity resolution): first every
+/// joint's `parent`/`inverse_bind`/name, then every joint's `translation`/`rotation`/`scale`.
 fn validate_skeleton(bytes: &[u8]) -> Result<(), String> {
     let mut reader = Reader::new(bytes);
     let _version = reader.u32()?;
@@ -547,6 +551,8 @@ fn validate_skeleton(bytes: &[u8]) -> Result<(), String> {
             return Err(format!("joint {index} name_len {name_len} exceeds 63"));
         }
         reader.skip(name_len)?;
+    }
+    for _ in 0..joint_count {
         reader.skip(3 * 4 + 4 * 4 + 3 * 4)?; // translation, rotation, scale
     }
     if !reader.finished() {

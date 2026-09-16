@@ -12,14 +12,26 @@ the same checks (defense in depth, not because either side trusts the other less
 The spec assigns `MESH = 2` and `MATERIAL = 3`, reasoning that contract §12 "gives
 `0x8000..=0xFFFF` explicitly to the application" and that `2`/`3` are the engine's own
 already-named `AssetKind::MESH`/`AssetKind::MATERIAL` constants. That reasoning does not hold
-against the actual grimoire_assets v0.1.1 code: `AssetKind::MESH`/`MATERIAL` (`ids.rs`) are
-doc-commented "reserved for a future kind; a v1 pack reader rejects it", and
+against the actual grimoire_assets code: `AssetKind::MESH`/`MATERIAL` (`ids.rs`) are doc-commented
+"reserved for a future kind; a v1 pack reader rejects it", and
 `PackWriter::add`/`PackReader::from_bytes` both run every kind through `classify_kind`, which
 maps raw `2..=5` to `PackError::ReservedKind` unconditionally -- `PackWriter::add` would fail on
-every MESH/MATERIAL entry. This module instead defines `FNP_MESH = 0x8004` and
-`FNP_MATERIAL = 0x8005`, in the same opaque `0x8000..=0xFFFF` application range the spec already
-uses for `FNP_TEXTURE_RAW`/`FNP_SKELETON`/`FNP_FIGURE`. The wire layout, `kind_version` and every
-other kind value are unchanged from the spec.
+every MESH/MATERIAL entry. Both converter sides hit this independently and first picked different
+replacement values (Strang A: `0x8004`/`0x8005`); the PO settled it in the engine's favour since
+Strang B's `0x8000`/`0x8004` ships as release `v0.2.0`. This module now matches that: `FNP_MESH =
+0x8000`, `FNP_MATERIAL = 0x8004`, in the same opaque `0x8000..=0xFFFF` application range the spec
+already uses for `FNP_TEXTURE_RAW`/`FNP_SKELETON`/`FNP_FIGURE`. The wire layout, `kind_version`
+and every other kind value are unchanged from the spec.
+
+## FNP_SKELETON layout (second alignment with the engine, same cause)
+
+The spec's "je Knochen: `parent`, `inverse_bind`, `name`. Dazu je Knochen: `translation`,
+`rotation`, `scale`." was ambiguous between one combined per-joint record and two separate passes
+over all joints; this module first read it as one combined record (the more natural reading of
+the German, and the only shape a streaming reader could produce without buffering the whole
+skeleton). The engine's reader does two separate passes -- all joints' `parent`/`inverse_bind`/
+`name` first, then all joints' `translation`/`rotation`/`scale` -- and, same as the kind values,
+that is now authoritative. `encode_skeleton` below writes two passes accordingly.
 """
 
 from __future__ import annotations
@@ -35,9 +47,10 @@ WEIGHT_TOLERANCE = 1.0e-3
 NO_TEXTURE = 0xFFFF_FFFF
 
 # See the module docstring: MESH/MATERIAL are reassigned off the engine-reserved 2/3 into the
-# application range; TEXTURE_RAW/SKELETON/FIGURE match figuren-in-engine-spec.md as written.
-FNP_MESH = 0x8004
-FNP_MATERIAL = 0x8005
+# application range, matching the engine's own (authoritative) choice; TEXTURE_RAW/SKELETON/
+# FIGURE match figuren-in-engine-spec.md as written.
+FNP_MESH = 0x8000
+FNP_MATERIAL = 0x8004
 FNP_TEXTURE_RAW = 0x8001
 FNP_SKELETON = 0x8002
 FNP_FIGURE = 0x8003
@@ -154,10 +167,9 @@ def encode_texture_raw(*, width: int, height: int, color_space: int, rgba: bytes
 def encode_skeleton(joints, *, label: str) -> bytes:  # joints: list[skeleton.Joint]
     """Encodes one `FNP_SKELETON` payload.
 
-    One flat record per joint (`parent`, `inverse_bind`, name, rest-pose translation/rotation/
-    scale, in that order) -- the spec's "je Knochen: ...  Dazu je Knochen: ..." phrasing reads as
-    two clauses of the *same* per-bone record, not two separate passes over all bones; this is
-    also the only layout a streaming reader could produce without buffering the whole skeleton.
+    Two passes over all joints (see the module docstring: the engine's reader, now
+    authoritative): first every joint's `parent`/`inverse_bind`/name, then every joint's rest-pose
+    `translation`/`rotation`/`scale`.
     """
     joint_count = len(joints)
     if joint_count > MAX_JOINT_COUNT:
@@ -180,6 +192,7 @@ def encode_skeleton(joints, *, label: str) -> bytes:  # joints: list[skeleton.Jo
         out += struct.pack("<16f", *joint.inverse_bind)
         out += struct.pack("<B", len(name_bytes))
         out += name_bytes
+    for joint in joints:
         out += struct.pack("<3f", *joint.translation)
         out += struct.pack("<4f", *joint.rotation)
         out += struct.pack("<3f", *joint.scale)
