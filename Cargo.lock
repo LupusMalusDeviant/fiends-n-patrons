@@ -468,7 +468,9 @@ dependencies = [
 name = "fnp_content"
 version = "0.1.0"
 dependencies = [
+ "grimoire",
  "grimoire_assets",
+ "grimoire_sigilc",
  "serde_json",
 ]
 
@@ -744,6 +746,20 @@ dependencies = [
  "grimoire_core",
  "grimoire_ecs",
  "grimoire_sim",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "grimoire_sigilc"
+version = "0.2.0"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
+dependencies = [
+ "grimoire_core",
+ "grimoire_ecs",
+ "grimoire_sigil",
+ "grimoire_sim",
+ "serde",
+ "serde_json",
  "thiserror 2.0.20",
 ]
 
