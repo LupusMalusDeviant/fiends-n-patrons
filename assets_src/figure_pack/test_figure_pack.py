@@ -306,3 +306,17 @@ class GlbReaderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GlbPathTests(unittest.TestCase):
+    """The source file name is `<name><suffix>`; the suffix selects the asset round."""
+
+    def test_default_suffix_is_the_r3b_round(self):
+        from pathlib import Path
+        import build_figure_pack as bfp
+        self.assertEqual(bfp.glb_path_for(Path("src"), "imp"), Path("src") / "imp_r3b_low.glb")
+
+    def test_a_custom_suffix_selects_another_round(self):
+        from pathlib import Path
+        import build_figure_pack as bfp
+        self.assertEqual(bfp.glb_path_for(Path("src"), "brute", "_r3c_low.glb"), Path("src") / "brute_r3c_low.glb")
