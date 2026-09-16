@@ -43,13 +43,13 @@ use grimoire::sigil::{
 use crate::{DT, Player, Position, PreviousPosition, Velocity};
 
 /// Half extents of the walkable arena, in world units (1 unit = 1 m).
-pub const ARENA_HALF: Vec2 = Vec2::new(14.0, 9.0);
+pub const ARENA_HALF: Vec2 = Vec2::new(10.5, 7.0);
 
 /// Where the player starts every round.
-pub const PLAYER_START: Vec2 = Vec2::new(0.0, -5.5);
+pub const PLAYER_START: Vec2 = Vec2::new(0.0, -4.0);
 
 /// Where the imp stands.
-pub const IMP_POSITION: Vec2 = Vec2::new(0.0, 4.5);
+pub const IMP_POSITION: Vec2 = Vec2::new(0.0, 3.5);
 
 /// Top speed of the player in world units per second.
 pub const PLAYER_SPEED: f32 = 5.5;
@@ -78,7 +78,7 @@ pub const HIT_RECOVERY_TICKS: u64 = 90;
 pub const BULLET_CAPACITY: u32 = 4096;
 
 /// How far outside the arena bullets live before the interpreter despawns them.
-pub const BULLET_BOUNDS_MARGIN: f32 = 4.0;
+pub const BULLET_BOUNDS_MARGIN: f32 = 3.0;
 
 /// Collision layer every bullet of the imp belongs to.
 pub const HOSTILE_BULLET_LAYER: LayerMask = LayerMask::layer(0);

@@ -35,7 +35,7 @@ emitter volley {
   delay = 60t // one second of calm after a round starts
   repeat = forever
   interval = 50t
-  speed = 0.1u/t
+  speed = 0.09u/t
   block aimed {
     count = 5
     spread = 36deg // total spread of the fan around the aim line
@@ -47,7 +47,7 @@ emitter ring {
   delay = 85t
   repeat = forever
   interval = 100t
-  speed = 0.065u/t
+  speed = 0.06u/t
   block spiral {
     arms = 14
     step = 9deg // the ring winds a little further every volley

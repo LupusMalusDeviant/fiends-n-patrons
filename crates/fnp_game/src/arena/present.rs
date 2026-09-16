@@ -57,8 +57,14 @@ const FLOOR_TILES: u32 = 24;
 /// Edge length of one floor tile.
 const FLOOR_TILE_SIZE: f32 = 2.0;
 /// Radius and height of the arena pillars.
-const PILLAR_RADIUS: f32 = 0.55;
-const PILLAR_HEIGHT: f32 = 4.5;
+const PILLAR_RADIUS: f32 = 0.5;
+const PILLAR_HEIGHT: f32 = 3.2;
+/// Height of the braziers on the near edge.
+const BRAZIER_HEIGHT: f32 = 0.8;
+/// How far the camera's follow point leans from the player towards the imp's side of the arena.
+const CAMERA_ANCHOR: Vec2 = Vec2::new(0.0, 1.5);
+/// Share of the player's own position in the camera's follow point.
+const CAMERA_FOLLOW_SHARE: f32 = 0.7;
 /// Height and depth of the curb that marks the arena edge.
 const CURB_HEIGHT: f32 = 0.3;
 const CURB_DEPTH: f32 = 0.5;
@@ -66,8 +72,8 @@ const CURB_DEPTH: f32 = 0.5;
 const CURB_GAP: f32 = 0.45;
 /// Ticks the soul takes to fall into its hit pose.
 const HIT_FALL_TICKS: f32 = 8.0;
-/// Ticks per on/off half period of the hit blink.
-const HIT_BLINK_TICKS: u64 = 5;
+/// Ticks per step of the hit blink: two steps shown, one hidden.
+const HIT_BLINK_TICKS: u64 = 4;
 /// Ticks of the rise-in at the start of a round.
 const RESPAWN_TICKS: f32 = 18.0;
 
@@ -336,16 +342,23 @@ impl ArenaVisuals {
 #[must_use]
 pub fn camera_template() -> Camera25D {
     let mut camera = Camera25D::default();
-    camera.target = crate::arena::PLAYER_START.to_array();
-    camera.tilt_degrees = 62.0;
-    camera.fov_y_degrees = 40.0;
-    camera.distance = 22.0;
-    camera.look_ahead_max = 1.5;
+    camera.target = camera_focus(crate::arena::PLAYER_START).to_array();
+    camera.tilt_degrees = 60.0;
+    camera.fov_y_degrees = 42.0;
+    camera.distance = 14.5;
+    camera.look_ahead_max = 1.0;
     camera.look_ahead_smoothing = 0.3;
     camera
 }
 
-/// Interpolated player position: the camera's follow target.
+/// The camera's follow point for an interpolated player position: mostly the player, pulled
+/// towards the imp's half so the enemy stays in view.
+#[must_use]
+pub fn camera_focus(player: Vec2) -> Vec2 {
+    player * CAMERA_FOLLOW_SHARE + CAMERA_ANCHOR
+}
+
+/// Interpolated player position.
 #[must_use]
 pub fn player_focus(world: &World, alpha: f32) -> Option<Vec2> {
     world
@@ -466,14 +479,30 @@ fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
     let edge = ARENA_HALF + Vec2::splat(CURB_GAP + CURB_DEPTH * 0.5);
     let pillar_x = edge.x + CURB_DEPTH;
     let pillar_y = edge.y + CURB_DEPTH;
+    // Pillars only on the far side and the flanks: on the camera side they would hide the arena.
+    // The near edge gets low braziers instead.
     let mut torch_index = 0_u32;
     for &x in &[-pillar_x, -pillar_x * 0.5, 0.0, pillar_x * 0.5, pillar_x] {
-        for &y in &[-pillar_y, pillar_y] {
+        push_pillar(visuals, frame, Vec2::new(x, pillar_y), &mut torch_index);
+    }
+    for &y in &[0.0, -pillar_y * 0.6] {
+        for &x in &[-pillar_x, pillar_x] {
             push_pillar(visuals, frame, Vec2::new(x, y), &mut torch_index);
         }
     }
-    for &x in &[-pillar_x, pillar_x] {
-        push_pillar(visuals, frame, Vec2::new(x, 0.0), &mut torch_index);
+    for &x in &[-pillar_x * 0.5, pillar_x * 0.5] {
+        let at = Vec2::new(x, -pillar_y);
+        let brazier = mul(
+            translation([at.x, at.y, BRAZIER_HEIGHT * 0.5]),
+            scale([0.6, 0.6, BRAZIER_HEIGHT]),
+        );
+        frame
+            .meshes
+            .push(mesh(visuals.block, slot::PLINTH, brazier));
+        frame.blob_shadows.push(blob(at, 0.7, 0.55));
+        frame
+            .point_lights
+            .push(torch([at.x, at.y + 0.3, BRAZIER_HEIGHT + 0.5]));
     }
 
     let long = 2.0 * edge.x + CURB_DEPTH;
@@ -594,6 +623,14 @@ fn push_player(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut St
     }
 
     frame.blob_shadows.push(blob(at, 0.55, 0.6));
+    // A cool lantern above the soul lifts the dark cloak off the dark floor (style bible,
+    // "Figuren": figures separate through light and value, never through outlines).
+    let mut lantern = PointLight::default();
+    lantern.position = [at.x, at.y - 0.8, 2.6];
+    lantern.color = linear(0x9A_B0_D8);
+    lantern.intensity = 4.0;
+    lantern.range = 5.5;
+    frame.point_lights.push(lantern);
 
     let Some(age) = hit_age else {
         let transform = mul(
@@ -629,7 +666,7 @@ fn push_player(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut St
     );
     let pulse = 0.55 + 0.45 * dmath::cos(age_f * 0.6);
     let red = [1.0 * pulse, 0.06 * pulse, 0.04 * pulse];
-    let visible = age < 20 || (age / HIT_BLINK_TICKS).is_multiple_of(2);
+    let visible = age < 20 || (age / HIT_BLINK_TICKS) % 3 != 2;
     if visible {
         push_figure(soul, transform, true, Some(red), frame);
     }
@@ -781,8 +818,8 @@ mod tests {
         assert!(!stats.key_light_rejected_invalid);
         assert!(!stats.ambient_rejected_invalid);
         assert_eq!(stats.bullets_drawn, 0);
-        // Floor, 12 pillars, 4 curbs, plinth, imp, soul and the marker ring.
-        assert_eq!(frame.meshes.len(), 1 + 12 + 4 + 1 + 1 + 1 + 1);
+        // Floor, 9 pillars, 2 braziers, 4 curbs, plinth, imp, soul and the marker ring.
+        assert_eq!(frame.meshes.len(), 1 + 9 + 2 + 4 + 1 + 1 + 1 + 1);
     }
 
     #[test]
