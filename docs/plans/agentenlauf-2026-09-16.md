@@ -82,3 +82,17 @@ Auf meine Sichtpruefung hin ging die Runde mit vier benannten Punkten zurueck. D
 - **Dreiecksfaecher an den Hoehlen:** bewusst nicht angefasst, weil die Gewichtung des Imps dafuer zu empfindlich ist. So dokumentiert, nicht stillschweigend uebergangen.
 
 **Offen nach eigener Sichtpruefung:** Das grosse Horn ist jetzt das hellste Objekt im Bild und zieht den Blick vom Gesicht weg; ausserdem sehen die beiden Hoerner derselben Figur unterschiedlich aus - das grosse hell und papieren, das kleine dunkelbraun. Diese Ungleichheit wirkt wie ein Fehler, nicht wie Absicht, und gehoert vor der naechsten Runde geklaert. Aus der Spielkamera funktioniert die Szene unveraendert gut: drei klar unterscheidbare Silhouetten, Schatten und Lichtpfuetzen sitzen.
+
+## Abschluss des Laufs
+
+In `main` gelandet sind sechs Pakete, jedes mit gruener CI auf Windows, Linux und macOS und jedes mit einem Eintrag im Phasenplan, der auch die roten Laeufe und ihre Ursachen benennt: WP2.6 (Schatten), WP2.8 (Render-Testszenen und das M1-Schaufenster), WP3.1 (Downlevel-Pruefung und Cluster-Layout), WP3.2 (Stress-Spikes zu Bullets und Licht), WP4.1 (Sigil-Parser) und WP4.2 (Sigil-Compiler, Merge-Commit `14af120`). Dazu drei Runden an den Figuren mit Skelett.
+
+### Was diese Nacht ueber die Vorrichtung gelehrt hat
+
+Zwei rote Laeufe auf `main` hatten dieselbe Wurzel: einen Job, den **kein Pull Request ausfuehrt**. Erst suchte ein Shell-Schritt die gerenderten Einzelbilder an einer anderen Stelle, als der Test sie ablegt, dann fehlte auf dem Runner das Programm zum Zusammensetzen des GIFs, das der Job faelschlich als vorinstalliert annahm. Gegen beides hilft keine statische Pruefung - `bash -n` findet Syntaxfehler, aber weder eine Pfadannahme noch ein fehlendes Programm. Wirksam ist, den Arbeitszweig vor dem Merge per `workflow_dispatch` anzustossen; ab jetzt gilt das als Regel fuer jeden Job, der nur auf `main` laeuft, und beim zweiten Fix ist es bereits so nachgewiesen worden.
+
+Eine zweite Lehre betrifft Selbstauskuenfte. Zweimal wich meine eigene Pruefung vom Bericht ab: Bei den Figuren war der Fortschritt gemessen echt, im Bild aber kaum sichtbar, weil das Eigenleuchten die neu geschnitzten Augenhoehlen ausfuellte; und ein als 'schwankende Umgebung' gemeldeter Fehlschlag beim Backen erwies sich in der Korrekturrunde als vollstaendig reproduzierbar. Beide Male fuehrte erst das Nachsehen zur richtigen Diagnose. Entsprechend traegt der Lauf jetzt eine Pruefung, die einen unvollstaendigen Durchgang abbricht, statt ihn als fertig zu melden.
+
+### Was am Morgen ansteht
+
+Der naechste Schritt ist ausdruecklich **kein Code**. Fuenf Engine-ADR-Vorschlaege warten auf Annahme, und einer davon blockiert den Ausbau: WP3.4 setzt auf die Entscheidung fuer Compute-Clustering auf. Deren Grundlage ist eindeutig gemessen - die Zuordnung auf dem Hauptprozessor verfehlt ihr Budget mit 115 bis 118 Prozent, auf der Grafikkarte kostet derselbe Schritt 1,3 bis 4,5 Prozent. Danach folgen WP3.4, WP4.3, WP5.1 und die Nacharbeit an WP8.4 (der Schutz gegen zu grosse erste Frames am TCP-Transport).
