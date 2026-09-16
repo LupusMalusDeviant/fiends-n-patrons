@@ -638,7 +638,7 @@ dependencies = [
 [[package]]
 name = "grimoire"
 version = "0.2.0"
-source = "git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.2.0#922005780a98782e65804e1905d25582aca38922"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
 dependencies = [
  "grimoire_assets",
  "grimoire_collide",
@@ -655,7 +655,7 @@ dependencies = [
 [[package]]
 name = "grimoire_assets"
 version = "0.2.0"
-source = "git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.2.0#922005780a98782e65804e1905d25582aca38922"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
 dependencies = [
  "grimoire_core",
  "grimoire_platform",
@@ -666,7 +666,7 @@ dependencies = [
 [[package]]
 name = "grimoire_collide"
 version = "0.2.0"
-source = "git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.2.0#922005780a98782e65804e1905d25582aca38922"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
 dependencies = [
  "grimoire_core",
  "grimoire_ecs",
@@ -676,7 +676,7 @@ dependencies = [
 [[package]]
 name = "grimoire_core"
 version = "0.2.0"
-source = "git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.2.0#922005780a98782e65804e1905d25582aca38922"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
 dependencies = [
  "libm",
 ]
@@ -684,7 +684,7 @@ dependencies = [
 [[package]]
 name = "grimoire_ecs"
 version = "0.2.0"
-source = "git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.2.0#922005780a98782e65804e1905d25582aca38922"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
 dependencies = [
  "grimoire_core",
  "thiserror 2.0.20",
@@ -693,7 +693,7 @@ dependencies = [
 [[package]]
 name = "grimoire_exec"
 version = "0.2.0"
-source = "git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.2.0#922005780a98782e65804e1905d25582aca38922"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
 dependencies = [
  "grimoire_ecs",
  "rayon",
@@ -703,7 +703,7 @@ dependencies = [
 [[package]]
 name = "grimoire_gpu"
 version = "0.2.0"
-source = "git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.2.0#922005780a98782e65804e1905d25582aca38922"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
 dependencies = [
  "grimoire_platform",
  "log",
@@ -715,7 +715,7 @@ dependencies = [
 [[package]]
 name = "grimoire_platform"
 version = "0.2.0"
-source = "git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.2.0#922005780a98782e65804e1905d25582aca38922"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
 dependencies = [
  "log",
  "raw-window-handle",
@@ -726,7 +726,7 @@ dependencies = [
 [[package]]
 name = "grimoire_render"
 version = "0.2.0"
-source = "git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.2.0#922005780a98782e65804e1905d25582aca38922"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
 dependencies = [
  "bytemuck",
  "grimoire_core",
@@ -739,7 +739,7 @@ dependencies = [
 [[package]]
 name = "grimoire_sigil"
 version = "0.2.0"
-source = "git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.2.0#922005780a98782e65804e1905d25582aca38922"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
 dependencies = [
  "grimoire_core",
  "grimoire_ecs",
@@ -750,7 +750,7 @@ dependencies = [
 [[package]]
 name = "grimoire_sim"
 version = "0.2.0"
-source = "git+https://github.com/LupusMalusDeviant/grimoire?tag=v0.2.0#922005780a98782e65804e1905d25582aca38922"
+source = "git+https://github.com/LupusMalusDeviant/grimoire?rev=1ddddc954c20a53a3fab58122efe21499c2f65af#1ddddc954c20a53a3fab58122efe21499c2f65af"
 dependencies = [
  "grimoire_core",
  "grimoire_ecs",
