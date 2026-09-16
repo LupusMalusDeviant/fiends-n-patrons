@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stage 1 of the figure-pack converter (figuren-in-engine-spec.md, "Strang A").
 
-Reads `<name>_r3b_low.glb` for each figure (glTF 2 binary, standard-library only: no
+Reads `<name><suffix>` (default `_r3b_low.glb`) for each figure (glTF 2 binary, standard-library only: no
 `pygltflib`, `numpy` or `Pillow`), decodes every accessor and embedded PNG by hand, and writes
 one payload file per pack entry plus an `index.json` naming path/kind/kind_version/file for each.
 Stage 2 (`crates/fnp_content/src/bin/figure_pack_builder.rs`) reads that `index.json` and hands
@@ -76,6 +76,15 @@ from stable_id import asset_id_for_path
 
 FIGURE_NAMES = ("soul", "imp", "brute")
 GLB_SUFFIX = "_r3b_low.glb"
+
+
+def glb_path_for(source: Path, name: str, suffix: str = GLB_SUFFIX) -> Path:
+    """Path of one figure's source file: `<source>/<name><suffix>`.
+
+    The suffix names the asset round (`_r3b_low.glb`, `_r3c_low.glb`, ...), so a new round of
+    figures needs a command-line argument, not a code change.
+    """
+    return source / f"{name}{suffix}"
 FK_CHECK_SAMPLE_PER_PART = 8
 FK_CHECK_TOLERANCE = 5.0e-3  # generous: float32 source data round-tripped through float64 math
 
@@ -532,7 +541,12 @@ def main(argv: list[str]) -> int:
         "--source",
         required=True,
         type=Path,
-        help="directory containing <name>_r3b_low.glb for soul/imp/brute",
+        help="directory containing <name><suffix> for soul/imp/brute",
+    )
+    parser.add_argument(
+        "--suffix",
+        default=GLB_SUFFIX,
+        help=f"file name suffix of each figure's source file (default: {GLB_SUFFIX})",
     )
     parser.add_argument(
         "--out", required=True, type=Path, help="output directory for payload files and index.json"
@@ -549,7 +563,7 @@ def main(argv: list[str]) -> int:
     reports: list[FigureReport] = []
     try:
         for name in names:
-            glb_path = args.source / f"{name}{GLB_SUFFIX}"
+            glb_path = glb_path_for(args.source, name, args.suffix)
             if not glb_path.is_file():
                 raise BuildError(f"source file not found: {glb_path}")
             entries, report = build_figure(name, glb_path)
