@@ -164,6 +164,44 @@ class RigMathTests(unittest.TestCase):
         self.assertEqual(new_translation, rig_math.apply_axis_correction_vec3(translation))
         self.assertEqual(new_rotation, rig_math.AXIS_CORRECTION_QUAT)
 
+    def test_vector_transform_ignores_translation(self) -> None:
+        # Same rotation/scale as point_transform's identity case, but a non-zero translation must
+        # make no difference to a direction vector (unlike a point).
+        trs = ((100.0, -50.0, 7.0), (0.0, 0.0, 0.0, 1.0), (1.0, 1.0, 1.0))
+        vector = (1.0, 2.0, 3.0)
+        self.assertEqual(rig_math.vector_transform(trs, vector), vector)
+
+    def test_mat4_apply_vector_ignores_translation_unlike_mat4_apply_point(self) -> None:
+        # Column-major affine matrix: identity rotation/scale, translation (10, 20, 30).
+        identity_with_translation = (
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            10.0, 20.0, 30.0, 1.0,
+        )
+        vector = (1.0, 2.0, 3.0)
+        self.assertEqual(rig_math.mat4_apply_vector(identity_with_translation, vector), vector)
+        self.assertEqual(
+            rig_math.mat4_apply_point(identity_with_translation, vector), (11.0, 22.0, 33.0)
+        )
+
+    def test_vector_transform_matches_axis_correction_for_the_correction_quat(self) -> None:
+        trs = ((0.0, 0.0, 0.0), rig_math.AXIS_CORRECTION_QUAT, (1.0, 1.0, 1.0))
+        vector = (1.0, 2.0, 3.0)
+        transformed = rig_math.vector_transform(trs, vector)
+        expected = rig_math.apply_axis_correction_vec3(vector)
+        for a, b in zip(transformed, expected):
+            self.assertAlmostEqual(a, b, places=6)
+
+    def test_rotate_tangent_preserves_handedness(self) -> None:
+        # texturqualitaet-spec.md: "tangent.xyz wird ... gedreht ... w unveraendert" -- a proper
+        # rotation cannot flip handedness, for either sign of w.
+        for w in (1.0, -1.0):
+            tangent = (1.0, 0.0, 0.0, w)
+            rotated = rig_math.rotate_tangent(tangent)
+            self.assertEqual(rotated[3], w)
+            self.assertEqual(rotated[:3], rig_math.apply_axis_correction_vec3(tangent[:3]))
+
 
 def _tiny_glb(nodes: list[dict], skins: list[dict]) -> Glb:
     return Glb(json_doc={"nodes": nodes, "skins": skins}, bin_chunk=b"")
@@ -243,7 +281,55 @@ class PackPayloadTests(unittest.TestCase):
         )
         data = pack_payloads.encode_mesh([vertex, vertex, vertex], [0, 1, 2], joint_count=4, label="t")
         version, vertex_count, index_count = struct.unpack_from("<III", data, 0)
-        self.assertEqual((version, vertex_count, index_count), (1, 3, 3))
+        # texturqualitaet-spec.md, A2: FNP_MESH always writes Fassung 2 now (72 bytes/vertex).
+        self.assertEqual((version, vertex_count, index_count), (pack_payloads.MESH_KIND_VERSION, 3, 3))
+        self.assertEqual(version, 2)
+
+    def test_mesh_defaults_to_the_no_tangent_fallback(self) -> None:
+        # A Vertex built without naming `tangent` (as every pre-Fassung-2 call site in this
+        # codebase and its tests does) must still encode successfully, using the spec's one
+        # fallback -- never silently invent a "real" tangent for data that has none.
+        vertex = pack_payloads.Vertex(
+            position=(0.0, 0.0, 0.0), normal=(0.0, 0.0, 1.0), uv=(0.0, 0.0),
+            joints=(0, 0, 0, 0), weights=(1.0, 0.0, 0.0, 0.0),
+        )
+        self.assertEqual(vertex.tangent, pack_payloads.NO_TANGENT)
+        data = pack_payloads.encode_mesh([vertex, vertex, vertex], [0, 1, 2], joint_count=1, label="t")
+        # header(12) + vertex_stride(72) per vertex; tangent is the last 16 bytes of each vertex.
+        header_size = 12
+        vertex_stride = 72
+        tangent_offset_in_vertex = 3 * 4 + 3 * 4 + 2 * 4 + 4 * 2 + 4 * 4  # position+normal+uv+joints+weights
+        last_vertex_offset = header_size + 2 * vertex_stride
+        tangent = struct.unpack_from("<4f", data, last_vertex_offset + tangent_offset_in_vertex)
+        self.assertEqual(tangent, pack_payloads.NO_TANGENT)
+
+    def test_mesh_writes_a_valid_unit_tangent(self) -> None:
+        vertex = pack_payloads.Vertex(
+            position=(0.0, 0.0, 0.0), normal=(0.0, 0.0, 1.0), uv=(0.25, 0.75),
+            joints=(0, 0, 0, 0), weights=(1.0, 0.0, 0.0, 0.0), tangent=(1.0, 0.0, 0.0, -1.0),
+        )
+        data = pack_payloads.encode_mesh([vertex, vertex, vertex], [0, 1, 2], joint_count=1, label="t")
+        # header(12) + one vertex(72): position(12) normal(12) uv(8) joints(8) weights(16) tangent(16)
+        header_size = 12
+        fields = struct.unpack_from("<3f 3f 2f 4H 4f 4f", data, header_size)
+        tangent = fields[-4:]
+        self.assertEqual(tangent, (1.0, 0.0, 0.0, -1.0))
+
+    def test_mesh_rejects_a_tangent_that_is_not_unit_length(self) -> None:
+        vertex = pack_payloads.Vertex(
+            position=(0, 0, 0), normal=(0, 0, 1), uv=(0, 0), joints=(0, 0, 0, 0),
+            weights=(1.0, 0.0, 0.0, 0.0), tangent=(0.5, 0.0, 0.0, 1.0),
+        )
+        with self.assertRaises(pack_payloads.PayloadError):
+            pack_payloads.encode_mesh([vertex], [0, 0, 0], joint_count=1, label="t")
+
+    def test_mesh_rejects_a_tangent_with_bad_handedness(self) -> None:
+        vertex = pack_payloads.Vertex(
+            position=(0, 0, 0), normal=(0, 0, 1), uv=(0, 0), joints=(0, 0, 0, 0),
+            weights=(1.0, 0.0, 0.0, 0.0), tangent=(1.0, 0.0, 0.0, 0.0),
+        )
+        with self.assertRaises(pack_payloads.PayloadError):
+            pack_payloads.encode_mesh([vertex], [0, 0, 0], joint_count=1, label="t")
 
     def test_texture_raw_rejects_wrong_length(self) -> None:
         with self.assertRaises(pack_payloads.PayloadError):
@@ -320,3 +406,60 @@ class GlbPathTests(unittest.TestCase):
         from pathlib import Path
         import build_figure_pack as bfp
         self.assertEqual(bfp.glb_path_for(Path("src"), "brute", "_r3c_low.glb"), Path("src") / "brute_r3c_low.glb")
+
+
+class PrimitiveTangentsTests(unittest.TestCase):
+    """`build_figure_pack._primitive_tangents`: the spec's one fallback and its one hard error."""
+
+    def test_no_texcoord_0_gets_the_zero_fallback_regardless_of_material(self) -> None:
+        import build_figure_pack as bfp
+
+        primitive = {"attributes": {}}  # no TEXCOORD_0, no TANGENT
+        tangents = bfp._primitive_tangents(
+            glb=None,  # unused on this path: no accessor is ever read
+            primitive=primitive,
+            vertex_count=3,
+            has_uv=False,
+            material_has_normal_map=True,  # even with a normal map, "ohne TEXCOORD_0" always wins
+            label="t",
+        )
+        self.assertEqual(tangents, [pack_payloads.NO_TANGENT] * 3)
+
+    def test_texcoord_0_with_tangent_is_read_from_the_accessor(self) -> None:
+        import build_figure_pack as bfp
+
+        buf = struct.pack("<4f", 0.0, 1.0, 0.0, -1.0)
+        doc = {
+            "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 16}],
+            "accessors": [{"bufferView": 0, "componentType": 5126, "count": 1, "type": "VEC4"}],
+        }
+        glb = Glb(json_doc=doc, bin_chunk=buf)
+        primitive = {"attributes": {"TEXCOORD_0": 0, "TANGENT": 0}}
+        tangents = bfp._primitive_tangents(
+            glb=glb, primitive=primitive, vertex_count=1, has_uv=True,
+            material_has_normal_map=True, label="t",
+        )
+        self.assertEqual(tangents, [(0.0, 1.0, 0.0, -1.0)])
+
+    def test_texcoord_0_with_normal_map_but_no_tangent_aborts(self) -> None:
+        import build_figure_pack as bfp
+
+        primitive = {"attributes": {"TEXCOORD_0": 0}}  # no TANGENT
+        with self.assertRaises(bfp.BuildError):
+            bfp._primitive_tangents(
+                glb=None, primitive=primitive, vertex_count=3, has_uv=True,
+                material_has_normal_map=True, label="t",
+            )
+
+    def test_texcoord_0_without_normal_map_and_no_tangent_also_aborts(self) -> None:
+        # Spec gap (documented in _primitive_tangents and the PR description): the spec names
+        # exactly one fallback, scoped to "no TEXCOORD_0"; this primitive has UV, so it does not
+        # qualify. Aborting -- not silently reusing the no-UV fallback -- is the deliberate choice.
+        import build_figure_pack as bfp
+
+        primitive = {"attributes": {"TEXCOORD_0": 0}}
+        with self.assertRaises(bfp.BuildError):
+            bfp._primitive_tangents(
+                glb=None, primitive=primitive, vertex_count=3, has_uv=True,
+                material_has_normal_map=False, label="t",
+            )

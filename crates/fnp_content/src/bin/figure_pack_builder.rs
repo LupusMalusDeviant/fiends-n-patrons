@@ -422,8 +422,36 @@ fn validate_payload(
     }
 }
 
-const MESH_VERTEX_SIZE: usize = 3 * 4 + 3 * 4 + 2 * 4 + 4 * 2 + 4 * 4; // pos+normal+uv+joints+weights
+// Fassung 1 (pos+normal+uv+joints+weights, 56 bytes/vertex) and Fassung 2 (Fassung 1 + tangent:
+// f32[4], 72 bytes/vertex) -- texturqualitaet-spec.md, A2: kind_version is tracked per kind now,
+// and only FNP_MESH moves to Fassung 2, so this validator must keep accepting Fassung 1 (nothing
+// currently writes it for FNP_MESH any more, but nothing forbids a caller from doing so either)
+// alongside the new Fassung 2 shape.
+const MESH_VERTEX_SIZE_V1: usize = 3 * 4 + 3 * 4 + 2 * 4 + 4 * 2 + 4 * 4; // pos+normal+uv+joints+weights
+const MESH_VERTEX_SIZE_V2: usize = MESH_VERTEX_SIZE_V1 + 4 * 4; // + tangent
 const WEIGHT_TOLERANCE: f32 = 1.0e-3;
+// texturqualitaet-spec.md, A2: "Gueltige Tangente: |xyz| = 1 (Toleranz 1e-3) und w = +1 oder
+// w = -1 (Toleranz 1e-3)", or exactly the [0, 0, 0, 0] sentinel for a primitive with no UV.
+const TANGENT_TOLERANCE: f32 = 1.0e-3;
+const NO_TANGENT: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
+
+fn validate_tangent(tangent: [f32; 4], vertex: u32) -> Result<(), String> {
+    if tangent == NO_TANGENT {
+        return Ok(());
+    }
+    let [x, y, z, w] = tangent;
+    let magnitude = (x * x + y * y + z * z).sqrt();
+    if (magnitude - 1.0).abs() > TANGENT_TOLERANCE {
+        return Err(format!(
+            "vertex {vertex} tangent {tangent:?} has |xyz|={magnitude}, not 1.0 and not the \
+             {NO_TANGENT:?} fallback"
+        ));
+    }
+    if (w.abs() - 1.0).abs() > TANGENT_TOLERANCE {
+        return Err(format!("vertex {vertex} tangent.w={w}, not +1 or -1"));
+    }
+    Ok(())
+}
 
 fn validate_mesh(
     path: &str,
@@ -436,7 +464,12 @@ fn validate_mesh(
         .ok_or_else(|| format!("no FNP_SKELETON found for figure {figure:?}"))?;
 
     let mut reader = Reader::new(bytes);
-    let _version = reader.u32()?;
+    let version = reader.u32()?;
+    if version != 1 && version != 2 {
+        return Err(format!(
+            "unsupported FNP_MESH kind_version {version} (expected 1 or 2)"
+        ));
+    }
     let vertex_count = reader.u32()?;
     let index_count = reader.u32()?;
     if !index_count.is_multiple_of(3) {
@@ -459,6 +492,10 @@ fn validate_mesh(
                 "vertex {vertex} weight sum {sum} deviates from 1.0"
             ));
         }
+        if version == 2 {
+            let tangent = [reader.f32()?, reader.f32()?, reader.f32()?, reader.f32()?];
+            validate_tangent(tangent, vertex)?;
+        }
     }
     for i in 0..index_count {
         let index = reader.u32()?;
@@ -474,7 +511,8 @@ fn validate_mesh(
             reader.remaining()
         ));
     }
-    let _ = MESH_VERTEX_SIZE; // documents the per-vertex stride the skip() calls above rely on
+    // documents the per-vertex stride the skip()/f32() calls above rely on, per version
+    let _ = (MESH_VERTEX_SIZE_V1, MESH_VERTEX_SIZE_V2);
     Ok(())
 }
 
@@ -699,6 +737,83 @@ mod tests {
         let joint_counts = HashMap::new();
         let bytes = mesh_bytes(1, 3, 0, 1.0);
         assert!(validate_mesh("figures/ghost/mesh/0", &bytes, &joint_counts).is_err());
+    }
+
+    /// Fassung 2 (texturqualitaet-spec.md, A2): same layout as [`mesh_bytes`] plus one
+    /// `tangent: f32[4]` per vertex, and `kind_version = 2` in the header.
+    fn mesh_bytes_v2(
+        vertex_count: u32,
+        index_count: u32,
+        joint: u16,
+        weight_sum: f32,
+        tangent: [f32; 4],
+    ) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(&2u32.to_le_bytes());
+        out.extend_from_slice(&vertex_count.to_le_bytes());
+        out.extend_from_slice(&index_count.to_le_bytes());
+        for _ in 0..vertex_count {
+            out.extend_from_slice(&[0u8; 3 * 4 + 3 * 4 + 2 * 4]); // position, normal, uv
+            for _ in 0..4 {
+                out.extend_from_slice(&joint.to_le_bytes());
+            }
+            let weights = [weight_sum, 0.0, 0.0, 0.0];
+            for w in weights {
+                out.extend_from_slice(&w.to_le_bytes());
+            }
+            for t in tangent {
+                out.extend_from_slice(&t.to_le_bytes());
+            }
+        }
+        for i in 0..index_count {
+            out.extend_from_slice(&(i % vertex_count.max(1)).to_le_bytes());
+        }
+        out
+    }
+
+    #[test]
+    fn validate_mesh_accepts_fassung_2_with_a_valid_tangent() {
+        let mut joint_counts = HashMap::new();
+        joint_counts.insert("soul".to_owned(), 4u32);
+        let bytes = mesh_bytes_v2(3, 3, 2, 1.0, [1.0, 0.0, 0.0, 1.0]);
+        assert!(validate_mesh("figures/soul/mesh/0", &bytes, &joint_counts).is_ok());
+        let bytes_neg = mesh_bytes_v2(3, 3, 2, 1.0, [0.0, 1.0, 0.0, -1.0]);
+        assert!(validate_mesh("figures/soul/mesh/0", &bytes_neg, &joint_counts).is_ok());
+    }
+
+    #[test]
+    fn validate_mesh_accepts_the_no_uv_tangent_fallback() {
+        // The one fallback the spec defines for a primitive without TEXCOORD_0: exactly
+        // [0, 0, 0, 0], which validate_tangent must accept even though it is not a unit vector.
+        let mut joint_counts = HashMap::new();
+        joint_counts.insert("soul".to_owned(), 4u32);
+        let bytes = mesh_bytes_v2(3, 3, 2, 1.0, [0.0, 0.0, 0.0, 0.0]);
+        assert!(validate_mesh("figures/soul/mesh/0", &bytes, &joint_counts).is_ok());
+    }
+
+    #[test]
+    fn validate_mesh_rejects_a_non_unit_tangent() {
+        let mut joint_counts = HashMap::new();
+        joint_counts.insert("soul".to_owned(), 4u32);
+        let bytes = mesh_bytes_v2(3, 3, 2, 1.0, [0.5, 0.0, 0.0, 1.0]);
+        assert!(validate_mesh("figures/soul/mesh/0", &bytes, &joint_counts).is_err());
+    }
+
+    #[test]
+    fn validate_mesh_rejects_a_tangent_with_bad_handedness() {
+        let mut joint_counts = HashMap::new();
+        joint_counts.insert("soul".to_owned(), 4u32);
+        let bytes = mesh_bytes_v2(3, 3, 2, 1.0, [1.0, 0.0, 0.0, 0.5]);
+        assert!(validate_mesh("figures/soul/mesh/0", &bytes, &joint_counts).is_err());
+    }
+
+    #[test]
+    fn validate_mesh_rejects_an_unsupported_kind_version() {
+        let mut joint_counts = HashMap::new();
+        joint_counts.insert("soul".to_owned(), 4u32);
+        let mut bytes = mesh_bytes(1, 3, 0, 1.0);
+        bytes[0..4].copy_from_slice(&3u32.to_le_bytes());
+        assert!(validate_mesh("figures/soul/mesh/0", &bytes, &joint_counts).is_err());
     }
 
     #[test]

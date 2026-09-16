@@ -37,6 +37,26 @@ Skelett-Wurzel (`skeleton.correct_root_joint_transform`) — nie an den Mesh-Ver
 zweites Mal in der Engine. Warum das ausreicht und warum es die Wurzel und nicht die Vertices
 trifft, steht im Modul-Docstring von `build_figure_pack.py`; jeder Lauf beweist es zusätzlich an
 echten Vertices (`_forward_kinematics_check`, Ausgabe "forward-kinematics check: ... max error").
+Dieselbe Begründung gilt für `TANGENT.xyz` (Fassung 2, siehe unten): auch die Tangente bleibt im
+Pack roh/ungedreht, exakt wie die Normale, und derselbe Lauf beweist die Äquivalenz zusätzlich an
+echten Vertices ("forward-kinematics tangent check: ... max error", `rig_math.vector_transform`).
+
+## FNP_MESH Fassung 2 (Tangenten)
+
+Seit texturqualitaet-spec.md wechselt **nur `FNP_MESH`** auf `kind_version` 2 (72 statt 56 Byte je
+Vertex: zusätzlich `tangent: f32[4]`); alle anderen Arten bleiben bei Fassung 1. Herkunft je
+Primitiv:
+
+- **Kein `TEXCOORD_0`** (Iris, Stab, Zähne): jeder Vertex bekommt `[0, 0, 0, 0]` — das vereinbarte
+  Zeichen für "keine Tangente". Der einzige Ausweichweg der Festlegung.
+- **`TEXCOORD_0` vorhanden, `TANGENT` vorhanden:** roh übernommen (keine Drehung, siehe oben).
+- **`TEXCOORD_0` vorhanden, `TANGENT` fehlt, Material nutzt eine Normalenkarte:** Fehler, der Lauf
+  bricht ab (`export_tangents=True` beim Blender-Export nachholen).
+- **`TEXCOORD_0` vorhanden, `TANGENT` fehlt, keine Normalenkarte:** kein in der Festlegung
+  vorgesehener Fall; der Lauf bricht trotzdem ab, statt einen dritten Ausweichweg zu erfinden
+  (bislang bei keinem der drei Figuren beobachtet).
+
+Gültige Tangente: `|xyz| = 1` und `w = +1` oder `-1` (Toleranz je 1e-3), sonst exakt `[0,0,0,0]`.
 
 ## Prüfungen
 
@@ -51,10 +71,13 @@ fehlschlägt (siehe `pack_payloads.py`, `skeleton.py`, `build_figure_pack.py`):
   nicht nur übernommen aus `skin.joints`).
 - Forward-Kinematik-Stichprobe: echte Vertices, durch die volle Skinning-Formel (Knochenkette x
   inverse Bindematrix) transformiert, stimmen mit der direkt gedrehten Rohposition überein.
+  Dieselbe Stichprobe prüft, wo vorhanden, auch `TANGENT.xyz` gegen die direkt gedrehte Rohtangente.
+- Tangentengültigkeit je Vertex (siehe "FNP_MESH Fassung 2" oben): `[0,0,0,0]` oder Einheitslänge
+  mit `w = +-1`.
 
 `crates/fnp_content/src/bin/figure_pack_builder.rs` prüft Index-/Knochen-/Gewichts-/
-Texturgrenzen ein zweites Mal, unabhängig, direkt aus den rohen Bytes, bevor es sie an
-`PackWriter` übergibt.
+Texturgrenzen und die Tangentengültigkeit ein zweites Mal, unabhängig, direkt aus den rohen Bytes,
+bevor es sie an `PackWriter` übergibt.
 
 ## Bekannte Eigenheiten der Quelldaten
 

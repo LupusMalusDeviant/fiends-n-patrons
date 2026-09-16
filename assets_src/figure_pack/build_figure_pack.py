@@ -61,6 +61,8 @@ from pack_payloads import (
     FNP_SKELETON,
     FNP_TEXTURE_RAW,
     KIND_VERSION,
+    MESH_KIND_VERSION,
+    NO_TANGENT,
     PayloadError,
     Vertex,
     encode_figure,
@@ -70,7 +72,15 @@ from pack_payloads import (
     encode_texture_raw,
 )
 from png_decode import PngError, decode_png
-from rig_math import apply_axis_correction_vec3, compose_trs, mat4_apply_point, point_transform
+from rig_math import (
+    apply_axis_correction_vec3,
+    compose_trs,
+    mat4_apply_point,
+    mat4_apply_vector,
+    point_transform,
+    rotate_tangent,
+    vector_transform,
+)
 from skeleton import SkeletonError, build_skeleton, remap_joint_indices
 from stable_id import asset_id_for_path
 
@@ -113,6 +123,10 @@ class FigureReport:
     bounds_max: tuple[float, float, float] = (0.0, 0.0, 0.0)
     fk_samples_checked: int = 0
     fk_max_error: float = 0.0
+    fk_tangent_checked: int = 0
+    fk_tangent_max_error: float = 0.0
+    tangent_primitive_count: int = 0
+    no_tangent_primitive_count: int = 0
     notes: list[str] = field(default_factory=list)
 
 
@@ -319,14 +333,66 @@ def _primitive_vertices(
     return positions, normals, uvs, joints_raw, weights, indices, vertex_count
 
 
+def _primitive_tangents(
+    glb: Glb,
+    primitive: dict[str, Any],
+    *,
+    vertex_count: int,
+    has_uv: bool,
+    material_has_normal_map: bool,
+    label: str,
+) -> list[tuple[float, float, float, float]]:
+    """Reads (or falls back for) one primitive's raw, unrotated `TANGENT`.
+
+    texturqualitaet-spec.md, A2, names exactly one fallback and exactly one error, "kein dritter
+    Fall": a primitive without `TEXCOORD_0` (iris, staff, teeth) gets [`NO_TANGENT`] for every
+    vertex, unconditionally; a primitive *with* `TEXCOORD_0` whose material uses a normal map but
+    carries no `TANGENT` aborts the run. The remaining combination -- `TEXCOORD_0` present, no
+    normal map on the material, still no `TANGENT` -- is not one of the spec's two named cases; it
+    also does not occur in any of the shipped soul/imp/brute fixtures (every UV'd primitive in the
+    `_r3d` exports carries TANGENT, verified against all 42 primitives across both LOD levels), so
+    rather than silently inventing a third fallback this aborts too (contract: "nicht still etwas
+    anderes bauen") -- flagged in the PR description as a spec gap, not a deviation.
+    """
+    attributes = primitive["attributes"]
+    if not has_uv:
+        return [NO_TANGENT] * vertex_count
+    if "TANGENT" in attributes:
+        tangents = read_accessor(glb, attributes["TANGENT"])
+        if len(tangents) != vertex_count:
+            raise BuildError(f"{label}: TANGENT count mismatch")
+        return [tuple(t) for t in tangents]
+    if material_has_normal_map:
+        raise BuildError(
+            f"{label}: primitive has TEXCOORD_0 and its material uses a normal map, but no "
+            "TANGENT attribute -- re-export from Blender with export_tangents=True (spec: no "
+            "fallback for this case)"
+        )
+    raise BuildError(
+        f"{label}: primitive has TEXCOORD_0 but no TANGENT, and its material has no normal map "
+        "-- not one of the spec's two defined cases (fallback is scoped to 'no TEXCOORD_0'); "
+        "aborting instead of guessing a third fallback"
+    )
+
+
 def _forward_kinematics_check(
-    joints: list, positions: list, joints_0, weights, *, label: str, report: FigureReport
+    joints: list,
+    positions: list,
+    tangents: list,
+    joints_0,
+    weights,
+    *,
+    label: str,
+    report: FigureReport,
 ) -> None:
     """Confirms `apply_axis_correction_vec3(raw_vertex) == full skin formula` for a sample.
 
     See the module docstring: this is the numeric proof that the axis correction living solely in
     the skeleton root is equivalent to rotating the mesh directly, for real vertices of a real
-    rig -- not just for the algebra.
+    rig -- not just for the algebra. Extended (texturqualitaet-spec.md, A2) to prove the same
+    equivalence for `TANGENT.xyz`, using `rig_math.vector_transform` (rotation/scale only, no
+    translation) in place of `point_transform`: a vertex with the [`NO_TANGENT`] sentinel is
+    skipped, since rotating the zero vector is trivially still zero either way.
     """
     global_trs = [None] * len(joints)
     for index, joint in enumerate(joints):
@@ -339,15 +405,29 @@ def _forward_kinematics_check(
     sample = min(FK_CHECK_SAMPLE_PER_PART, len(positions))
     for i in range(sample):
         position = positions[i]
+        tangent = tangents[i]
+        has_tangent = tangent != NO_TANGENT
+        tangent_xyz = tangent[:3]
         quad_joints = joints_0[i]
         quad_weights = weights[i]
         skinned = (0.0, 0.0, 0.0)
+        tangent_skinned = (0.0, 0.0, 0.0)
         for joint_index, weight in zip(quad_joints, quad_weights):
             if weight == 0.0:
                 continue
             bind_local = mat4_apply_point(joints[joint_index].inverse_bind, position)
             world = point_transform(global_trs[joint_index], bind_local)
             skinned = tuple(s + weight * w for s, w in zip(skinned, world))
+            if has_tangent:
+                # Same two-step formula as position: undo this joint's bind-pose orientation
+                # (inverse_bind's linear part) first, then apply its current global TRS's
+                # rotation/scale -- skipping the inverse-bind step would only skin correctly by
+                # accident (e.g. when every joint's bind rotation happens to be identity).
+                bind_local_tangent = mat4_apply_vector(joints[joint_index].inverse_bind, tangent_xyz)
+                tangent_world = vector_transform(global_trs[joint_index], bind_local_tangent)
+                tangent_skinned = tuple(
+                    s + weight * w for s, w in zip(tangent_skinned, tangent_world)
+                )
         expected = apply_axis_correction_vec3(position)
         error = max(abs(a - b) for a, b in zip(skinned, expected))
         report.fk_max_error = max(report.fk_max_error, error)
@@ -357,6 +437,17 @@ def _forward_kinematics_check(
                 f"{label}: forward-kinematics self-check failed for vertex {i}: skinned "
                 f"{skinned} vs. directly-rotated {expected} (error {error})"
             )
+        if has_tangent:
+            expected_tangent = rotate_tangent(tangent)[:3]
+            tangent_error = max(abs(a - b) for a, b in zip(tangent_skinned, expected_tangent))
+            report.fk_tangent_max_error = max(report.fk_tangent_max_error, tangent_error)
+            report.fk_tangent_checked += 1
+            if tangent_error > FK_CHECK_TOLERANCE:
+                raise BuildError(
+                    f"{label}: forward-kinematics tangent self-check failed for vertex {i}: "
+                    f"skinned {tangent_skinned} vs. directly-rotated {expected_tangent} "
+                    f"(error {tangent_error})"
+                )
 
 
 def build_figure(name: str, glb_path: Path) -> tuple[list[PackEntry], FigureReport]:
@@ -390,6 +481,15 @@ def build_figure(name: str, glb_path: Path) -> tuple[list[PackEntry], FigureRepo
         mesh = glb.json_doc["meshes"][node["mesh"]]
         for primitive in mesh["primitives"]:
             label = f"{name}/mesh/{part_index}"
+            if "material" not in primitive:
+                raise BuildError(f"{label}: primitive has no material (no default material support)")
+            source_material = glb.json_doc["materials"][primitive["material"]]
+            material_has_normal_map = "normalTexture" in source_material
+            material_uses_textures = "pbrMetallicRoughness" in source_material and any(
+                key in source_material.get("pbrMetallicRoughness", {})
+                for key in ("baseColorTexture", "metallicRoughnessTexture")
+            ) or material_has_normal_map
+
             (
                 positions,
                 normals,
@@ -404,6 +504,20 @@ def build_figure(name: str, glb_path: Path) -> tuple[list[PackEntry], FigureRepo
             ):
                 raise BuildError(f"{label}: attribute accessors disagree on vertex count")
 
+            has_uv = "TEXCOORD_0" in primitive["attributes"]
+            tangents = _primitive_tangents(
+                glb,
+                primitive,
+                vertex_count=vertex_count,
+                has_uv=has_uv,
+                material_has_normal_map=material_has_normal_map,
+                label=label,
+            )
+            if has_uv:
+                builder.report.tangent_primitive_count += 1
+            else:
+                builder.report.no_tangent_primitive_count += 1
+
             joints_remapped = remap_joint_indices(
                 [tuple(int(v) for v in q) for q in joints_raw],
                 skeleton_result.original_index_to_new,
@@ -415,6 +529,7 @@ def build_figure(name: str, glb_path: Path) -> tuple[list[PackEntry], FigureRepo
                 _forward_kinematics_check(
                     skeleton_result.joints,
                     positions,
+                    tangents,
                     joints_remapped,
                     weights,
                     label=label,
@@ -424,7 +539,14 @@ def build_figure(name: str, glb_path: Path) -> tuple[list[PackEntry], FigureRepo
                 raise BuildError(f"{label}: forward-kinematics self-check errored: {error}") from error
 
             vertices = [
-                Vertex(position=positions[i], normal=normals[i], uv=uvs[i], joints=joints_remapped[i], weights=weights[i])
+                Vertex(
+                    position=positions[i],
+                    normal=normals[i],
+                    uv=uvs[i],
+                    joints=joints_remapped[i],
+                    weights=weights[i],
+                    tangent=tangents[i],
+                )
                 for i in range(vertex_count)
             ]
             try:
@@ -432,7 +554,7 @@ def build_figure(name: str, glb_path: Path) -> tuple[list[PackEntry], FigureRepo
             except PayloadError as error:
                 raise BuildError(str(error)) from error
             builder.entries.append(
-                PackEntry(builder.path("mesh", str(part_index)), FNP_MESH, KIND_VERSION, mesh_payload)
+                PackEntry(builder.path("mesh", str(part_index)), FNP_MESH, MESH_KIND_VERSION, mesh_payload)
             )
 
             for position in positions:
@@ -441,14 +563,7 @@ def build_figure(name: str, glb_path: Path) -> tuple[list[PackEntry], FigureRepo
                     bounds_min[axis] = min(bounds_min[axis], corrected[axis])
                     bounds_max[axis] = max(bounds_max[axis], corrected[axis])
 
-            if "material" not in primitive:
-                raise BuildError(f"{label}: primitive has no material (no default material support)")
-            source_material = glb.json_doc["materials"][primitive["material"]]
-            material_uses_textures = "pbrMetallicRoughness" in source_material and any(
-                key in source_material.get("pbrMetallicRoughness", {})
-                for key in ("baseColorTexture", "metallicRoughnessTexture")
-            ) or "normalTexture" in source_material
-            if "TEXCOORD_0" not in primitive["attributes"] and material_uses_textures:
+            if not has_uv and material_uses_textures:
                 builder.report.notes.append(
                     f"{label}: material references textures but the primitive has no "
                     "TEXCOORD_0 (texCoord: -1 in source) -- UV filled with (0, 0)"
@@ -530,6 +645,14 @@ def _print_report(reports: list[FigureReport]) -> None:
         print(
             f"  forward-kinematics check: {report.fk_samples_checked} vertices, "
             f"max error {report.fk_max_error:.3e}"
+        )
+        print(
+            f"  forward-kinematics tangent check: {report.fk_tangent_checked} vertices, "
+            f"max error {report.fk_tangent_max_error:.3e}"
+        )
+        print(
+            f"  mesh parts with TANGENT: {report.tangent_primitive_count}, "
+            f"without (no UV, [0,0,0,0]): {report.no_tangent_primitive_count}"
         )
         for note in report.notes:
             print(f"  note: {note}")

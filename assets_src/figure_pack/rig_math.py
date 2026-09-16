@@ -60,6 +60,25 @@ def apply_axis_correction_vec3(v: Vec3) -> Vec3:
     return (x, -z, y)
 
 
+Tangent = tuple[float, float, float, float]  # (x, y, z, w); w is handedness, +-1
+
+
+def rotate_tangent(tangent: Tangent) -> Tangent:
+    """Rotates a tangent's `xyz` by the axis correction, exactly like a normal; `w` (handedness)
+    passes through unchanged -- a proper rotation cannot flip handedness.
+
+    This is the literal statement of texturqualitaet-spec.md's "tangent.xyz wird ... um +90 Grad
+    um X gedreht wie die Normale, w unveraendert" -- not how the stored `FNP_MESH` payload value is
+    produced (that stays the *raw*, unrotated tangent, see `vector_transform`'s docstring: the
+    engine rotates it at runtime with the same bone matrices as the normal, so pre-rotating here
+    too would double the effect). This function exists for the forward-kinematics self-check's
+    expected value and as the direct, standalone statement of the "w unveraendert" rule.
+    """
+    x, y, z, w = tangent
+    rx, ry, rz = apply_axis_correction_vec3((x, y, z))
+    return (rx, ry, rz, w)
+
+
 def correct_root_joint_transform(translation: Vec3, rotation: Quat) -> tuple[Vec3, Quat]:
     """Prepends the axis correction to one skeleton root joint's rest-pose local transform.
 
@@ -101,6 +120,28 @@ def point_transform(trs: tuple[Vec3, Quat, Vec3], point: Vec3) -> Vec3:
     return vec3_add(t, quat_rotate_vec3(q, vec3_scale_components(point, s)))
 
 
+def vector_transform(trs: tuple[Vec3, Quat, Vec3], vector: Vec3) -> Vec3:
+    """Applies a global TRS transform to a direction vector: `rotate(q, s * vector)` (no translation).
+
+    Same role as [`point_transform`], but for a direction (a mesh's `TANGENT.xyz`, exactly like its
+    `NORMAL`) rather than a position -- translation must not apply to a direction.
+
+    Used only by `build_figure_pack.py`'s forward-kinematics self-check, to prove that storing a
+    primitive's raw (unrotated) tangent, exactly like its raw normal, is equivalent to a direct
+    `apply_axis_correction_vec3` once the skeleton root's rest-pose transform carries the +90-degree
+    correction: at rest pose every joint's `jointGlobalTransform_j (x) invBindMatrix_j` reduces to the
+    single correction rotation `R` (see `build_figure_pack.py`'s module docstring and
+    `correct_root_joint_transform`), so the weighted sum of `vector_transform(global_trs_j, v)` over
+    a vertex's skin weights collapses to `R * v == apply_axis_correction_vec3(v)` -- the same identity
+    the existing position check already relies on. The payload therefore stores the tangent raw,
+    never pre-rotated: the engine rotates `tangent.xyz` with the same bone matrices as the normal
+    (figuren-in-engine-spec.md, Strang B), so rotating it here too would double the effect exactly
+    like it would for position (contract: "einmal ... nicht doppelt").
+    """
+    _t, q, s = trs
+    return quat_rotate_vec3(q, vec3_scale_components(vector, s))
+
+
 def mat4_apply_point(m: Mat4, p: Vec3) -> Vec3:
     """Applies a column-major affine 4x4 matrix to a point (homogeneous w=1).
 
@@ -116,4 +157,22 @@ def mat4_apply_point(m: Mat4, p: Vec3) -> Vec3:
         m[0] * x + m[4] * y + m[8] * z + m[12],
         m[1] * x + m[5] * y + m[9] * z + m[13],
         m[2] * x + m[6] * y + m[10] * z + m[14],
+    )
+
+
+def mat4_apply_vector(m: Mat4, v: Vec3) -> Vec3:
+    """Applies a column-major affine 4x4 matrix to a direction vector (homogeneous w=0).
+
+    Same matrix as [`mat4_apply_point`], but drops the translation column -- the linear (3x3) part
+    only, as a direction requires. Used by the forward-kinematics self-check to apply an
+    `inverseBindMatrix` to a raw `TANGENT.xyz` exactly like `mat4_apply_point` applies it to
+    `POSITION`: the tangent must go through the *same* two-step "undo bind pose, then apply current
+    pose" skinning formula as the position does, not just the second step -- skipping the inverse
+    bind here would silently drop each joint's own bind-pose orientation from the check.
+    """
+    x, y, z = v
+    return (
+        m[0] * x + m[4] * y + m[8] * z,
+        m[1] * x + m[5] * y + m[9] * z,
+        m[2] * x + m[6] * y + m[10] * z,
     )
