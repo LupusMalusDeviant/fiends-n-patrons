@@ -39,6 +39,9 @@ Schema-Codegen aus einer Quelle und die Benchmark-Strategie mit Callgrind-Instru
 - **WP8.2 Debug-Protokoll** liegt als Engine-PR #13 mit grüner CI vor: Nachrichten-Katalog mit Richtungsprüfung, Handshake nach PO-Entscheid V-13 (andere Engine-Version immer abgelehnt, anderer Build nur bei beidseitig bekanntem Hash, unbekannt mit Warnung), handgeleitete Byte-Fixtures. Der unabhängige Review fand zwei echte Fehler in neuem Code: die Verarbeitung nach dem Handshake war öffentlich aufrufbar und damit umgehbar, und der Empfang des ersten Frames verwarf stillschweigend alle weiteren im selben Abruf gelesenen Frames. Beide sind behoben und mit Tests abgesichert, dazu fünf kleinere Punkte. Gemergt als `d97cd21`, Push-CI auf `main` grün. Nacharbeit für WP8.4: der Schutz gegen zu große erste Frames fehlt am TCP-Transport noch. Die zunächst gemeldete \"neue Fehlervariante\" ist keine Vertragsänderung: §13 nennt sie bereits.
 - **WP2.5 PBR-Shading** gemergt (Engine-PR #14, Merge-Commit `45deded`): GGX-Mikrofacetten mit Metall- und Rauheitswerten, Punktlichter durch denselben Term, analytischer Umgebungsterm, Textur-Registry mit den Farbräumen aus dem Vertrag und geometrisches Spekular-Antialiasing. Der Spike zu OF-3.5 misst dafür rund das 1,3-fache an Rechenzeit auf dem Software-Adapter; TAA wurde mangels Verlaufspuffer nur auf dem Papier bewertet. Ergebnis als Engine-ADR-Vorschlag „Spekuläres Anti-Aliasing statt TAA“, Annahme durch den PO offen.
 
+- **WP2.6 Schatten** gemergt (Engine-PR #15, Merge-Commit `315930d`): Schattenkarte fuer das Key-Light mit weicher Filterung, Blob-Schatten als guenstige Alternative, Modus umschaltbar. Gemessen kostet die Schattenkarte auf dem Software-Adapter etwa das Doppelte, Blob praktisch nichts. Engine-ADR-Vorschlag zu OF-3.2 liegt vor, Entscheid offen.
+- **WP8.2 Debug-Protokoll** gemergt (Merge-Commit `d97cd21`).
+
 ### Assets mit Skelett
 
 Runde 1 ist fertig und beantwortet die Kernfrage: Der Skript-Ansatz trägt, wenn die Fläche als **eine durchgehende Quad-Fläche** entsteht statt aus zusammengesetzten Grundkörpern. Belegt an drei Figuren (Spielerfigur, Imp, Brute): geschlossene Netze ohne fehlerhafte Kanten, saubere Kantenschleifen im Drahtgitter, Skelette mit 20 bis 27 Knochen, geprüfte Gewichtung ohne ungewichtete Punkte, Posen-Reihen als Nachweis der Verformung, Umhang aus einer Stoffsimulation mit echten Falten, UV-Auspacken mit gemessener Texeldichte und glTF-Export mit Skin.
@@ -46,3 +49,15 @@ Runde 1 ist fertig und beantwortet die Kernfrage: Der Skript-Ansatz trägt, wenn
 Offene Mängel nach eigener Sichtprüfung der Bilder: der Stab hängt starr neben der Hand statt gegriffen zu werden, den Figuren fehlen Gesichter, der Imp hebt sich zu wenig vom Boden ab, die Figurentexturen sind zu flach (gemessener Albedo-Kontrast 1,12:1), und die Dreiecksmengen sind für den Spielbetrieb zu hoch. Runde 2 arbeitet genau daran, zusätzlich an einer sparsamen Spielstufe mit eingebackenen Normalen.
 
 Zwei Werkzeugfallen sind dokumentiert: Ein Extrudieren lässt die Ausgangsflächen stehen, wodurch Blender die automatische Gewichtung **stillschweigend** verweigert; und das Angleichen der UV-Inseln meldet Erfolg, tut aber nichts.
+
+### Assets, zweite Runde
+
+Die zweite Runde behebt die Maengel der ersten und liefert zusaetzlich eine sparsame Spielstufe.
+
+- **Griff:** Der Stab sitzt jetzt zwischen den Fingern; der Fehler lag in der Ruhepose, nicht in der Bindung an das Skelett.
+- **Gesichter:** Imp mit Schnauze, Mundfurche, Nuestern und leuchtenden Augen; Brute mit Kiefer, tieferen Augenhoehlen und leuchtenden Augen; die Maske der Spielerfigur mit dunklen Sehschlitzen. Die Augen mussten per Strahlenschnitt auf der tatsaechlichen Oberflaeche platziert werden, weil geschaetzte Positionen unter der Haut verschwanden.
+- **Texturen:** eigens erzeugt, mit Merkmalen im Bereich von 10 bis 30 Zentimetern statt feinem Rauschen, das aus der Spielkamera flimmern wuerde. Kontrast der Imp-Haut von 1,10 auf 2,01, der Brute-Haut von 1,08 auf 1,74, mittlere Neigung der Normalen jeweils verdreifacht.
+- **Spielstufe:** je Figur eine sparsame Variante mit eingebackenen Normalen (rund 7.000 bis 8.700 Dreiecke statt 28.000 bis 35.000), gleiche Knochen und Gewichte; die Spielansicht ist aus dieser Stufe gerendert.
+- **Altfehler gefunden:** Beim Imp war die automatische Gewichtung in Runde 1 vollstaendig fehlgeschlagen und nur durch einen Notbehelf verdeckt. Runde 2 uebertraegt echte Gewichte und behebt das.
+
+Eigene Sichtpruefung: Die Gesichter lesen sich jetzt auch aus der Spielkamera, vor allem ueber die leuchtenden Augen. Offen bleibt Handarbeit: Die Augen sitzen als flache Scheiben auf der Oberflaeche statt in ausmodellierten Hoehlen, die Koepfe sind weiterhin glatt, und die Texturen sind Rauschen statt erzaehlter Details.
