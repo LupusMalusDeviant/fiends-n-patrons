@@ -1,0 +1,5 @@
+/generated/
+/repro_check/
+/preview_revision/
+__pycache__/
+*.pyc

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "design_status": "three_visual_prototypes_requested_by_user",
+  "source_documents": [
+    "docs/prd/0005-kampfsystem-spieler.md",
+    "docs/prd/0003-rendering-und-art.md",
+    "docs/prd/0011-narrativ-und-lore.md",
+    "docs/prd/0016-tooling-suite.md",
+    "docs/adr/0014-realistischer-3d-look-statt-toon.md"
+  ],
+  "interpretation": "The PRD proposes two contrasting melee presets and leaves their identities open. The user requests three visual models. Names and the third polearm archetype are proposals, not approved gameplay or lore.",
+  "characters": [
+    {"id": "iron_penitent", "label": "Eiserner Buesser", "height_m": 1.98, "width_scale": 1.18, "role": "heavy_blade", "description": "Armoured condemned soul; broad layered pauldrons, enclosed bascinet, penitential chains, split petrol tabard and heavy gothic sword."},
+    {"id": "ash_reaver", "label": "Aschenlaeufer", "height_m": 1.80, "width_scale": 0.91, "role": "fast_sickle", "description": "Narrow hooded silhouette, pale hooked mask, short asymmetric cloak, leather harness and hooked sickle."},
+    {"id": "veil_warden", "label": "Schleierhueter", "height_m": 1.91, "width_scale": 1.0, "role": "ritual_bladed_staff", "description": "Veiled melee ritualist with layered stole, reliquary belt, bone gorget and crescent glaive; no fixed patron allegiance."}
+  ]
+}
