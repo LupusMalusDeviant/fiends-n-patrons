@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "resolution": 1024,
+  "seed": 1592595177,
+  "palette_decision": "Strict cool/dark limits apply to large environment surfaces. Small props retain natural colors while avoiding projectile hue ranges. Keep the existing cloak color unchanged.",
+  "materials": [
+    {"id":"floor_tiles","label":"Bodenfliesen","scope":"environment","basecolor":"#33363D","scene_color":"#33363D","roughness":0.85,"metallic":0,"tile_size_m":[4,4]},
+    {"id":"grout","label":"Fugenmoertel","scope":"environment","basecolor":"#1A1C21","scene_color":"#1A1C21","roughness":0.95,"metallic":0,"tile_size_m":[1,1]},
+    {"id":"pillar_stone","label":"Saeulenstein","scope":"environment","basecolor":"#3E4047","scene_color":"#3E4047","roughness":0.75,"metallic":0,"tile_size_m":[2,2]},
+    {"id":"ruin_wall_moss","label":"Ruinenmauer mit Moos","scope":"environment","basecolor":"#383A3F","scene_color":"#383A3F","roughness":0.85,"metallic":0,"tile_size_m":[4,4]},
+    {"id":"altar_basalt","label":"Basaltaltar","scope":"environment","basecolor":"#26282D","scene_color":"#2A2528","roughness":0.60,"metallic":0,"tile_size_m":[2,2]},
+    {"id":"bronze","label":"Bronze - warm und gedaempft","scope":"prop","basecolor":"#80603D","scene_color":"#F2C28A","roughness":0.35,"metallic":1,"tile_size_m":[1,1],"note":"Art-directed muted bronze in the requested #6B4A2A to #8C6A45 range; metallic stays 1. The actual scene lighting requires a later check."},
+    {"id":"candle_wax","label":"Kerzenwachs - cremig","scope":"prop","basecolor":"#D8CDB4","scene_color":"#D8CDB4","roughness":0.85,"metallic":0,"tile_size_m":[0.25,0.25]},
+    {"id":"cloak_fabric","label":"Umhang-Stoff","scope":"actor","basecolor":"#24505C","scene_color":"#24505C","roughness":0.90,"metallic":0,"tile_size_m":[1,1]},
+    {"id":"bone_mask","label":"Knochenmaske","scope":"actor","basecolor":"#CFC3A8","scene_color":"#CFC3A8","roughness":0.60,"metallic":0,"tile_size_m":[0.5,0.5]},
+    {"id":"staff_wood","label":"Stabholz","scope":"actor","basecolor":"#4A311E","scene_color":"#4A311E","roughness":0.70,"metallic":0,"tile_size_m":[1,1]},
+    {"id":"imp_skin","label":"Imp-Haut","scope":"actor","basecolor":"#7A5231","scene_color":"#7A5231","roughness":0.55,"metallic":0,"tile_size_m":[1,1]},
+    {"id":"brute_flesh","label":"Brute-Fleisch","scope":"actor","basecolor":"#5E2B25","scene_color":"#5E2B25","roughness":0.60,"metallic":0,"tile_size_m":[2,2]},
+    {"id":"shoulder_plates","label":"Schulterplatten","scope":"actor","basecolor":"#3B3A3E","scene_color":"#3B3A3E","roughness":0.40,"metallic":0,"tile_size_m":[1,1],"note":"Metallic remains zero to match the scene contract; material identity can be revised explicitly later."}
+  ]
+}

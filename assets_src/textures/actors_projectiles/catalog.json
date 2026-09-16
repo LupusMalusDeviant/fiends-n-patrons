@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "seed": 1592602000,
+  "status": "Additional design proposals, not finalized character or monster identities",
+  "materials": [
+    {"id":"demon_horn","label":"Daemonsches Horn","group":"monster","basecolor":"#827E74","roughness":0.64,"metallic":0,"tile_size_m":[0.8,0.8]},
+    {"id":"plague_hide","label":"Pesthaut","group":"monster","basecolor":"#485345","roughness":0.82,"metallic":0,"tile_size_m":[1.6,1.6]},
+    {"id":"charred_carapace","label":"Verkohlter Panzer","group":"monster","basecolor":"#303138","roughness":0.87,"metallic":0,"tile_size_m":[1.6,1.6]},
+    {"id":"exposed_sinew","label":"Sehnen und Narben","group":"monster","basecolor":"#70423F","roughness":0.56,"metallic":0,"tile_size_m":[1.2,1.2]},
+    {"id":"void_hide","label":"Leerenhaut","group":"monster","basecolor":"#393B50","roughness":0.74,"metallic":0,"tile_size_m":[1.6,1.6]},
+    {"id":"bone_armor","label":"Knochenpanzer","group":"monster","basecolor":"#918F82","roughness":0.72,"metallic":0,"tile_size_m":[1.2,1.2]},
+    {"id":"player_leather","label":"Spieler - Leder","group":"player","basecolor":"#3F3C39","roughness":0.80,"metallic":0,"tile_size_m":[0.6,0.6]},
+    {"id":"player_wraps","label":"Spieler - Bandagen","group":"player","basecolor":"#A5A091","roughness":0.93,"metallic":0,"tile_size_m":[0.6,0.6]},
+    {"id":"player_steel","label":"Spieler - Ruestungsstahl","group":"player","basecolor":"#BCC2CB","roughness":0.48,"metallic":1,"tile_size_m":[0.8,0.8]},
+    {"id":"player_inner_cloth","label":"Spieler - Futterstoff","group":"player","basecolor":"#18232C","roughness":0.98,"metallic":0,"tile_size_m":[1,1]},
+    {"id":"player_silver_trim","label":"Spieler - Silberbeschlag","group":"player","basecolor":"#C2C6CD","roughness":0.45,"metallic":1,"tile_size_m":[0.6,0.6]},
+    {"id":"player_blade","label":"Spieler - Klingenstahl","group":"player","basecolor":"#B8BEC7","roughness":0.34,"metallic":1,"tile_size_m":[1.2,1.2]}
+  ]
+}
