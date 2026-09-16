@@ -30,6 +30,19 @@ Schema-Codegen aus einer Quelle und die Benchmark-Strategie mit Callgrind-Instru
 - Nichts Privates in die öffentlichen Repos: keine lokalen Pfade, keine fremden Mailadressen, keine Angaben zur Arbeitsweise des PO, keine Hardware.
 - Vertragsänderungen folgen dem Änderungsprotokoll: Klarstellungen ohne Freigabe, additive und brechende Änderungen gesammelt zur Freigabe.
 
-## Ergebnisse
+## Ergebnisse (Zwischenstand)
 
-Werden im Lauf ergänzt.
+### Engine
+
+- **WP2.4 Kamera** gemergt (Engine-PR #11, Merge-Commit `6e96ed6`): renderseitiges Following mit kritisch gedämpfter Feder und Vorausschau, Mauszielen mit deterministischer Quantisierung in die Eingabe-Achsen, Fassaden-Haken für Fokus und Bühnen-Extraktion. Das Replay-Gate belegt identische Simulations-Hashes unter zwei verschiedenen Kameraeinstellungen; alle Goldens unverändert. PO-Entscheide dazu: Vorausschau als Fokus-Geschwindigkeit mal einer Sekunde (begrenzt), Kamera nur nach ausdrücklicher Anmeldung durch das Spiel, Marker-Werte vorläufig bis zur Stilbibel.
+- **WP6.2 Benchmark-Gate** vollständig dokumentiert. Der erste Lauf auf `main` war rot: ein Apostroph in einer Parameter-Ersetzung ließ im Trend-Skript ein Anführungszeichen offen, und der Job läuft nur bei Push auf `main`, war also in keinem Pull Request geprüft worden. Engine-PR #12 (`34689a0`) behebt das, prüft seitdem **jedes CI-Skript mit `bash -n` schon im Pull Request** und reicht die Runner-Bezeichnung über eine Umgebungsvariable statt als Ausdruck im Shell-Block durch. Seitdem ist das Gate auf `main` grün und der Trenddaten-Branch `bench-trends` existiert mit den ersten Messwerten.
+- **WP8.2 Debug-Protokoll** liegt als Engine-PR #13 mit grüner CI vor: Nachrichten-Katalog mit Richtungsprüfung, Handshake nach PO-Entscheid V-13 (andere Engine-Version immer abgelehnt, anderer Build nur bei beidseitig bekanntem Hash, unbekannt mit Warnung), handgeleitete Byte-Fixtures. Ein unabhängiger Review läuft; gemergt wird erst danach. Die zunächst gemeldete \"neue Fehlervariante\" ist keine Vertragsänderung: §13 nennt sie bereits.
+- **WP2.5** (PBR-Shading mit Texturen, Spike zur Kantenglättung von Glanzlichtern samt ADR-Vorschlag) ist in Arbeit.
+
+### Assets mit Skelett
+
+Runde 1 ist fertig und beantwortet die Kernfrage: Der Skript-Ansatz trägt, wenn die Fläche als **eine durchgehende Quad-Fläche** entsteht statt aus zusammengesetzten Grundkörpern. Belegt an drei Figuren (Spielerfigur, Imp, Brute): geschlossene Netze ohne fehlerhafte Kanten, saubere Kantenschleifen im Drahtgitter, Skelette mit 20 bis 27 Knochen, geprüfte Gewichtung ohne ungewichtete Punkte, Posen-Reihen als Nachweis der Verformung, Umhang aus einer Stoffsimulation mit echten Falten, UV-Auspacken mit gemessener Texeldichte und glTF-Export mit Skin.
+
+Offene Mängel nach eigener Sichtprüfung der Bilder: der Stab hängt starr neben der Hand statt gegriffen zu werden, den Figuren fehlen Gesichter, der Imp hebt sich zu wenig vom Boden ab, die Figurentexturen sind zu flach (gemessener Albedo-Kontrast 1,12:1), und die Dreiecksmengen sind für den Spielbetrieb zu hoch. Runde 2 arbeitet genau daran, zusätzlich an einer sparsamen Spielstufe mit eingebackenen Normalen.
+
+Zwei Werkzeugfallen sind dokumentiert: Ein Extrudieren lässt die Ausgangsflächen stehen, wodurch Blender die automatische Gewichtung **stillschweigend** verweigert; und das Angleichen der UV-Inseln meldet Erfolg, tut aber nichts.
