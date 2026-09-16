@@ -36,6 +36,7 @@ that is now authoritative. `encode_skeleton` below writes two passes accordingly
 
 from __future__ import annotations
 
+import math
 import struct
 from dataclasses import dataclass
 
@@ -44,7 +45,13 @@ MAX_INDEX_COUNT = 3_000_000
 MAX_JOINT_COUNT = 256
 MAX_TEXTURE_PIXELS = 64_000_000  # spec: "Produkt <= 64 Mio." (decimal million, not 64 MiB)
 WEIGHT_TOLERANCE = 1.0e-3
+TANGENT_TOLERANCE = 1.0e-3  # texturqualitaet-spec.md: |xyz|=1 and w=+-1, each within this tolerance
 NO_TEXTURE = 0xFFFF_FFFF
+
+# The one fallback texturqualitaet-spec.md defines, for a primitive with no TEXCOORD_0 (iris,
+# staff, teeth): every vertex gets exactly this tangent. `encode_mesh` treats it as always valid,
+# regardless of the |xyz|=1/w=+-1 rule below (which does not apply to it).
+NO_TANGENT: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
 
 # See the module docstring: MESH/MATERIAL are reassigned off the engine-reserved 2/3 into the
 # application range, matching the engine's own (authoritative) choice; TEXTURE_RAW/SKELETON/
@@ -54,9 +61,13 @@ FNP_MATERIAL = 0x8004
 FNP_TEXTURE_RAW = 0x8001
 FNP_SKELETON = 0x8002
 FNP_FIGURE = 0x8003
+# kind_version is tracked per kind, not shared across all of them (texturqualitaet-spec.md, A2):
+# only FNP_MESH moves to Fassung 2 (adds `tangent: f32[4]`, 72 bytes/vertex instead of 56).
+# MATERIAL/TEXTURE_RAW/SKELETON/FIGURE stay on KIND_VERSION (Fassung 1) -- unaffected by this PR.
 KIND_VERSION = 1
+MESH_KIND_VERSION = 2
 
-_VERTEX_STRUCT = struct.Struct("<3f 3f 2f 4H 4f")
+_VERTEX_STRUCT = struct.Struct("<3f 3f 2f 4H 4f 4f")
 
 
 class PayloadError(ValueError):
@@ -70,12 +81,40 @@ class Vertex:
     uv: tuple[float, float]
     joints: tuple[int, int, int, int]
     weights: tuple[float, float, float, float]
+    # Raw (unrotated) tangent, exactly like `normal`: the engine rotates `tangent.xyz` with the
+    # same bone matrices as the normal (Strang B), so this module must never pre-rotate it -- doing
+    # so would double the +90-degree-about-X axis correction the skeleton root already carries (see
+    # `build_figure_pack.py`'s module docstring and `rig_math.vector_transform`). Defaults to the
+    # spec's one fallback so existing call sites that predate FNP_MESH Fassung 2 keep working.
+    tangent: tuple[float, float, float, float] = NO_TANGENT
+
+
+def _check_tangent(tangent: tuple[float, float, float, float], *, label: str, vertex_index: int) -> None:
+    """Validates one vertex's tangent: exactly [`NO_TANGENT`], or |xyz|=1 and w=+-1 (tol 1e-3).
+
+    "Es gibt keinen dritten Fall" (texturqualitaet-spec.md): every tangent this module accepts is
+    one of these two shapes, nothing else.
+    """
+    if tangent == NO_TANGENT:
+        return
+    x, y, z, w = tangent
+    magnitude = math.sqrt(x * x + y * y + z * z)
+    if abs(magnitude - 1.0) > TANGENT_TOLERANCE:
+        raise PayloadError(
+            f"{label}: vertex {vertex_index} tangent {tangent} has |xyz|={magnitude}, "
+            f"not 1.0 (tolerance {TANGENT_TOLERANCE}) and not the {NO_TANGENT} fallback"
+        )
+    if abs(abs(w) - 1.0) > TANGENT_TOLERANCE:
+        raise PayloadError(
+            f"{label}: vertex {vertex_index} tangent.w={w}, not +1 or -1 (tolerance "
+            f"{TANGENT_TOLERANCE})"
+        )
 
 
 def encode_mesh(
     vertices: list[Vertex], indices: list[int], *, joint_count: int, label: str
 ) -> bytes:
-    """Encodes one `FNP_MESH` (spec kind `MESH`) primitive payload."""
+    """Encodes one `FNP_MESH` (spec kind `MESH`) primitive payload, always as Fassung 2."""
     vertex_count = len(vertices)
     index_count = len(indices)
     if vertex_count > MAX_VERTEX_COUNT:
@@ -86,7 +125,7 @@ def encode_mesh(
         raise PayloadError(f"{label}: index count {index_count} is not divisible by 3")
 
     out = bytearray()
-    out += struct.pack("<I", KIND_VERSION)
+    out += struct.pack("<I", MESH_KIND_VERSION)
     out += struct.pack("<II", vertex_count, index_count)
     for vertex_index, v in enumerate(vertices):
         for joint in v.joints:
@@ -101,8 +140,9 @@ def encode_mesh(
                 f"{label}: vertex {vertex_index} weight sum {weight_sum} deviates from 1.0 by "
                 f"more than {WEIGHT_TOLERANCE}"
             )
+        _check_tangent(v.tangent, label=label, vertex_index=vertex_index)
         out += _VERTEX_STRUCT.pack(
-            *v.position, *v.normal, *v.uv, *v.joints, *v.weights
+            *v.position, *v.normal, *v.uv, *v.joints, *v.weights, *v.tangent
         )
     for i, index in enumerate(indices):
         if not (0 <= index < vertex_count):
