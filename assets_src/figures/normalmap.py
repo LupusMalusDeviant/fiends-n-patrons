@@ -8,14 +8,21 @@ import numpy as np
 def height_to_normal(height_m, texel_size_m):
     """Central-difference slope -> unit tangent-space normal.
 
-    height_m: HxW array of surface displacement in metres.
+    height_m: HxW array of surface displacement in metres, row 0 at the top of
+      the image (v = 1), as every PNG here is written.
     texel_size_m: (du_m, dv_m), the physical size of one pixel.
     Tileable: gradients wrap around both axes, matching REPEAT texturing.
+
+    Rows run downwards while V runs upwards, so the row difference is the
+    NEGATIVE V derivative. Until this was checked against Blender's own
+    tangent-space bake (test_normal_convention.py: red +1.000, green -1.000)
+    the row difference was used as-is, and every generated detail normal map
+    had its green channel inverted.
     """
     du, dv = texel_size_m
     h = np.asarray(height_m, dtype=np.float64)
     dhdu = (np.roll(h, -1, axis=1) - np.roll(h, 1, axis=1)) / (2.0 * du)
-    dhdv = (np.roll(h, -1, axis=0) - np.roll(h, 1, axis=0)) / (2.0 * dv)
+    dhdv = -(np.roll(h, -1, axis=0) - np.roll(h, 1, axis=0)) / (2.0 * dv)
     n = np.stack([-dhdu, -dhdv, np.ones_like(h)], axis=-1)
     n = n / np.linalg.norm(n, axis=-1, keepdims=True)
     return n
