@@ -108,8 +108,10 @@ erzeugt. Die neuen Grundfarben stehen in `palette.py`, Runde 4 trifft den Farbto
 
 - Die Augenhöhlen sind mit Dreiecksfächern eingesetzt statt mit sauberen Kantenschleifen.
 - Die Rillen der Hörner falten die hohe Geometrie; dort bleibt die Oberfläche glatt statt gerillt.
-- Der simulierte Umhang der Seele ist ein eigenes Stoffobjekt und trägt weiter die gekachelte Textur
-  aus Runde 2; an seinen UV-Nähten bleibt Flickwerk sichtbar. Runde 4 erfasst nur den Körper.
+- Der simulierte Umhang der Seele wirkt in der Engine kantig und fleckig. Er ist ein eigenes
+  Stoffobjekt außerhalb von Runde 4 mit der glatten Textur aus Runde 2 und nur einer UV-Insel, hat
+  also keine Nähte; die Flecken kommen demnach aus der Stoffgeometrie selbst. Genauer gemessen ist
+  das noch nicht.
 - Die Lederriemen am Umhang der Seele liegen jetzt im Raum und treffen auf die Figur nur in wenigen
   schmalen Streifen (rund 1 % der Umhang-Texel).
 
