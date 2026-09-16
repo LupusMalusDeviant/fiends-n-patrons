@@ -11,5 +11,23 @@ publish.workspace = true
 
 [dependencies]
 
+# Only used by the `figure_pack_builder` bin below (offline asset tooling, not the gameplay
+# library): reads the enemy figures' `index.json` and writes `figures.pack` with the engine's own
+# `grimoire_assets::PackWriter` (figuren-in-engine-spec.md, "Strang A").
+[dependencies.grimoire_assets]
+workspace = true
+
+[dependencies.serde_json]
+workspace = true
+
+# `soul`/`imp`/`brute` are enemy content (this crate's own "enemies" remit), and this is the tool
+# that turns their exported rig into the pack the engine loads at runtime -- picked over
+# fnp_app/fnp_game/fnp_sim_harness because those are all runtime game crates with no reason to
+# depend on grimoire_assets, while fnp_content already owns enemy content and had no binary of
+# its own yet.
+[[bin]]
+name = "figure_pack_builder"
+path = "src/bin/figure_pack_builder.rs"
+
 [lints]
 workspace = true
