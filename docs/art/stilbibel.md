@@ -40,7 +40,7 @@ Verteidigungslinie (Regel 3).
 | Gegnerische Bullets (HOSTILE) | 6 | 315–335° (Magenta) und 75–95° (Limette) | ≥ 80 % | ≥ 90 % | Weißglühender Kern + dunkler Rand, siehe „Bullets" |
 | Eigene Projektile (FRIENDLY) | 3 (Sprite-/Mesh-Kanal, nicht Ebene 6) | 185–200° (Eisblau/Cyan) | 40–60 % | hoch, reduzierte Alpha | Silhouette länglich statt rund |
 | Telegraphie (Vorschlag) | 4 | 48–62° (Bernstein/Gold) | ≥ 70 % | ≥ 80 % | Reservierte Familie, harte Kantenform statt weichem Glow — Abgrenzung zum violetten Ritualkreis (siehe Befunde und Offene Punkte) |
-| Figuren (Spieler, Gegner) | 3 | frei | niedrig–mittel | niedrig–mittel | Bullets gewinnen immer gegen Figuren an Sättigung und Value |
+| Figuren (Spieler, Gegner) | 3 | frei | niedrig–mittel (≤ 60 %) | niedrig–mittel | Bullets gewinnen immer gegen Figuren an Sättigung und Value |
 | Spieler-Marker | 7 | 185–200° (Friendly-Familie, entsättigter/heller) | niedrig | sehr hoch | Unterscheidet sich von Friendly-Bullets über Ebene/Kontext, nicht über eine neue Hue |
 | UI | 9 | kein eigener Anspruch in v0 | – | – | UI-Styleguide (P2, `docs/art/ui-styleguide.md`) legt Werte fest; bis dahin meidet UI die reservierten Gefahr-Familien |
 
@@ -138,8 +138,8 @@ geometrische Spekular-Anti-Aliasing (Kandidat für OF-3.5, siehe Offene Punkte).
 | Kerzenwachs | `#D8CDB4` | 0,85 | 0 | – |
 
 Requisiten- und Figuren-Referenz (nicht Teil des Umgebungs-Farbraums, siehe „Figuren"): Umhang
-`#24505C`, Kapuzeninnenseite `#0A0C0E`, Knochenmaske `#CFC3A8`, Stabholz `#4A3524`; Imp-Haut `#7A7068`,
-Hörner `#C9BBA0`; Brute-Fleisch `#5E3530`, Schulterplatten `#3B3A3E`.
+`#24505C`, Kapuzeninnenseite `#0A0C0E`, Knochenmaske `#CFC3A8`, Stabholz `#4A311E`; Imp-Haut `#7A5231`,
+Hörner `#C9BBA0`; Brute-Fleisch `#5E2B25`, Schulterplatten `#3B3A3E`.
 
 **Regel:** Große Umgebungsflächen (Boden, Wände, Säulen) bleiben im Umgebungs-Farbraum. Kleine
 Requisiten und Metalle dürfen ihre reale Farbe tragen (warme Bronze, cremiges Wachs), aber nie im
@@ -183,6 +183,22 @@ verglichenen Alternativen (Median-Kontrast 1,67, Minimum 1,19–1,24 gegen den R
 Blob-Schatten wurden deshalb in der Polish-Runde von 45 % auf 60 % Abdunklung verstärkt. Echte
 Schattenwürfe (OF-3.2) sollten diesen Wert weiter verbessern; das ist Teil der OF-3.2-Entscheidung, nicht
 separat zu lösen.
+
+**Albedo der Figuren (PO-Entscheid 2026-09-16):** Die Farbe einer Figur kommt aus ihrer Textur, nicht
+aus der Szenenbeleuchtung — eine Figur, die nur unter warmem Licht farbig wirkt, verliert ihre
+Lesbarkeit, sobald eine Arena anders beleuchtet ist. „Mittel" in der Farbraum-Tabelle heißt konkret
+**höchstens 60 % Sättigung (HSV)**. Angehoben wurden deshalb nur die organischen Materialien:
+Imp-Haut von 14 % auf 59 % (Orangebraun, vom PO aus drei gerenderten Stufen gewählt), Brute-Fleisch
+und Stabholz auf die Obergrenze von 60 %. Unverändert bleiben Horn, Krallen und Knochenmaske
+(Elfenbein bei rund 40°, zu nah am reservierten Telegraphie-Gold 48–62°), der Umhang (liegt bereits
+in der Petrol-Familie der eigenen Seite) und die Schulterplatten (mehr Sättigung schöbe sie ins Violett
+des Ritualglühens). Umgefärbt wurde per Kanal-Verstärkung auf der fertigen Textur, die jedes Detail
+unverändert lässt; die Palette des Texturgenerators trägt dieselben Faktoren.
+
+**Bewusst in Kauf genommenes Risiko:** Das Orangebraun der Imp-Haut (Farbton 26°) liegt in derselben
+Familie wie Fackel- und Glutlicht (15–45°). In warm beleuchteten Bereichen der Arena kann die Silhouette
+eines Imps gegen eine Lichtpfütze am Boden an Kontrast verlieren. Das ist im Look-Review an M1 zu prüfen;
+die Alternative wäre die gerenderte Stufe mit 44 % (Braun).
 
 **Spielerlesbarkeit:** Der Umhang `#24505C` (kühles Teal) verschwindet vor dem violetten Ritualglühen
 (`#8A5CFF`-Familie, Hue 255–275°) — beide liegen nah beieinander in Hue und Value. Das ist ein offener
