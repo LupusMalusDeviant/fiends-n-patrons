@@ -89,7 +89,7 @@ Then vergleicht CI Zustands-Hashes alle 600 Ticks; bei Abweichung ab Tick 18.600
 ## Offene Fragen
 
 - **OF-18.1:** Subsystem-Hash-Granularität (pro System pro Tick vs. alle N Ticks) — Kosten/Nutzen-Spike in P1.
-- **OF-18.2:** Render-Snapshot-Referenzen pro GPU-Treiber-Familie nötig (CI-Runner-Varianz)? Empirisch in P1 klären (koppelt OF-17.3).
+- **OF-18.2:** Render-Snapshot-Referenzen pro GPU-Treiber-Familie nötig (CI-Runner-Varianz)? **Beantwortet in P1 (Plan 0002 WP3.6, M2).**
   *Erste Daten (Plan 0002, WP2.1, Engine-PR #5, CI-Lauf 35015614138, Stand 2026-09-15):* Die Offscreen-Tests melden den gewählten Adapter je Runner im Job-Summary.
 
   | Runner | Adapter | Backend | Gerätetyp | Treiber | übersprungene GPU-Tests |
@@ -99,6 +99,16 @@ Then vergleicht CI Zustands-Hashes alle 600 Ticks; bei Abweichung ab Tick 18.600
   | windows-latest | Microsoft Basic Render Driver (WARP) | Dx12 | Cpu | unbekannt | 0 |
 
   Damit ist OP-3 aus Plan 0001 beantwortet: Der gehostete macOS-Runner stellt einen paravirtualisierten Metal-Adapter bereit, die GPU-Tests laufen dort und werden nicht übersprungen. Für OF-18.2 heißt das: drei Treiberfamilien (Software-Vulkan, paravirtualisiertes Metal, WARP), die Referenzbilder vermutlich je Plattform brauchen; entschieden wird mit den ersten Snapshot-Szenen (WP2.8).
+  *Befund (Engine-PRs #45 und #50, Stand 2026-09-17):* Gemessen wurden drei Treiberfamilien: WARP unter Windows, lavapipe (llvmpipe, Mesa 25.2.8, LLVM 20.1.2) unter Linux und das paravirtualisierte Metal-Gerät unter macOS. Grundlage sind die zehn Render-Testszenen `pbr_materials`, `shadows_keylight`, `shadows_blob`, `camera_tilt_35/60/75/90`, `lights_256`, `bullets_on_top` und `overlay`, gerendert bei 160×90.
+
+  - **Wiederholung im selben Lauf:** Der Test `scene_variance` rendert jede Szene dreimal je Adapter, zweimal mit demselben Renderer und einmal mit einem neuen Gerät. In 13 CI-Läufen lag die Abweichung auf allen drei Adaptern in jeder Szene bei 0,000 im Mittel und 0 im Maximum. Jeder Adapter reproduziert also bitgenau.
+  - **Wiederholung über Läufe gegen die eingecheckte Referenz:** WARP war in 30 CI-Läufen in jeder Szene bitgleich. lavapipe war in 11 von 12 Läufen bitgleich; ein Lauf wich in allen Szenen minimal ab (Mittel höchstens 0,016, Maximum höchstens 2), bei gleichem Runner-Abbild, gleicher Mesa-Fassung und gleicher Region. Die Host-CPU wurde damals nicht protokolliert; wahrscheinlichste Ursache ist, dass llvmpipe seinen Maschinencode passend zur Host-CPU erzeugt. Seit Engine-PR #50 nennt der CI-Bericht die Host-CPU je Runner.
+  - **Abstand zwischen den Treiberfamilien:** lavapipe gegen die WARP-Referenzen im Mittel 0,051 bis 0,188 je Szene, im Maximum bis 26 (`bullets_on_top`). Metal gegen die WARP-Referenzen im Mittel 0,000 bis 0,011, im Maximum bis 20 (`lights_256`).
+  - **Toleranz:** mittlere absolute Kanalabweichung höchstens 3,0 und größte Kanalabweichung höchstens 60, unverändert seit WP2.8. Alle gemessenen Abstände liegen darin. Echte Regressionen liegen darüber: Blob- statt Key-Light-Schatten ergibt 3,26 im Mittel und 121 im Maximum, eine um 15 Grad falsche Kameraneigung 2,92 und 123.
+
+  *Antwort:* Referenzen je Treiberfamilie, ja. Eine gemeinsame Referenz läge zwar noch in der Toleranz, würde aber bis zu 26 der 60 Stufen Spielraum im Maximum verbrauchen, den die Toleranz für echte Regressionen braucht; gegen die eigene Referenz bleibt der Abstand bei 0 oder höchstens 2. Windows und Linux haben eigene Referenzen; die Linux-Referenzen stammen unverändert aus einem CI-Artefakt. macOS hat in P1 keine Referenzen, weil der Runner keinen CPU-Adapter anbietet und die Szenen dort übersprungen werden. Metal ist gemessen und reproduziert bitgenau; macOS-Referenzen gehören zum P3-Gate (FR-06).
+
+  *Blockierregel je Plattform (seit M2, Engine-PR #50):* Unter Windows (WARP) und Linux (lavapipe) lässt eine Abweichung über der Toleranz oder eine fehlende Referenz den CI-Lauf scheitern. Unter macOS bleibt der Vergleich bis P3 im Warnmodus. Ein Test ohne GPU belegt die Regel in jedem `cargo test` an den eingecheckten Referenzen. Neue Szenen brauchen vor dem Merge eine Referenz für Windows und Linux; der Kandidat liegt im CI-Artefakt `snapshot-candidates-<runner>`.
 - **OF-18.3:** „Pattern-Kenner"-Bot: aufgezeichnete Lösungswege vs. einfacher Lookahead-Solver? Spike P3.
 
 ## Referenzen
