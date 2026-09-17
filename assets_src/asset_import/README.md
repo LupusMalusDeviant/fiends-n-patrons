@@ -1,14 +1,18 @@
 # asset_import/
 
-Prüfstufe für fremd erzeugte 3D-Figuren (Hi3D-Downloads, geriggte Arbeitskopien) auf dem Weg in
-das Pack der Engine. Erste von vier Stufen des Hexen-Pilots: **Prüfen**, Vorbereiten, Packen,
-Nachweis in der Engine. Die Prüfung misst eine `.glb` gegen die Grenzen der Engine, die Regeln des
-Konverters in [`../figure_pack`](../figure_pack/README.md) und das Budget ihrer Rolle.
+Import fremd erzeugter 3D-Figuren (Hi3D-Downloads, geriggte Arbeitskopien) in das Pack der Engine.
+Vier Stufen, erprobt am Hexen-Pilot: **Prüfen** (Stufe 1), **Vorbereiten** (Stufe 2), Packen,
+Nachweis in der Engine.
 
-Nur Python-Standardbibliothek, kein Blender, kein numpy. Den glTF-Container liest
-`../figure_pack/glb_reader.py`.
+- **Prüfen** misst eine `.glb` gegen die Grenzen der Engine, die Regeln des Konverters in
+  [`../figure_pack`](../figure_pack/README.md) und das Budget ihrer Rolle. Nur
+  Python-Standardbibliothek; den glTF-Container liest `../figure_pack/glb_reader.py`.
+- **Vorbereiten** macht aus der geriggten Arbeitskopie und ihrem hochaufgelösten Original eine
+  Spielfigur im Budget (Abschnitt „Stufe 2: Vorbereiten“). Blender headless, numpy und Pillow.
 
-## Aufruf
+## Stufe 1: Prüfen
+
+### Aufruf
 
 ```sh
 python -B check_asset.py --role player <figur.glb>
@@ -27,7 +31,7 @@ Rollen: `player`, `enemy`, `boss`, `prop`. `--budgets <datei>` ersetzt `budgets.
   dekodiert; Größe und Format stehen im PNG- oder JPEG-Kopf. Gelesen werden nur die Positionen
   (für die Blickrichtung) und die inversen Bindematrizen.
 
-## Was geprüft wird
+### Was geprüft wird
 
 | Ebene | Prüfungen | Herkunft der Grenze |
 |---|---|---|
@@ -44,7 +48,7 @@ Index 4 Byte. Eine Blockkompression (OF-3.4) würde den Texturanteil etwa vierte
 **Clip-Namen** sind nur eine Warnung: Ob und wie die Engine Clips abspielt, entscheidet ein eigenes
 ADR. Bis dahin zeigt die Prüfung, welche erwarteten Namen fehlen und welche unbekannt sind.
 
-## Budgets
+### Budgets
 
 Die Rollenbudgets in `budgets.json` sind ein **Vorschlag** und eine offene PO-Frage. Die PRDs
 nennen keine Zahlen für Dreiecke, Texturen oder Knochen. Bindend sind dort nur die Rahmen:
@@ -78,7 +82,7 @@ Begründung:
   hat 31), Gegner weniger.
 - **Höhe:** nach `../figures/spec.py` (Imp 1,0 m, Verdammte Seele 1,8 m, Brute 2,4 m).
 
-## Blickrichtung
+### Blickrichtung
 
 glTF legt fest: +Y ist oben, die Vorderseite eines Modells schaut nach +Z. Die Prüfung bestimmt
 die Blickrichtung auf zwei unabhängigen Wegen:
@@ -103,12 +107,145 @@ Entweder dreht der Prototyp die Figuren falsch herum, oder der Kommentar in `pre
 nicht. Das klärt eine Sichtprüfung im Spiel; bis dahin fallen die Figuren der Runde 4 in dieser
 Prüfung durch.
 
+## Stufe 2: Vorbereiten
+
+### Aufruf
+
+```sh
+python -B prepare_figure.py --rigged <geriggt.glb> --high <hi3d.glb> --out-dir <ziel>
+    --name witch --role player --height 1.8 --triangles 12000 --texture-size 1024
+    --blender <blender>
+python -B prepare_figure.py --rigged <imp_rig.glb> --high <imp_hi3d.glb> --out-dir <ziel>
+    --name imp --role enemy --height 1.0 --triangles 5000 --texture-size 512 --swap-sides
+    --blender <blender>
+```
+
+(Je Aufruf eine Zeile.) Voraussetzungen: Blender 5.2 LTS (`--blender` oder Umgebungsvariable
+`BLENDER`), Python mit numpy und Pillow nach [`../textures/requirements.txt`](../textures/requirements.txt).
+Blender läuft mit `-b --factory-startup -t 1`, ohne Fenster und ohne Grafikkarte.
+
+Ausgaben in `--out-dir`: `<name>.glb`, drei PNG-Texturen (Grundfarbe, Metallic-Roughness,
+Normalen), `<name>_prepare.json` (Messwerte der Vorbereitung), `<name>_check.json` (Stufe-1-Prüfung
+der fertigen Figur), `<name>_blender.log` und `manifest.json` mit den SHA-256 aller Ausgaben außer
+dem Protokoll. Schlägt die Prüfung der fertigen Figur fehl, endet das Skript mit Exit-Code 1.
+`--texture-variants 512,2048` schreibt zusätzliche Texturgrößen für Vergleiche.
+
+### Ablauf
+
+1. **Texturen** (`prepare_figure.py`): Grundfarbe und Metallic-Roughness der geriggten Datei werden
+   mit einem exakten Kastenfilter verkleinert, die Grundfarbe in linearem Licht wie die Mip-Kette
+   der Engine.
+2. **Import** (`blender_prepare.py`): geriggte Arbeitskopie (Skin, Knochen, Clips) und das
+   Hi3D-Original; Knotentransformationen des Originals werden eingerechnet.
+3. **Seiten tauschen** (`--swap-sides`): Knochen mit `.L`/`_l` und `.R`/`_r` tauschen die Namen,
+   samt Vertex-Gruppen und Animationskanälen. Beim Imp-Piloten liegen die `.L`-Knochen auf der
+   rechten Körperseite; nach dem Tausch stimmen Knochennamen und Zehenrichtung überein.
+4. **Verschweißen und glätten** beider Netze. Die geriggte Hexe kommt flach schattiert an, jede
+   Dreiecksecke ein eigener Vertex (299.984 Vertices für 100.000 Dreiecke). Das lag nicht an
+   zerstückelten UVs: Position und UV zusammen unterscheiden nur 70.638 Vertices.
+5. **Reduzieren:** Das Hi3D-Original wird auf die Zieldreiecke reduziert (Collapse-Decimate), die
+   Skin-Gewichte werden vom geriggten Netz übertragen (nächste Fläche, interpoliert), auf vier
+   Einflüsse begrenzt und normiert. Grund: Die geriggten Arbeitskopien sind rissig. Nach dem
+   Verschweißen hat die Hexe 38.462 offene Kanten in 307 Stücken (nächster Randvertex im Median
+   0,2 mm entfernt), der Imp 16.036 offene Kanten; die Originale haben keine. Größere
+   Schweißabstände schließen die Risse nicht, sie zerstören Flächen (bei 1 mm fallen 5 % der
+   Dreiecke weg, 6.635 offene Kanten bleiben). `--lod-source rigged` reduziert trotzdem die
+   Arbeitskopie.
+6. **Skalieren und aufstellen:** gleichmäßige Skalierung auf die Zielhöhe, tiefster Punkt auf den
+   Boden, Mitte über den Ursprung, gemessen an der reduzierten Figur. Angewendet auf Netzdaten,
+   Ruhepose, Ortskanäle aller Clips und das Original, nie als Objekttransformation.
+7. **Formnormalen** vom Original auf die reduzierte Figur mit `../figures/shapenormal.py`
+   (nächster Oberflächenpunkt je Texel, MikkTSpace-Tangentenraum, kein Cycles-Bake).
+8. **Export** als `.glb` mit Tangenten, allen Clips und den drei PNG-Texturen.
+
+### Ergebnisse des Pilots
+
+| | Hexe | Imp |
+|---|---|---|
+| Quelle | Hi3D 2.000.000 Dreiecke; Rig 100.000 Dreiecke, 31 Knochen, 18 Clips | Hi3D 2.000.000 Dreiecke; Rig 70.000 Dreiecke, 26 Knochen, 2 Clips |
+| Spielfigur | 11.996 Dreiecke, **12.236 Vertices** | 5.000 Dreiecke, **3.661 Vertices** |
+| Engine-Grenzen je Teil | 12.236 von 1.000.000 Vertices, 35.988 von 3.000.000 Indizes | 3.661 von 1.000.000, 15.000 von 3.000.000 |
+| Höhe, Fußpunkt, Blickrichtung | 1,800 m, 0,000 m, +Z | 1,000 m, 0,000 m, +Z |
+| Texturen | 3 × 1024², GPU 16,0 MiB (vorher 2 × 8192², 682,7 MiB) | 3 × 512², GPU 4,0 MiB (vorher 682,7 MiB) |
+| Abstand zum Original (p50 / p99) | 0,75 / 3,8 mm | 0,75 / 2,8 mm |
+| Gewichtsübertragung (Abstand p99) | 2,3 mm, kein Vertex ohne Gewicht | 3,1 mm, kein Vertex ohne Gewicht |
+| Normalenfehler gegen Original, Median ohne / mit Karte | vorn 28,8° / 10,3°, hinten 31,1° / 8,2° | vorn 20,6° / 7,6°, hinten 20,3° / 7,5° |
+| Gegenprobe mit umgedrehtem Grünkanal | vorn 35,7°, hinten 37,7° | vorn 24,3°, hinten 23,8° |
+| Stufe-1-Prüfung | PASS, 29 von 29 | PASS, 1 Warnung (fehlende Clips) |
+
+### Entscheidungen, gemessen
+
+**Dreiecke nach Silhouette.** `render_game_view.py` zeichnet Original und Spielfigur mit vier
+Abtastungen je Pixel an der Spielkamera des Prototyps; gemessen wird der Anteil der Deckung, der
+abweicht.
+
+| | 1080p | 2160p |
+|---|---:|---:|
+| Hexe 8.000 | 6,3 % | 5,9 % |
+| **Hexe 12.000** | **5,2 %** | **4,4 %** |
+| Hexe 18.000 | 4,8 % | 3,8 % |
+| Hexe 18.000 aus der rissigen Arbeitskopie | 7,0 % | 6,2 % |
+| **Imp 5.000** | **11,3 %** | **6,7 %** |
+| Imp 7.500 | 11,0 % | 6,1 % |
+| Imp 10.000 | 10,7 % | 5,8 % |
+
+Jenseits von 12.000 (Hexe) und 5.000 (Imp) Dreiecken bringt die Hälfte mehr unter einen
+Prozentpunkt. Der Imp ist an der Spielkamera rund 52 px hoch; seine Abweichung sitzt fast ganz in
+Krallen und Hörnerspitzen.
+
+**Texturgröße nach Mip-Stufe.** `texel_footprint.py` bestimmt je Dreieck die Mip-Stufe, die der
+Sampler der Engine wählt (trilinear, ohne anisotrope Filterung), über acht Drehungen der Figur.
+Angegeben ist der Bildanteil, der Stufe 0 liest, also mit der halben Größe Detail verlöre:
+
+| | 512 | 1024 | 2048 |
+|---|---:|---:|---:|
+| Hexe 1080p | 25,3 % | **1,0 %** | 0,1 % |
+| Hexe 2160p | 72,5 % | 25,3 % | 1,0 % |
+| Imp 1080p | **0,3 %** | 0,0 % | 0,0 % |
+| Imp 2160p | 10,8 % | 0,3 % | 0,0 % |
+
+Im Bild: Hexe mit 2048 gegen 1024 im Mittel 0,04 sRGB-Stufen Unterschied (1080p, höchstens 1) und
+0,06 (2160p, höchstens 5); mit 512 bei 2160p bis 44 Stufen. Imp mit 1024 gegen 512 im Mittel 0,03
+(1080p) und 0,05 (2160p, höchstens 3). Gewählt: **Hexe 1024, Imp 512.** 2048 lohnt nur für
+Nahaufnahmen.
+
+### Wiederholbarkeit
+
+Zwei vollständige Läufe in getrennten Prozessen ergeben für Hexe und Imp dasselbe `manifest.json`,
+also bytegleiche `.glb`, Texturen und Berichte. Mit mehreren Threads unterschieden sich 2 von 18.862
+Tangenten um 1e-4 und ein Texel der Normalenkarte; deshalb `-t 1`. Nachgewiesen auf einem Rechner
+mit Blender 5.2.2 LTS; zwischen Rechnern oder Blender-Fassungen ist es nicht geprüft (OF-16.3).
+
+### Prüfwerkzeuge
+
+- `verify_normal_map.py`: zeichnet Original, Spielfigur und Spielfigur mit Normalenkarte
+  orthografisch von vorn und hinten und misst den Winkel zur Originalnormale, auch gemittelt über
+  4 und 16 Pixel und mit umgedrehtem Grünkanal als Gegenprobe. Tangentenrahmen und
+  Texturorientierung wie `mesh.wgsl` (glTF: `v = 0` ist die oberste Zeile).
+- `texel_footprint.py`: Mip-Stufen an der Spielkamera je Texturgröße.
+- `render_game_view.py`: Spielkamera-Ansicht mit vier Abtastungen je Pixel, Mip-Kette wie in der
+  Engine und Lambert-Licht; Silhouettenvergleich und Texturvarianten nebeneinander. Eine Vorschau,
+  kein Ersatz für das Engine-Bild aus Stufe 4.
+
+### Bekannte Grenzen
+
+- Die Formnormale nimmt je Texel den nächsten Punkt des Originals. Zeigt dessen Normale von der
+  reduzierten Fläche weg (Haarsträhnen, Stofflagen), bleibt der Texel flach: Hexe 6,6 %, Imp 0,5 %.
+- UV-Inseln überlappen nach dem Reduzieren auf rund 1 % der belegten Texel.
+- Die Hexe ist sehr dunkel: Grundfarbe im Median HSV-Value 6,7 % (Imp 20,4 %); die Stilbibel nennt
+  für den Boden rund 24 %. Ob sie sich an der Spielkamera noch vom Boden abhebt, zeigt das
+  Engine-Bild in Stufe 4. Diese Stufe ändert keine Farben.
+- Die Ergebnisse (`.glb`, Texturen, Berichte) liegen nicht im Repo.
+
 ## Tests
 
 ```sh
-python -B -m unittest test_check_asset.py
+python -B -m unittest test_check_asset.py test_prepare_tools.py
 ```
 
-Die Tests bauen kleine `.glb`-Dateien im Speicher (Figur mit Skin, Zehen, Texturen und Clips) und
-prüfen Messung, Grenzen, Exit-Codes und die Kopfleser für PNG und JPEG. Die JPEG-Beispiele sind nur
-Dateiköpfe; die Prüfung dekodiert nie Pixel.
+`test_check_asset.py` baut kleine `.glb`-Dateien im Speicher (Figur mit Skin, Zehen, Texturen und
+Clips) und prüft Messung, Grenzen, Exit-Codes und die Kopfleser für PNG und JPEG; die
+JPEG-Beispiele sind nur Dateiköpfe. `test_prepare_tools.py` prüft die Teile von Stufe 2 ohne
+Blender: Kastenfilter und Linearlicht, Materialbilder, Seitennamen, Tangentenrahmen und
+Texturorientierung, Mip-Stufen und das Verwerfen von Rückseiten. `blender_prepare.py` selbst
+prüfen die Pilotläufe über ihre Berichte und die Stufe-1-Prüfung der fertigen Figur.
