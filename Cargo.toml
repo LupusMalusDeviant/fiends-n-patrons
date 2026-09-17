@@ -14,26 +14,20 @@ publish = false
 [workspace.dependencies]
 fnp_content = { path = "crates/fnp_content" }
 fnp_game = { path = "crates/fnp_game" }
-# Engine pin (ADR-0009): normally a release tag of the public Grimoire repository, fetched
-# anonymously over HTTPS (ADR-0013); upgrades follow CONTRIBUTING.md, section "Engine-Upgrade".
-#
-# PROTOTYPE BRANCH ONLY: pinned to a commit of the engine's `main` instead of a tag. The prototype
-# needs two things only engine `main` after v0.2.0 has: `FNP_MESH` payload version 2 in the figure
-# packs (real tangents, texture-quality package strand B2) and the bullet pass with the Sigil render
-# adapter (plan 0002 WP3.5/WP5.3); no release tag covers them yet.
-# Before this can reach the game's `main`, the engine needs a release tag and every engine crate
-# below goes back to `tag = ...` in one `build(engine)` commit. All entries share one commit.
-grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", rev = "a01495c4ccca49499514255817ac0df616271ccb" }
-# Thread-pool executor of the same engine commit (engine ADR-0006); keep equal to `grimoire`.
-grimoire_exec = { git = "https://github.com/LupusMalusDeviant/grimoire", rev = "a01495c4ccca49499514255817ac0df616271ccb" }
+# Engine pin (ADR-0009): a release tag of the public Grimoire repository, fetched anonymously over
+# HTTPS (ADR-0013). Cargo.lock records the tag commit; upgrades follow CONTRIBUTING.md, section
+# "Engine-Upgrade". Every engine crate below uses the same tag.
+grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.3.0" }
+# Thread-pool executor (engine ADR-0006).
+grimoire_exec = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.3.0" }
 # Pack container reader/writer: the `grimoire` facade does not re-export it. Used offline by
 # figure_pack_builder (PackWriter) and at startup by fnp_app to open a figure pack (PackReader,
-# AssetStore). Keep equal to `grimoire`.
-grimoire_assets = { git = "https://github.com/LupusMalusDeviant/grimoire", rev = "a01495c4ccca49499514255817ac0df616271ccb" }
+# AssetStore).
+grimoire_assets = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.3.0" }
 # Sigil compiler, a build dependency only: fnp_content's build script compiles the `.sigil` sources
-# under content/ into binary units. No runtime crate depends on it (engine ADR-0008). Keep equal to
-# `grimoire`.
-grimoire_sigilc = { git = "https://github.com/LupusMalusDeviant/grimoire", rev = "a01495c4ccca49499514255817ac0df616271ccb" }
+# under content/ into binary units until the asset compiler exists (plan 0002 WP4.3, PO decision
+# 2026-09-17). No runtime crate depends on it (engine ADR-0008).
+grimoire_sigilc = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.3.0" }
 # JSON parsing for figure_pack_builder's `index.json` input (an offline dev tool, not runtime
 # engine/game code, so the workspace's determinism/no-std-alloc conventions do not apply to it).
 serde_json = "1.0"

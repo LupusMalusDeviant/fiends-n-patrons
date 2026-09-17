@@ -6,13 +6,12 @@ auf Kosten des Zorns der übrigen vier.
 
 Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Release-Tags).
 
-> Status: **erster spielbarer Prototyp (Branch `proto/first-playable`)**. Die Seele läuft durch eine
-> beleuchtete Arena, ein Imp feuert ein Sigil-Pattern, ein Treffer beendet die Runde, nach 1,5 s
-> beginnt sie neu. Auf diesem Branch pinnt das Spiel einen Commit von Grimoire-`main` statt eines
-> Tags (die Figuren-Packs brauchen Mesh-Fassung 2); vor einem Merge nach `main` braucht es einen
-> Engine-Release-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Die P0-Demo
-> „Beschwörungskreis“ bleibt als `FiendsGame` erhalten, ihr goldener Endhash (Seed 42, 3.600 Ticks)
-> gilt unverändert.
+> Status: **erster spielbarer Prototyp**. Die Seele läuft durch eine beleuchtete Arena, ein Imp
+> feuert ein Sigil-Pattern, ein Treffer beendet die Runde, nach 1,5 s beginnt sie neu. Das Spiel pinnt
+> Grimoire `v0.3.0` über einen Git-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Ein
+> Determinismus-Test friert den Endhash der Arena für Seed 42 über 3.600 Ticks ein. Die P0-Demo
+> „Beschwörungskreis“ (`FiendsGame`) mit ihrem eigenen Endhash besteht noch; sie entfällt in einem
+> eigenen Schritt (PO-Entscheid 2026-09-17).
 
 ## Einstieg
 
