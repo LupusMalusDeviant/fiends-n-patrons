@@ -74,6 +74,14 @@ cargo test --workspace --locked --no-fail-fast
 cargo build --workspace --locked
 ```
 
+Wer etwas unter `assets_src/` ändert, führt zusätzlich die Python-Tests der Werkzeuge aus (numpy
+und Pillow nach `assets_src/textures/requirements.txt`; kein Blender, keine Grafikkarte nötig):
+
+```bash
+python -B -m unittest discover -s assets_src/figure_pack -t assets_src/figure_pack
+python -B -m unittest discover -s assets_src/asset_import -t assets_src/asset_import
+```
+
 Die Pflichtprüfungen laufen nur mit **auskommentiertem** `[patch]` in `<Arbeitsordner>\.cargo\config.toml`;
 ein aktiver Patch lässt jeden `--locked`-Aufruf scheitern. Vor dem Commit zusätzlich prüfen, dass
 `Cargo.lock` weder eine Pfad-Quelle für `grimoire` noch einen `[[patch.unused]]`-Eintrag enthält
@@ -83,10 +91,15 @@ ein aktiver Patch lässt jeden `--locked`-Aufruf scheitern. Vor dem Commit zusä
 
 | Workflow | Auslöser | Inhalt |
 |----------|----------|--------|
-| `ci.yml` | Push auf `main`, Pull Request, manuell | `fmt`; `test` auf Windows/Linux/macOS mit clippy, Tests (`--no-fail-fast`) und Build; unter Linux zusätzlich der Abgleich der `clippy.toml`-Kopien mit dem gepinnten Engine-Tag |
+| `ci.yml` | Push auf `main`, Pull Request, manuell | `fmt`; `assets` (Linux, Python-Tests von `assets_src/figure_pack` und `assets_src/asset_import`); `test` auf Windows/Linux/macOS mit clippy, Tests (`--no-fail-fast`) und Build; unter Linux zusätzlich der Abgleich der `clippy.toml`-Kopien mit dem gepinnten Engine-Tag |
 | `nightly.yml` | täglich 02:47 UTC, manuell | Determinismus-Test im Release-Profil, dann Release-Build von `fiends-n-patrons` für drei Systeme als Artefakt (7 Tage), Kurz-Changelog im Job-Summary; geplante Läufe entfallen, wenn `main` 24 h nicht bewegt wurde (Push oder Merge laut Aktivitäts-API, nicht Commit-Datum) |
 | `release.yml` | Tag `vX.Y.Z` | Versionsprüfung, Determinismus-Test im Release-Profil und Release-Builds für drei Systeme, **Entwurf** eines GitHub-Release mit git-cliff-Notes und Binaries |
 
+- Der Job `assets` läuft bei jedem Auslöser des Workflows, nicht nur bei Änderungen unter
+  `assets_src/`: GitHub Actions kennt keinen Pfadfilter je Job, und ein Filter am Workflow würde für
+  jede andere Änderung gar keinen Status melden (siehe „Achtung Branch-Schutz“ gleich darunter). Der
+  Job dauert unter einer Minute. Die Blender-Stufe (`blender_prepare.py`) prüft er nicht; die deckt
+  der Pilotlauf ab.
 - Commits, die nur Markdown oder `docs/` ändern, lösen `ci.yml` nicht aus. **Achtung Branch-Schutz:**
   Ein per Pfadfilter übersprungener Workflow meldet keinen Status; reine Doku-PRs bleiben bei
   Pflicht-Checks auf „Expected“ stehen und brauchen `gh workflow run ci.yml --ref <branch>` oder
@@ -347,7 +360,8 @@ erlaubt, solange kein veröffentlichtes Release zu dem Tag existiert.
 
 ## Versionen der GitHub Actions
 
-Actions sind gepinnt: `actions/checkout@v7`, `actions/upload-artifact@v7`,
-`actions/download-artifact@v8`, `Swatinem/rust-cache@v2`, `orhun/git-cliff-action@v4`. Aktuelle
+Actions sind gepinnt: `actions/checkout@v7`, `actions/setup-python@v7`,
+`actions/upload-artifact@v7`, `actions/download-artifact@v8`, `Swatinem/rust-cache@v2` (auf den
+Commit, nicht nur das Tag), `orhun/git-cliff-action@v4`. Aktuelle
 Stände prüfen mit `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`. Ein Wechsel ist ein
 eigener `ci:`-Commit, nachdem die Release-Notes gelesen wurden.
