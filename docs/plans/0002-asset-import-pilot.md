@@ -4,7 +4,7 @@
 - **Status:** Stufen 1 bis 3 gemergt, Stufe 4 offen. Rollenbudgets, Texturgrößen und Zielhöhen sind **vorläufig (PO-Freigabe ausstehend)**; die gemessenen Werte in §3 sind gemessen, nicht geschätzt.
 - **Bezug:** [Plan 0002](0002-phase-p1-sichtbarer-kern.md) (PO-Entscheide vom Abend des 2026-09-17, Meilenstein M3), [PRD-0003](../prd/0003-rendering-und-art.md) (Look, Kamera, Figuren), [PRD-0002](../prd/0002-grimoire-engine-architektur.md) (Budgets), Engine-Vertrag `crate-vertraege.md` §6 (`FNP_MESH`, Knochenverformung, Texturgrenzen) und §12 (Pack v1), Engine-Formatdoku `pack.md`.
 - **Warum ein eigenes Dokument:** Der Pilot ist kein Arbeitspaket aus den P1-PRDs, sondern Spiel-Repo-Arbeit, die der PO am Abend des 2026-09-17 parallel zu M3 beauftragt hat. Plan 0002 verweist darauf (PO-Entscheide vom Abend des 2026-09-17), statt seine WP-Nummerierung zu dehnen; alle Werkzeuge liegen unter `assets_src/`, kein Rust ist betroffen.
-- **Nicht getan:** kein Rust und kein Engine-Code geändert (insbesondere nicht `crates/fnp_game/src/arena/present.rs` und nicht `crates/fnp_content/`); kein Blender und keine Grafikkarte in der CI; keine Messung auf Referenz-Hardware; die Ergebnisdateien der Stufen 2 und 3 liegen außerhalb des Repos, weil sie aus Quellen, Skripten und Manifest reproduzierbar sind.
+- **Nicht getan:** Die vier Pilot-PRs ändern kein Rust und keinen Engine-Code (insbesondere nicht `crates/fnp_game/src/arena/present.rs` und nicht `crates/fnp_content/`; der Prototyp-Neubau in Spiel-PR #12 hat beides unabhängig davon angefasst); kein Blender und keine Grafikkarte in der CI; keine Messung auf Referenz-Hardware; die Ergebnisdateien der Stufen 2 und 3 liegen außerhalb des Repos, weil sie aus Quellen, Skripten und Manifest reproduzierbar sind.
 
 ## 1. Auftrag
 
@@ -18,7 +18,7 @@ Vier Stufen: **prüfen, vorbereiten, packen, in der Engine ansehen.** Eingaben s
 
 **Befunde an den Pilot-Eingaben:** Hi3D-Hexe als `player` 13 FAIL (2.000.000 Dreiecke, 1.035.319 Vertices gegen höchstens 1 Mio. Vertices und 3 Mio. Indizes je Teil, zwei JPEG 8192² mit 67,1 Mio. Pixeln über der Engine-Grenze, keine Normalen, kein Skin); geriggte Hexe 9 FAIL (100.000 Dreiecke, 299.984 Vertices, 31 Knochen, alle 12 erwarteten und 6 optionalen Clips, geschätzt 704 MiB GPU, Ruhepose gleich Bindepose mit 1e-6 Abweichung); Imp-Rig-Pilot als `enemy` 9 FAIL (70.000 Dreiecke, 43.303 Vertices, 26 Knochen, nur `idle` und `walk`); Hi3D-Imp 11 FAIL. Die eigenen Figuren der Runde 4 verletzen das vorgeschlagene Texturbudget (10 statt 4 Texturen), Dreiecke, Knochen, Höhe und Fußpunkt passen.
 
-**Zwei echte Widersprüche gefunden:** Das Imp-Rig legt die `.L`-Knochen auf die Seite −X eines Netzes, das nach +Z schaut — die Seitennamen sind gespiegelt, für ein statisches Bild belanglos, für jede Animationsübertragung nicht. Und die Blickrichtung ist offen: `budgets.json` und `facing_yaw` in `present.rs` erwarten +Z (glTF-Standard, so liefern alle Hi3D-Downloads), die Figuren der Runde 4 schauen gemessen nach −Z. Die Zehenregel für die Blickrichtung ist an zehn Netzen gemessen und jedes Mal mit einer Punktansicht von vorn und hinten bestätigt (Vorzeichen immer richtig, Betrag 2,2 bis 12 % der Höhe).
+**Zwei echte Widersprüche gefunden:** Das Imp-Rig legt die `.L`-Knochen auf die Seite −X eines Netzes, das nach +Z schaut — die Seitennamen sind gespiegelt, für ein statisches Bild belanglos, für jede Animationsübertragung nicht. Und die Blickrichtung ist offen: `budgets.json` und `facing_yaw` in `present.rs` erwarten +Z (glTF-Standard, so liefern alle Hi3D-Downloads), die Figuren der Runde 4 schauen gemessen nach −Z. Die Zehenregel für die Blickrichtung ist an zehn Netzen gemessen und jedes Mal mit einer Punktansicht von vorn und hinten bestätigt (Vorzeichen immer richtig, Betrag 2,2 bis 12 % der Höhe). **Entschieden und umgesetzt (2026-09-17) mit Spiel-PR #12 (`835117a`):** Die Konvention bleibt glTF +Z (glTF-Standard, alle Hi3D-Quellen); die Figuren-Packs der Runden 3 und 4 sind als `MinusZ` markiert und werden im Modellraum um eine halbe Drehung gedreht, bevor Blickrichtung und Treffer-Reaktion wirken. Vorher lief die Seele rückwärts und der Imp zeigte dem Spieler den Rücken; Nahaufnahmen auf dem Software-Adapter belegen beides vor und nach der Änderung, die Simulation blieb unberührt. Aus dem Piloten folgt daraus nur: **neue Importe liefern +Z und brauchen die Markierung nicht.**
 
 ### Stufe 2 — Vorbereiten (Spiel-PR #13, Merge-Commit `7a559f2`)
 
@@ -48,7 +48,7 @@ Die 94 Python-Tests der Asset-Werkzeuge liefen bisher nirgends außer auf dem En
 
 ### Stufe 4 — Engine-Bild und Massentest (offen)
 
-Noch nicht begonnen: die gepackten Figuren in der Engine rendern (gegen den echten Boden, Helligkeit der Hexe messen), eine Menge davon als Crowd-Test messen und daraus die Rollenbudgets bestätigen. Erst diese Stufe beantwortet die Fragen 3 (Helligkeit) und 1 (Budgets) aus §5 sowie die Blickrichtung aus Stufe 1.
+Noch nicht begonnen: die gepackten Figuren in der Engine rendern (gegen den echten Boden, Helligkeit der Hexe messen), eine Menge davon als Crowd-Test messen und daraus die Rollenbudgets bestätigen. Erst diese Stufe beantwortet die Fragen 1 (Budgets) und 7 (Helligkeit) aus §5; die Blickrichtung aus Stufe 1 ist inzwischen anderweitig entschieden. Der Prototyp läuft seit Spiel-PR #12 (`835117a`) wieder in der Hauptschleife der Engine und lädt Figuren über den Asset-Haken — das ist der Weg, auf dem Stufe 4 die Pilotfiguren ins Bild bringt, und die Kamera-Vorgabe C (45° / 11 m, Figur 248 px hoch bei 1080p) ist die Ansicht, in der der PO sie vergleichen will.
 
 ## 3. Gemessene Werte (Stufen 2 und 3)
 
@@ -81,7 +81,7 @@ Die PRDs nennen keine Zahlen je Rolle. `assets_src/asset_import/budgets.json` f�
 ## 5. Offene PO-Fragen (je mit Empfehlung)
 
 1. **Rollenbudgets** aus §4 als vorläufige Werte übernehmen. *Empfehlung:* ja, Bestätigung nach Stufe 4 und GPU-Messsitzung.
-2. **Blickrichtung +Z oder −Z.** *Empfehlung:* +Z (glTF-Standard, alle fremden Quellen, Annahme von `present.rs`); im Prototyp prüfen, ob die Figuren rückwärts laufen, und dann den Export der Runde 4 drehen.
+2. **Blickrichtung +Z oder −Z.** *Erledigt (2026-09-17)* mit Spiel-PR #12 (`835117a`): Die Konvention bleibt +Z; die Packs der Runden 3 und 4 sind als `MinusZ` markiert und werden zur Darstellung gedreht, statt ihren Export zu ändern. Neue Importe liefern +Z.
 3. **Zielhöhe der Hexe** — Hi3D normiert jede Figur auf 1,0 m. *Empfehlung:* 1,8 m wie die Verdammte Seele, damit Kapsel und Kamera unverändert passen; der Imp bleibt bei 1,0 m, der Fußpunkt beider kommt auf y = 0.
 4. **Gespiegelte Seitennamen im Imp-Rig.** *Empfehlung:* in der Vorbereitungsstufe `.L`/`.R` tauschen, nicht in den Quelldateien.
 5. **Fehlende Clip-Namen** als Warnung oder Fehler. *Empfehlung:* Warnung, bis das Animations-ADR entschieden ist.
