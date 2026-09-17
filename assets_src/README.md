@@ -7,6 +7,7 @@ die headless glTF gemäß Stilbibel erzeugen (PRD-0016 FR-09, ab P3).
 |---|---|
 | [`figures/`](figures/README.md) | Die drei geriggten Figuren (Imp, Verdammte Seele, Brute): Modell, Texturen, Backen, Export |
 | [`figure_pack/`](figure_pack/README.md) | Konverter von den Figuren-`.glb` in das Pack-Format der Engine |
+| [`asset_import/`](asset_import/README.md) | Budget-Prüfung für fremd erzeugte Figuren (Hi3D, geriggte Kopien) vor dem Konverter |
 | [`textures/`](textures/README.md) | Materialpaket der Look-Testszene; Grundtexturen, auf denen die Figuren aufbauen |
 | [`player_models/`](player_models/README.md) | Drei Entwürfe für Spielerfiguren mit Nahkampfwaffen |
 

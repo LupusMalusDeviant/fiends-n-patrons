@@ -1,0 +1,99 @@
+{
+  "format": 1,
+  "status": "Vorschlag; die Rollenbudgets sind eine offene PO-Frage (README, Abschnitt Budgets)",
+  "engine": {
+    "source": "grimoire v0.4.0: grimoire_render figure_format.rs (MAX_MESH_VERTICES, MAX_MESH_INDICES, MAX_TEXTURE_PIXELS), stage3d.rs (MAX_SKIN_JOINTS), mesh.rs (MeshVertex, 4 Einflüsse), grimoire_gpu context.rs (max_texture_dimension_2d des Software-Adapters)",
+    "max_primitive_vertices": 1000000,
+    "max_primitive_indices": 3000000,
+    "max_texture_pixels": 64000000,
+    "max_texture_dimension": 8192,
+    "max_skin_joints": 256
+  },
+  "pipeline": {
+    "source": "assets_src/figure_pack (Konverter) und die Figuren der Runde 4",
+    "accepted_image_types": ["image/png"],
+    "front_axis": "+Z",
+    "front_axis_note": "glTF-Standard und Annahme von fnp_game present.rs facing_yaw (Engine -Y); die Figuren der Runde 4 schauen gemessen nach -Z (README, Blickrichtung)",
+    "foot_level_tolerance_share": 0.02,
+    "center_tolerance_share": 0.15,
+    "rest_pose_tolerance": 0.001
+  },
+  "roles": {
+    "player": {
+      "source": "Vorschlag; Höhe nach der Verdammten Seele (spec.py 1,8 m), PRD-0005 FR-03 Kapsel in Modellgröße",
+      "height_m": [1.5, 2.1],
+      "max_triangles": 20000,
+      "max_vertices": 20000,
+      "max_primitives": 8,
+      "require_skin": true,
+      "max_joints": 64,
+      "max_textures": 4,
+      "max_texture_dimension": 2048,
+      "max_gpu_mib": 96,
+      "expect_normal_map": true,
+      "clips": {
+        "severity": "warn",
+        "source": "PRD-0005 FR-01 bis FR-12; Abspielen entscheidet ein eigenes ADR",
+        "required": ["idle", "run", "dash", "melee_1", "melee_2", "parry", "skill_cast", "ultimate", "bomb", "item_use", "hit_react", "death"],
+        "optional": ["walk", "melee_3", "rewind", "spawn", "interact", "victory"]
+      }
+    },
+    "enemy": {
+      "source": "Vorschlag; Höhen nach spec.py (Imp 1,0 m, Brute 2,4 m), Gegnerzahl laut PRD-0007 (100 aktive Gegner)",
+      "height_m": [0.5, 3.0],
+      "max_triangles": 12000,
+      "max_vertices": 12000,
+      "max_primitives": 8,
+      "require_skin": true,
+      "max_joints": 48,
+      "max_textures": 4,
+      "max_texture_dimension": 1024,
+      "max_gpu_mib": 24,
+      "expect_normal_map": true,
+      "clips": {
+        "severity": "warn",
+        "source": "PRD-0007 FR-11 (Telegraphie mit Aufladeanimation); Abspielen entscheidet ein eigenes ADR",
+        "required": ["idle", "walk", "attack", "hit_react", "death"],
+        "optional": ["run", "spawn", "attack_windup"]
+      }
+    },
+    "boss": {
+      "source": "Vorschlag; PRD-0008 (Intro, Phasen, Verwandlung)",
+      "height_m": [2.0, 10.0],
+      "max_triangles": 50000,
+      "max_vertices": 50000,
+      "max_primitives": 12,
+      "require_skin": true,
+      "max_joints": 128,
+      "max_textures": 6,
+      "max_texture_dimension": 2048,
+      "max_gpu_mib": 160,
+      "expect_normal_map": true,
+      "clips": {
+        "severity": "warn",
+        "source": "PRD-0008; Abspielen entscheidet ein eigenes ADR",
+        "required": ["idle", "walk", "attack", "hit_react", "death", "intro", "phase_transition"],
+        "optional": ["attack_windup", "spawn_adds"]
+      }
+    },
+    "prop": {
+      "source": "Vorschlag",
+      "height_m": [0.05, 8.0],
+      "max_triangles": 5000,
+      "max_vertices": 5000,
+      "max_primitives": 4,
+      "require_skin": false,
+      "max_joints": 16,
+      "max_textures": 3,
+      "max_texture_dimension": 1024,
+      "max_gpu_mib": 20,
+      "expect_normal_map": false,
+      "clips": {
+        "severity": "warn",
+        "source": "keine Clips erwartet",
+        "required": [],
+        "optional": []
+      }
+    }
+  }
+}
