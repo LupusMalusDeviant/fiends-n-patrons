@@ -1,0 +1,4 @@
+# The one engine tag the asset gate may skip (Plan 0002 WP9.3): it predates grimoire-ac, the
+# engine asset compiler (engine Plan 0002 WP9.2). Delete this file with the next engine pin; the
+# CI refuses to keep it once the pinned tag carries the compiler.
+v0.4.0

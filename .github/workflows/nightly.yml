@@ -86,6 +86,112 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # The asset gate on all three systems (Plan 0002 WP9.3). The CI runs it on Linux for every push;
+  # here it runs where a difference between operating systems would show up — path handling, file
+  # order, line endings. The compiler itself is the engine's own at the pinned tag, so identical
+  # units on three systems are the engine's promise (its own identity gate), not this job's; what
+  # this job proves is that the tooling around it behaves the same everywhere.
+  content:
+    name: asset compiler (${{ matrix.case.name }}, ${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        case:
+          - name: content/
+            directory: content
+            out: packs
+            expect: pass
+            codes: ""
+          - name: negative proof
+            directory: tests/fixtures/sigil-broken
+            out: packs/negative
+            expect: fail
+            codes: tests/fixtures/sigil-broken/expected-codes.txt
+    steps:
+      - uses: actions/checkout@v7
+      - name: Engine pin from Cargo.lock
+        id: pin
+        run: bash .github/scripts/engine-pin.sh | tee -a "$GITHUB_OUTPUT"
+      # Second checkout of the public engine repository (ADR-0013): no secret and no deploy key, only
+      # the automatic read-only workflow token, which is not persisted.
+      - name: Check out the engine at the pinned tag
+        uses: actions/checkout@v7
+        with:
+          repository: LupusMalusDeviant/grimoire
+          ref: ${{ steps.pin.outputs.tag }}
+          path: engine
+          persist-credentials: false
+      - name: The tag is the commit Cargo.lock pins
+        env:
+          EXPECTED: ${{ steps.pin.outputs.rev }}
+        run: |
+          set -euo pipefail
+          actual=$(git -C engine rev-parse HEAD)
+          echo "Tag ${{ steps.pin.outputs.tag }} -> $actual"
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "::error title=Engine-Tag verschoben::Tag ${{ steps.pin.outputs.tag }} zeigt auf $actual, Cargo.lock pinnt $EXPECTED."
+            exit 1
+          fi
+      # `grimoire-ac` is younger than the engine tag this game pins; until the pin reaches a tag that
+      # ships it, exactly the tag named in .github/asset-gate-bootstrap runs without the gate, loudly.
+      # That file becomes an error the moment a pinned tag carries the compiler, so the exemption
+      # cannot outlive its reason.
+      - name: Does the pinned tag carry the asset compiler?
+        id: tools
+        run: bash .github/scripts/asset-tools-ready.sh "${{ steps.pin.outputs.tag }}"
+      - uses: actions/cache@v6
+        if: steps.tools.outputs.ready == 'true'
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            engine/target
+          key: asset-tools-${{ runner.os }}-${{ steps.pin.outputs.tag }}-${{ hashFiles('Cargo.lock', 'engine/tools/global.json') }}
+          restore-keys: |
+            asset-tools-${{ runner.os }}-${{ steps.pin.outputs.tag }}-
+      - name: Install the engine's pinned toolchain (rust-toolchain.toml)
+        if: steps.tools.outputs.ready == 'true'
+        run: rustup toolchain install
+        working-directory: engine
+      - name: Build sigilc from the pinned tag
+        if: steps.tools.outputs.ready == 'true'
+        run: cargo build --release -p grimoire_sigilc --bin sigilc --locked
+        working-directory: engine
+      - uses: actions/setup-dotnet@v6
+        if: steps.tools.outputs.ready == 'true'
+        with:
+          global-json-file: engine/tools/global.json
+          cache: true
+          cache-dependency-path: engine/tools/**/packages.lock.json
+      - name: Build grimoire-ac from the pinned tag
+        if: steps.tools.outputs.ready == 'true'
+        working-directory: engine
+        run: |
+          set -euo pipefail
+          dotnet restore tools/src/Grimoire.AssetCompiler/Grimoire.AssetCompiler.csproj --locked-mode
+          dotnet build tools/src/Grimoire.AssetCompiler/Grimoire.AssetCompiler.csproj --no-restore --configuration Release
+      - name: Tool paths
+        if: steps.tools.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          suffix=""
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            suffix=".exe"
+          fi
+          {
+            echo "GRIMOIRE_SIGILC=$GITHUB_WORKSPACE/engine/target/release/sigilc$suffix"
+            echo "GRIMOIRE_AC=$GITHUB_WORKSPACE/engine/tools/src/Grimoire.AssetCompiler/bin/Release/net10.0/grimoire-ac$suffix"
+          } >>"$GITHUB_ENV"
+      - name: grimoire-ac build ${{ matrix.case.directory }}
+        if: steps.tools.outputs.ready == 'true'
+        run: bash .github/scripts/asset-gate.sh "${{ matrix.case.directory }}" "${{ matrix.case.out }}" "${{ matrix.case.expect }}" "${{ matrix.case.codes }}"
+
   build:
     name: release build (${{ matrix.platform }})
     needs: changes
