@@ -169,12 +169,14 @@ jobs:
         if: steps.tools.outputs.ready == 'true'
         run: cargo build --release -p grimoire_sigilc --bin sigilc --locked
         working-directory: engine
+      # No NuGet cache here on purpose: the asset compiler's project graph has no third-party
+      # package at all (only the tooling suite's test projects use one), so a restore downloads
+      # nothing, never creates the global packages folder, and the cache's post step would fail on
+      # the missing directory. What is worth caching — the engine build — the step above covers.
       - uses: actions/setup-dotnet@v6
         if: steps.tools.outputs.ready == 'true'
         with:
           global-json-file: engine/tools/global.json
-          cache: true
-          cache-dependency-path: engine/tools/**/packages.lock.json
       - name: Build grimoire-ac from the pinned tag
         if: steps.tools.outputs.ready == 'true'
         working-directory: engine

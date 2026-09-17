@@ -181,9 +181,10 @@ bricht den Lauf**; ein Pack wird nur geschrieben, wenn es vollständig zu seinen
 - **Voraussetzung am Pin.** Der gepinnte Engine-Tag muss den Asset-Compiler mitbringen; seit
   `v0.5.0` tut das jeder. Ein Pin auf einen älteren Tag ist ein Fehler mit klarer Meldung
   (`.github/scripts/asset-tools-ready.sh`), kein stillschweigend übersprungener Job.
-- **Laufzeit.** Der erste Lauf eines Engine-Tags baut `sigilc` und die Werkzeuge vollständig;
-  danach zieht der Cache. Richtwert bleibt R13: Standard-Push unter 15 Minuten pro Plattform. Die
-  Zeit des Übersetzens selbst steht als `grimoire-ac timings:` im Job-Protokoll.
+- **Laufzeit (R13).** Erster scharfer Lauf am Tag `v0.5.0` mit leerem Cache: 41 s für den ganzen
+  Job (Toolchain 7 s, `sigilc` 9 s, SDK 4 s, `grimoire-ac` 13 s), davon 53 ms fürs Übersetzen
+  selbst. Richtwert bleibt R13: Standard-Push unter 15 Minuten pro Plattform. Die Zeit des
+  Übersetzens steht als `grimoire-ac timings:` in jedem Job-Protokoll.
 
 Lokal dasselbe (die Werkzeuge einmal aus dem gepinnten Tag bauen, danach nur noch das letzte
 Kommando):
