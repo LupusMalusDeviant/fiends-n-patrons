@@ -13,7 +13,10 @@ use grimoire_sigilc::compiler::{LoadError, SourceLoader, compile};
 
 /// Canonical content paths (relative to `content/`) of every unit this crate embeds, with the
 /// file name each compiled unit gets in `OUT_DIR`.
-const UNITS: &[(&str, &str)] = &[("sigil/imp_volley.sigil", "imp_volley.unit")];
+const UNITS: &[(&str, &str)] = &[
+    ("sigil/imp_volley.sigil", "imp_volley.unit"),
+    ("sigil/imp_curtain.sigil", "imp_curtain.unit"),
+];
 
 /// Loads imported sources relative to the content root.
 struct ContentRoot(PathBuf);

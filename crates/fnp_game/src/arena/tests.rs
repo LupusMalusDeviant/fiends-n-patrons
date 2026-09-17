@@ -1,5 +1,5 @@
 use grimoire::collide::{Circle, CollisionQuery, Shape, overlaps};
-use grimoire::sigil::{AimTarget, BulletPool, Emitter};
+use grimoire::sigil::{AimTarget, BulletPool, Emitter, SigilContent, UnitId};
 
 use super::*;
 
@@ -30,6 +30,19 @@ fn round(sim: &Simulation) -> RoundState {
     *sim.world().resource::<RoundState>().expect("round state")
 }
 
+fn mode(sim: &Simulation) -> Mode {
+    sim.world()
+        .resource::<ArenaMode>()
+        .expect("arena mode")
+        .mode
+}
+
+fn toggle() -> TickInput {
+    let mut input = TickInput::default();
+    input.slots[0].buttons = 1 << CURTAIN_BUTTON;
+    input
+}
+
 fn bullets(sim: &Simulation) -> usize {
     sim.world()
         .resource::<BulletPool>()
@@ -37,12 +50,21 @@ fn bullets(sim: &Simulation) -> usize {
 }
 
 #[test]
-fn build_spawns_player_imp_two_emitters_and_the_interpreter() {
+fn build_spawns_player_imp_the_volley_emitters_and_the_interpreter() {
     let sim = built(1);
     let world = sim.world();
     assert_eq!(world.query::<&Player>().count(), 1);
     assert_eq!(world.query::<&Imp>().count(), 1);
-    assert_eq!(world.query::<&Emitter>().count(), 2);
+    let units = *world.resource::<ImpUnits>().expect("imp units");
+    let emitters: Vec<(UnitId, u16)> = world
+        .query::<&Emitter>()
+        .map(|emitter| (emitter.unit, emitter.emitter))
+        .collect();
+    assert_eq!(
+        emitters,
+        vec![(units.volley, 0), (units.volley, 1), (units.volley, 2)]
+    );
+    assert_eq!(mode(&sim), Mode::Volley);
     assert!(world.resource::<BulletPool>().is_some());
     assert!(world.resource::<SpatialGrid>().is_some());
     assert_eq!(round(&sim), RoundState::first());
@@ -104,20 +126,103 @@ fn the_aim_target_follows_the_player() {
 }
 
 #[test]
-fn the_imp_waits_for_the_telegraph_delay_then_fires_both_emitters() {
+fn the_imp_waits_for_the_telegraph_delay_then_fires_all_three_emitters() {
     let mut sim = built(4);
-    // The volley has `delay = 60t`: nothing is emitted before tick 60.
+    // `aimed` has `delay = 60t`: nothing is emitted before tick 60.
     for _ in 0..60 {
         sim.step(input(FULL, 0));
     }
     assert_eq!(bullets(&sim), 0);
     sim.step(input(FULL, 0));
-    assert_eq!(bullets(&sim), 5, "the aimed fan has five embers");
-    for _ in 0..30 {
+    assert_eq!(bullets(&sim), 5, "five aimed darts");
+    for _ in 61..85 {
         sim.step(input(FULL, 0));
     }
-    // The ring (`delay = 85t`) has fired its fourteen thorns too.
-    assert_eq!(bullets(&sim), 5 + 14);
+    assert_eq!(
+        bullets(&sim),
+        5 + 9,
+        "the fan (`delay = 84t`) adds nine orbs"
+    );
+    for _ in 85..151 {
+        sim.step(input(FULL, 0));
+    }
+    // Second darts at 108, second fan at 132, the ring of 24 grains at 150.
+    assert_eq!(bullets(&sim), 2 * 5 + 2 * 9 + 24);
+}
+
+#[test]
+fn a_press_toggles_the_curtain_once_and_clears_the_volley() {
+    let mut sim = built(8);
+    for _ in 0..120 {
+        sim.step(input(FULL, 0));
+    }
+    assert!(bullets(&sim) > 0);
+    // Held for three ticks: one toggle, not three.
+    for _ in 0..3 {
+        sim.step(toggle());
+    }
+    assert_eq!(mode(&sim), Mode::Curtain);
+    let units = *sim.world().resource::<ImpUnits>().expect("imp units");
+    let emitters: Vec<(UnitId, u64)> = sim
+        .world()
+        .query::<&Emitter>()
+        .map(|emitter| (emitter.unit, emitter.started_at))
+        .collect();
+    assert_eq!(emitters, vec![(units.curtain, 120), (units.curtain, 120)]);
+    // The clear request removed the volley's bullets; only curtain bullets are alive now.
+    let pool = sim.world().resource::<BulletPool>().expect("pool");
+    let content = sim.world().resource::<SigilContent>().expect("content");
+    let curtain_index = content
+        .library()
+        .unit_index(units.curtain)
+        .expect("curtain loaded");
+    assert!(
+        pool.iter()
+            .all(|bullet| bullet.unit_index() == curtain_index)
+    );
+
+    sim.step(TickInput::default());
+    sim.step(toggle());
+    assert_eq!(mode(&sim), Mode::Volley);
+    assert_eq!(sim.world().query::<&Emitter>().count(), 3);
+}
+
+#[test]
+fn the_curtain_holds_about_ten_thousand_bullets_and_the_soul_is_not_hit() {
+    let mut sim = built(9);
+    sim.step(toggle());
+    let mut peak = 0;
+    for _ in 0..900 {
+        sim.step(TickInput::default());
+        peak = peak.max(bullets(&sim));
+    }
+    let live = bullets(&sim);
+    assert!((9_000..=12_000).contains(&live), "{live} live bullets");
+    assert!(peak < BULLET_CAPACITY as usize, "peak {peak}");
+    let pool = sim.world().resource::<BulletPool>().expect("pool");
+    assert_eq!(pool.dropped_spawns(), 0);
+    let state = round(&sim);
+    assert_eq!(state.hits, 0, "invulnerable in curtain mode");
+    assert_eq!(state.phase, Phase::Fighting);
+    let _ = sim.state_hash();
+}
+
+#[test]
+fn toggling_during_a_lost_round_keeps_the_restart_tick() {
+    let mut sim = built(5);
+    let mut hit_at = None;
+    for _ in 0..600 {
+        sim.step(TickInput::default());
+        if let Phase::Hit { at_tick } = round(&sim).phase {
+            hit_at = Some(at_tick);
+            break;
+        }
+    }
+    let hit_at = hit_at.expect("an idle player is hit");
+    sim.step(toggle());
+    for emitter in sim.world().query::<&Emitter>() {
+        assert_eq!(emitter.started_at, hit_at + HIT_RECOVERY_TICKS);
+    }
 }
 
 #[test]

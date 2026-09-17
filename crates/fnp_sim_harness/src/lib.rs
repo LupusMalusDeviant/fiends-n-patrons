@@ -6,13 +6,13 @@
 //! **Status:** first playable prototype. [`run_arena`] runs the [`ArenaGame`] plugin through the
 //! facade's `App::run_headless` with any per-tick input, usually the scripted
 //! [`arena_bot_input`]; [`simulate_arena`] drives the same run on a bare [`Simulation`] so tests
-//! can inspect game state, and [`run_arena_with_executor`] repeats the bot run on a given
-//! executor. The integration tests in `tests/determinism.rs` prove determinism, freeze a golden
+//! can inspect game state, and [`run_arena_with_executor`] repeats a run on a given executor.
+//! [`curtain_bot_input`] is the same bot switching the imp to its curtain mode. The integration tests in `tests/determinism.rs` prove determinism, freeze a golden
 //! final hash and check every checkpoint with 1, 2 and N threads.
 
 use std::sync::Arc;
 
-use fnp_game::arena::ArenaGame;
+use fnp_game::arena::{ArenaGame, CURTAIN_BUTTON};
 use fnp_game::{GAME_TITLE, TICK_RATE_HZ};
 use grimoire::HeadlessReport;
 use grimoire::prelude::*;
@@ -55,16 +55,31 @@ pub fn run_arena(seed: u64, ticks: u64, input: &mut dyn FnMut(u64) -> TickInput)
     arena_app(seed).run_headless(ticks, input)
 }
 
-/// Runs [`run_arena`] with [`arena_bot_input`] and `executor` installed on the world.
+/// Tick on which [`curtain_bot_input`] presses the curtain button.
+pub const CURTAIN_PRESS_TICK: u64 = 30;
+
+/// [`arena_bot_input`] plus one press of the curtain button on [`CURTAIN_PRESS_TICK`]: the bot
+/// switches the imp to its curtain mode (about ten thousand bullets) and keeps moving in it.
+#[must_use]
+pub fn curtain_bot_input(tick: u64) -> TickInput {
+    let mut input = arena_bot_input(tick);
+    if tick == CURTAIN_PRESS_TICK {
+        input.slots[0].buttons |= 1 << CURTAIN_BUTTON;
+    }
+    input
+}
+
+/// Runs [`run_arena`] with `input` and `executor` installed on the world.
 #[must_use]
 pub fn run_arena_with_executor(
     seed: u64,
     ticks: u64,
     executor: Arc<dyn Executor>,
+    input: &mut dyn FnMut(u64) -> TickInput,
 ) -> HeadlessReport {
     arena_app(seed)
         .executor(executor)
-        .run_headless(ticks, &mut arena_bot_input)
+        .run_headless(ticks, input)
 }
 
 /// The headless arena app with `seed`.
@@ -114,5 +129,9 @@ mod tests {
         for tick in [0, 1, 359, 360, 509, 510, 599, 600, 10_000] {
             assert_eq!(arena_bot_input(tick), arena_bot_input(tick));
         }
+        let presses = (0..600)
+            .filter(|&tick| curtain_bot_input(tick).slots[0].is_pressed(CURTAIN_BUTTON))
+            .count();
+        assert_eq!(presses, 1, "the curtain bot presses once");
     }
 }

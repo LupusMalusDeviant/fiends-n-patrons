@@ -1,8 +1,8 @@
 //! Presentation of the arena: turns the simulated world into a [`StageFrame`].
 //!
 //! Everything here reads `&World` and writes only the frame; nothing flows back into the
-//! simulation. Registering meshes and textures needs the window renderer, so the executable
-//! registers them once ([`stage_mesh_data`], a figure pack) and hands the handles in as
+//! simulation. The executable's stage plugin registers the meshes and textures once through the
+//! engine's asset hook ([`stage_mesh_data`], a figure pack) and hands the handles in as
 //! [`ArenaVisuals`].
 //!
 //! **Bullets** go through the engine's path only: the facade adapter
@@ -25,8 +25,8 @@ use grimoire::render::{
 use grimoire::sigil::BulletPool;
 
 use super::{
-    ARENA_HALF, Facing, HIT_RECOVERY_TICKS, IMP_POSITION, Imp, PLAYER_HIT_HALF_WIDTH,
-    PLAYER_HIT_RADIUS, Phase, RoundState,
+    ARENA_HALF, ArenaMode, Facing, HIT_RECOVERY_TICKS, IMP_POSITION, Imp, Mode,
+    PLAYER_HIT_HALF_WIDTH, PLAYER_HIT_RADIUS, Phase, RoundState,
 };
 use crate::{Player, Position, PreviousPosition};
 
@@ -153,10 +153,37 @@ pub fn scale(s: [f32; 3]) -> Mat4 {
     ]
 }
 
-/// Yaw that turns a figure's authored front (towards -Y, the viewer) to face `direction`.
+/// Yaw that turns a figure whose front follows the game's convention to face `direction`.
+///
+/// Convention: a figure's front looks along glTF +Z, like the glTF standard and the Hi3D assets.
+/// The skeleton root's axis rotation (glTF Y-up to engine Z-up) turns glTF +Z into engine -Y,
+/// towards the viewer, so an unrotated figure faces the camera. A figure authored the other way
+/// round says so with [`AuthoredFront::MinusZ`] and is turned by half a turn first
+/// ([`AuthoredFront::correction`]).
 #[must_use]
 pub fn facing_yaw(direction: Vec2) -> f32 {
     dmath::atan2(direction.x, -direction.y)
+}
+
+/// Which way a figure's model looks in glTF space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthoredFront {
+    /// glTF +Z, the game's convention (glTF standard, Hi3D assets).
+    PlusZ,
+    /// glTF -Z: turned by half a turn so it follows the convention.
+    MinusZ,
+}
+
+impl AuthoredFront {
+    /// Model-space rotation that turns the figure's authored front into the convention's front;
+    /// applied before every other transform of the figure.
+    #[must_use]
+    pub fn correction(self) -> Mat4 {
+        match self {
+            AuthoredFront::PlusZ => IDENTITY,
+            AuthoredFront::MinusZ => rotation_z(dmath::PI),
+        }
+    }
 }
 
 /// Hamilton product of two `[x, y, z, w]` quaternions.
@@ -202,12 +229,15 @@ pub struct FigureVisual {
     pub ground_lift: f32,
     /// Height of the figure's bounds.
     pub height: f32,
+    /// Which way the model looks; see [`facing_yaw`] for the convention.
+    pub authored_front: AuthoredFront,
 }
 
 impl FigureVisual {
-    /// Prepares a figure loaded through `grimoire::adapters::figure_assets::load_figure`.
+    /// Prepares a figure loaded through `grimoire::adapters::figure_assets::load_figure_into`,
+    /// authored to look along `authored_front`.
     #[must_use]
-    pub fn from_loaded(figure: &LoadedFigure) -> Self {
+    pub fn from_loaded(figure: &LoadedFigure, authored_front: AuthoredFront) -> Self {
         let rest_pose = rest_pose_skin_matrices(&figure.skeleton);
         let hit_pose = crumpled_pose(&figure.skeleton, 0.35).unwrap_or_else(|| rest_pose.clone());
         Self {
@@ -216,6 +246,7 @@ impl FigureVisual {
             hit_pose,
             ground_lift: -figure.bounds_min[2],
             height: figure.bounds_max[2] - figure.bounds_min[2],
+            authored_front,
         }
     }
 
@@ -231,11 +262,12 @@ impl FigureVisual {
             hit_pose: vec![IDENTITY],
             ground_lift: 0.0,
             height: 1.8,
+            authored_front: AuthoredFront::PlusZ,
         }
     }
 }
 
-/// Procedural geometry of the arena, registered once by the executable.
+/// Procedural geometry of the arena, registered once through the engine's asset hook.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StageMeshData {
     /// Square floor of stone tiles.
@@ -323,17 +355,63 @@ impl ArenaVisuals {
     }
 }
 
-/// Camera of the prototype; the executable replaces `target` with its follow spring every frame.
+/// One of the camera settings the player can cycle through.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CameraPreset {
+    /// Short name shown in the window title.
+    pub name: &'static str,
+    /// Tilt against the ground in degrees (90 looks straight down).
+    pub tilt_degrees: f32,
+    /// Distance from the follow point along the view direction, in world units.
+    pub distance: f32,
+}
+
+/// Field of view of every camera preset.
+pub const CAMERA_FOV_Y_DEGREES: f32 = 42.0;
+
+/// The camera presets in cycling order; the first is the default.
+///
+/// A (60 degrees, 14.5 m) shows the most arena and the smallest figures, C (45 degrees, 11 m) the
+/// largest with less arena in view, B lies in between. Measured on the offscreen capture at 1080p,
+/// the soul with its hit ring is 128 px tall under A, 184 px under B and 248 px under C. The PO
+/// compares the character designs at game size with them (decision 2026-09-17).
+pub const CAMERA_PRESETS: [CameraPreset; 3] = [
+    CameraPreset {
+        name: "A",
+        tilt_degrees: 60.0,
+        distance: 14.5,
+    },
+    CameraPreset {
+        name: "B",
+        tilt_degrees: 52.0,
+        distance: 12.5,
+    },
+    CameraPreset {
+        name: "C",
+        tilt_degrees: 45.0,
+        distance: 11.0,
+    },
+];
+
+/// Camera of preset `index` (wrapping), aimed at the follow point of the player's start; the
+/// stage plugin moves `target` every frame with a follow spring.
 #[must_use]
-pub fn camera_template() -> Camera25D {
+pub fn camera_preset(index: usize) -> Camera25D {
+    let preset = CAMERA_PRESETS[index % CAMERA_PRESETS.len()];
     let mut camera = Camera25D::default();
     camera.target = camera_focus(crate::arena::PLAYER_START).to_array();
-    camera.tilt_degrees = 60.0;
-    camera.fov_y_degrees = 42.0;
-    camera.distance = 14.5;
+    camera.tilt_degrees = preset.tilt_degrees;
+    camera.fov_y_degrees = CAMERA_FOV_Y_DEGREES;
+    camera.distance = preset.distance;
     camera.look_ahead_max = 1.0;
     camera.look_ahead_smoothing = 0.3;
     camera
+}
+
+/// The default camera, preset A.
+#[must_use]
+pub fn camera_template() -> Camera25D {
+    camera_preset(0)
 }
 
 /// The camera's follow point for an interpolated player position: mostly the player, pulled
@@ -363,6 +441,8 @@ pub struct Hud {
     pub hit_pending: bool,
     /// Live bullets.
     pub bullets: u32,
+    /// Whether the imp plays its curtain mode.
+    pub curtain: bool,
 }
 
 /// Reads the [`Hud`] values from the world.
@@ -374,6 +454,9 @@ pub fn hud(world: &World) -> Hud {
         hits: round.map_or(0, |round| round.hits),
         hit_pending: round.is_some_and(|round| matches!(round.phase, Phase::Hit { .. })),
         bullets: world.resource::<BulletPool>().map_or(0, BulletPool::len),
+        curtain: world
+            .resource::<ArenaMode>()
+            .is_some_and(|mode| mode.mode == Mode::Curtain),
     }
 }
 
@@ -538,6 +621,9 @@ fn push_figure(
     } else {
         &figure.rest_pose
     };
+    // Innermost: bring the model's front onto the convention, so facing and knock-back apply to
+    // every figure alike.
+    let transform = mul(transform, figure.authored_front.correction());
     let Ok(joint_offset) = u32::try_from(frame.joint_matrices.len()) else {
         return;
     };
@@ -747,7 +833,7 @@ mod tests {
         // Walk away from the aimed fan so the round is still running.
         let mut input = TickInput::default();
         input.slots[0].axes[0] = i16::MAX;
-        for _ in 0..140 {
+        for _ in 0..170 {
             sim.step(input);
         }
         let visuals = ArenaVisuals::placeholder();
@@ -774,7 +860,7 @@ mod tests {
         assert!(stats.bullet_point_lights_drawn > 0);
         // Every mesh is arena, figure or marker: no bullet meshes.
         assert_eq!(frame.meshes.len(), 1 + 9 + 2 + 4 + 1 + 1 + 1 + 1);
-        // Both imp bullet types are on screen, each on its own table row.
+        // All three imp bullet types are on screen, each on its own table row.
         let mut rows: Vec<(u16, u16)> = frame
             .bullets
             .iter()
@@ -782,7 +868,11 @@ mod tests {
             .collect();
         rows.sort_unstable();
         rows.dedup();
-        assert_eq!(rows, vec![(0, 0), (1, 1)], "orb in magenta, rice in lime");
+        assert_eq!(
+            rows,
+            vec![(0, 1), (1, 0), (2, 0)],
+            "orb in lime, grain (rice) and dart (diamond) in magenta"
+        );
     }
 
     #[test]
@@ -840,6 +930,50 @@ mod tests {
             front[0][1] * authored_front[0] + front[1][1] * authored_front[1],
         ];
         assert!((turned[0] - 1.0).abs() < 1.0e-5 && turned[1].abs() < 1.0e-5);
+
+        // A figure authored along glTF -Z (engine +Y before any rotation) is corrected first and
+        // then faces +X as well.
+        let corrected = mul(rotation_z(yaw), AuthoredFront::MinusZ.correction());
+        let minus_z_front = [0.0, 1.0];
+        let turned = [
+            corrected[0][0] * minus_z_front[0] + corrected[1][0] * minus_z_front[1],
+            corrected[0][1] * minus_z_front[0] + corrected[1][1] * minus_z_front[1],
+        ];
+        assert!((turned[0] - 1.0).abs() < 1.0e-5 && turned[1].abs() < 1.0e-5);
+        assert_eq!(AuthoredFront::PlusZ.correction(), IDENTITY);
+    }
+
+    #[test]
+    fn mouse_aim_hits_the_same_ground_point_under_every_camera_preset() {
+        // Aim is sampled through the rendered camera (engine contract §9.4): the cursor over a
+        // ground point must give the direction from the player to that point, whichever preset
+        // draws the frame, even though the camera looks at the pulled follow point, not the player.
+        let viewport = [1920.0, 1080.0];
+        let player = Vec2::new(2.5, -3.0);
+        for offset in [
+            Vec2::new(3.0, 2.0),
+            Vec2::new(-4.0, 0.5),
+            Vec2::new(0.25, -1.5),
+        ] {
+            let expected = grimoire::quantize_aim(offset);
+            for index in 0..CAMERA_PRESETS.len() {
+                let mut camera = camera_preset(index);
+                camera.target = camera_focus(player).to_array();
+                let pixel = camera
+                    .ground_to_screen((player + offset).to_array(), viewport)
+                    .expect("the ground point is in front of the camera");
+                let aim = grimoire::sample_aim(&camera, pixel, viewport, player)
+                    .expect("the cursor lies on the ground");
+                for axis in 0..2 {
+                    assert!(
+                        (i32::from(aim[axis]) - i32::from(expected[axis])).abs() <= 2,
+                        "preset {index}, offset {offset:?}: {aim:?} vs {expected:?}"
+                    );
+                }
+            }
+        }
+        assert_eq!(camera_template(), camera_preset(0));
+        assert_eq!(camera_preset(3), camera_preset(0), "the index wraps");
     }
 
     #[test]

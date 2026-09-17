@@ -1,12 +1,16 @@
-//! Loading the arena's figures and procedural geometry into a [`WgpuRenderer`].
+//! Loading the arena's figures and procedural geometry through the facade's asset hook
+//! ([`RenderAssets`], contract §9.10).
 
 use std::fmt;
 use std::path::Path;
 
-use fnp_game::arena::present::{ArenaVisuals, FigureVisual, stage_mesh_data};
-use grimoire::adapters::figure_assets::{FigureLoadError, load_figure};
+use fnp_game::arena::present::{
+    ArenaVisuals, AuthoredFront, FigureVisual, StageMeshData, stage_mesh_data,
+};
+use grimoire::RenderAssets;
+use grimoire::adapters::figure_assets::{FigureLoadError, load_figure_into};
 use grimoire::platform::StdFileSystem;
-use grimoire::render::{MeshError, WgpuRenderer};
+use grimoire::render::{MeshError, MeshHandle};
 use grimoire_assets::{AssetError, AssetStore, PackReader};
 
 /// Name of the player figure inside the pack (`figures/soul/...`).
@@ -14,6 +18,13 @@ pub const SOUL_FIGURE: &str = "soul";
 
 /// Name of the enemy figure inside the pack (`figures/imp/...`).
 pub const IMP_FIGURE: &str = "imp";
+
+/// Which way the soul and the imp of the current figure packs (rounds 3 and 4) look: glTF -Z,
+/// against the game's convention of glTF +Z (like the glTF standard and the Hi3D assets). Measured
+/// on the rigs: the hands and toes sit at negative glTF Z, the imp's tail at positive Z, and the
+/// `.L` joints at negative X, which is the figure's left only when it looks along -Z. Assets that
+/// follow the convention use [`AuthoredFront::PlusZ`].
+pub const PACK_FIGURES_FRONT: AuthoredFront = AuthoredFront::MinusZ;
 
 /// Failure preparing the arena's visuals.
 #[derive(Debug)]
@@ -62,40 +73,53 @@ pub struct LoadSummary {
     pub imp_height: f32,
 }
 
-/// Opens the figure pack at `pack`, loads the soul and the imp and registers the stage geometry.
+/// Handles of the procedural stage geometry.
+struct StageHandles {
+    floor: MeshHandle,
+    pillar: MeshHandle,
+    block: MeshHandle,
+    marker_ring: MeshHandle,
+}
+
+fn register_stage(
+    assets: &mut dyn RenderAssets,
+    meshes: StageMeshData,
+) -> Result<StageHandles, VisualsError> {
+    let mut register = |data| assets.register_mesh(data).map_err(VisualsError::StageMesh);
+    Ok(StageHandles {
+        floor: register(meshes.floor)?,
+        pillar: register(meshes.pillar)?,
+        block: register(meshes.block)?,
+        marker_ring: register(meshes.marker_ring)?,
+    })
+}
+
+/// Opens the figure pack at `pack`, loads the soul and the imp and registers them and the stage
+/// geometry with `assets`.
 ///
 /// # Errors
 /// A [`VisualsError`] naming the step that failed.
 pub fn load_visuals(
-    renderer: &mut WgpuRenderer,
+    assets: &mut dyn RenderAssets,
     pack: &Path,
 ) -> Result<(ArenaVisuals, LoadSummary), VisualsError> {
     let reader = PackReader::open(&StdFileSystem, pack).map_err(VisualsError::OpenPack)?;
     let mut store = AssetStore::new(Box::new(reader));
-    let soul =
-        load_figure(&mut store, renderer, SOUL_FIGURE).map_err(|error| VisualsError::Figure {
+    let soul = load_figure_into(&mut store, assets, SOUL_FIGURE).map_err(|error| {
+        VisualsError::Figure {
             name: SOUL_FIGURE,
             error,
-        })?;
+        }
+    })?;
     let imp =
-        load_figure(&mut store, renderer, IMP_FIGURE).map_err(|error| VisualsError::Figure {
+        load_figure_into(&mut store, assets, IMP_FIGURE).map_err(|error| VisualsError::Figure {
             name: IMP_FIGURE,
             error,
         })?;
+    let stage = register_stage(assets, stage_mesh_data())?;
 
-    let meshes = stage_mesh_data();
-    let mut register = |data| {
-        renderer
-            .register_mesh(data)
-            .map_err(VisualsError::StageMesh)
-    };
-    let floor = register(meshes.floor)?;
-    let pillar = register(meshes.pillar)?;
-    let block = register(meshes.block)?;
-    let marker_ring = register(meshes.marker_ring)?;
-
-    let soul_visual = FigureVisual::from_loaded(&soul);
-    let imp_visual = FigureVisual::from_loaded(&imp);
+    let soul_visual = FigureVisual::from_loaded(&soul, PACK_FIGURES_FRONT);
+    let imp_visual = FigureVisual::from_loaded(&imp, PACK_FIGURES_FRONT);
     let summary = LoadSummary {
         soul_parts: soul.parts.len(),
         soul_joints: soul.skeleton.joints.len(),
@@ -107,11 +131,28 @@ pub fn load_visuals(
         ArenaVisuals {
             soul: soul_visual,
             imp: imp_visual,
-            floor,
-            pillar,
-            block,
-            marker_ring,
+            floor: stage.floor,
+            pillar: stage.pillar,
+            block: stage.block,
+            marker_ring: stage.marker_ring,
         },
         summary,
     ))
+}
+
+/// Registers only the stage geometry and stands both figures in as placeholders that reuse the
+/// block mesh: for runs without a figure pack (headless tests).
+///
+/// # Errors
+/// [`VisualsError::StageMesh`] if a stage mesh is rejected.
+pub fn placeholder_visuals(assets: &mut dyn RenderAssets) -> Result<ArenaVisuals, VisualsError> {
+    let stage = register_stage(assets, stage_mesh_data())?;
+    Ok(ArenaVisuals {
+        soul: FigureVisual::placeholder(stage.block),
+        imp: FigureVisual::placeholder(stage.block),
+        floor: stage.floor,
+        pillar: stage.pillar,
+        block: stage.block,
+        marker_ring: stage.marker_ring,
+    })
 }
