@@ -487,6 +487,7 @@ dependencies = [
 name = "fnp_sim_harness"
 version = "0.1.0"
 dependencies = [
+ "fnp_content",
  "fnp_game",
  "grimoire",
  "grimoire_exec",
