@@ -162,7 +162,7 @@ class ReduceTests(unittest.TestCase):
         image = np.zeros((2, 2, 4), dtype=np.uint8)
         image[0, :, :3] = 255
         image[:, 0, 3] = 255
-        self.assertEqual(textures.box_reduce(image, 2, srgb=True)[0, 0].tolist(), [188, 188, 188, 128])
+        self.assertEqual(textures.box_reduce(image, 2, srgb=True)[0, 0].tolist(), [187, 187, 187, 128])  # deliberately wrong: CI proof, reverted in the next commit
         self.assertEqual(textures.box_reduce(image, 2, srgb=False)[0, 0].tolist(), [128, 128, 128, 128])
 
     def test_matches_the_float_rule_of_the_engine(self) -> None:
