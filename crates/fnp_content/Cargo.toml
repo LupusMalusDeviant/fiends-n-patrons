@@ -8,8 +8,11 @@ authors.workspace = true
 repository.workspace = true
 license-file.workspace = true
 publish.workspace = true
+build = "build.rs"
 
+# The facade, for decoding the compiled Sigil units this crate embeds (`grimoire::sigil`).
 [dependencies]
+grimoire.workspace = true
 
 # Only used by the `figure_pack_builder` bin below (offline asset tooling, not the gameplay
 # library): reads the enemy figures' `index.json` and writes `figures.pack` with the engine's own
@@ -19,6 +22,13 @@ workspace = true
 
 [dependencies.serde_json]
 workspace = true
+
+# The build script compiles every Sigil source under `content/sigil/` into a binary unit with the
+# engine's compiler (a build step, never a runtime dependency: engine ADR-0008). The units are
+# embedded into this crate, so every build of the game carries exactly the compiled content of its
+# own commit.
+[build-dependencies]
+grimoire_sigilc.workspace = true
 
 # `soul`/`imp`/`brute` are enemy content (this crate's own "enemies" remit), and this is the tool
 # that turns their exported rig into the pack the engine loads at runtime -- picked over

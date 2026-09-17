@@ -16,21 +16,18 @@ fnp_content = { path = "crates/fnp_content" }
 fnp_game = { path = "crates/fnp_game" }
 # Engine pin (ADR-0009): a release tag of the public Grimoire repository, fetched anonymously over
 # HTTPS (ADR-0013). Cargo.lock records the tag commit; upgrades follow CONTRIBUTING.md, section
-# "Engine-Upgrade".
-grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.2.0" }
-# Thread-pool executor of the same engine tag (engine ADR-0006); keep the tag equal to `grimoire`.
-grimoire_exec = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.2.0" }
-# Pack container writer, used offline by figure_pack_builder only (the `grimoire` facade crate
-# does not re-export it, see that crate's Cargo.toml comment). NOT pinned to tag v0.1.1 like
-# `grimoire`/`grimoire_exec` above: at that tag, grimoire_assets is still the P0 placeholder
-# ("Status: placeholder -- implementation starts in phase P1", no PackWriter/PackReader/AssetId
-# at all) -- `PackWriter` only exists on the engine's `main` branch, not yet in any tag. This
-# `rev` pin is a deliberate, reported deviation from figuren-in-engine-spec.md's assumption that
-# grimoire_assets::PackWriter was already available through the existing engine pin (see the PR
-# description): it should be replaced by a proper tag bump (CONTRIBUTING.md "Engine-Upgrade") for
-# `grimoire`/`grimoire_exec`/`grimoire_assets` together once a release tag covers this code, so
-# the whole workspace is back on one commit of the engine.
-grimoire_assets = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.2.0" }
+# "Engine-Upgrade". Every engine crate below uses the same tag.
+grimoire = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.3.0" }
+# Thread-pool executor (engine ADR-0006).
+grimoire_exec = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.3.0" }
+# Pack container reader/writer: the `grimoire` facade does not re-export it. Used offline by
+# figure_pack_builder (PackWriter) and at startup by fnp_app to open a figure pack (PackReader,
+# AssetStore).
+grimoire_assets = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.3.0" }
+# Sigil compiler, a build dependency only: fnp_content's build script compiles the `.sigil` sources
+# under content/ into binary units until the asset compiler exists (plan 0002 WP4.3, PO decision
+# 2026-09-17). No runtime crate depends on it (engine ADR-0008).
+grimoire_sigilc = { git = "https://github.com/LupusMalusDeviant/grimoire", tag = "v0.3.0" }
 # JSON parsing for figure_pack_builder's `index.json` input (an offline dev tool, not runtime
 # engine/game code, so the workspace's determinism/no-std-alloc conventions do not apply to it).
 serde_json = "1.0"

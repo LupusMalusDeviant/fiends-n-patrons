@@ -9,13 +9,20 @@ repository.workspace = true
 license-file.workspace = true
 publish.workspace = true
 
+# The library holds the command line, the figure-pack loading and the main loop, so integration
+# tests (the offscreen capture) drive exactly the code the executable runs.
+[lib]
+path = "src/lib.rs"
+
 [[bin]]
 name = "fiends-n-patrons"
 path = "src/main.rs"
 
+# grimoire_assets opens the figure pack (PackReader, AssetStore); the facade does not re-export it.
 [dependencies]
 fnp_game.workspace = true
 grimoire.workspace = true
+grimoire_assets.workspace = true
 
 [lints]
 workspace = true

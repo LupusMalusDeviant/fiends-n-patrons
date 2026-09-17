@@ -2,10 +2,12 @@
 //!
 //! Game states and run logic of Fiends n Patrons, built on the Grimoire facade.
 //!
-//! **Status:** P0 demo "Beschwoerungskreis". [`FiendsGame`] proves the engine integration, not
-//! gameplay: a player dot with light momentum, steered by input axes 0 and 1, and a ritual swarm
-//! orbiting a summoning circle that slowly drifts towards the player. Holding button 0 channels
-//! the ritual and speeds up the swarm.
+//! **Status:** first playable prototype. [`arena::ArenaGame`] is the prototype the executable
+//! runs: the player soul in a lit arena, one imp firing a Sigil pattern, hits and round restarts
+//! ([`arena`]). [`FiendsGame`] is the P0 demo "Beschwoerungskreis" and stays unchanged, because the
+//! determinism gate's golden master is frozen on it: a player dot with light momentum, steered by
+//! input axes 0 and 1, and a ritual swarm orbiting a summoning circle that slowly drifts towards
+//! the player. Holding button 0 channels the ritual and speeds up the swarm.
 //!
 //! ## Determinism
 //!
@@ -14,6 +16,8 @@
 //! through `derive_rng`, and use `dmath` instead of the platform float functions (engine contract
 //! section 3, enforced by this crate's `clippy.toml`). Everything outside [`GamePlugin::build`] is
 //! presentation and never feeds back into the simulation.
+
+pub mod arena;
 
 use std::sync::Arc;
 

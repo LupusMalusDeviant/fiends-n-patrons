@@ -2,6 +2,7 @@
 
 use std::ffi::OsString;
 use std::fmt;
+use std::path::{Path, PathBuf};
 
 /// Seed used when `--seed` is not given; runs without a seed stay reproducible.
 pub const DEFAULT_SEED: u64 = 0;
@@ -9,24 +10,35 @@ pub const DEFAULT_SEED: u64 = 0;
 /// Environment variable that ends the run after the given number of frames.
 pub const MAX_FRAMES_VAR: &str = "GRIMOIRE_EXAMPLE_MAX_FRAMES";
 
+/// Environment variable naming the figure pack when `--pack` is not given.
+pub const PACK_VAR: &str = "FNP_FIGURE_PACK";
+
 /// Usage text printed by `--help` and after argument errors.
 pub const USAGE: &str = "\
-Usage: fiends-n-patrons [--seed <u64>]
+Usage: fiends-n-patrons --pack <figures.pack> [--seed <u64>]
 
 Options:
-  --seed <u64>  Simulation seed (default 0)
-  -h, --help    Print this help
+  --pack <path>  Figure pack with the figures `soul` and `imp` (or set FNP_FIGURE_PACK)
+  --seed <u64>   Simulation seed (default 0)
+  -h, --help     Print this help
+
+Controls:
+  WASD or arrow keys  Move the soul
+  Escape              Quit
 
 Environment:
+  FNP_FIGURE_PACK=<path>             Figure pack, used when --pack is not given
   GRIMOIRE_EXAMPLE_MAX_FRAMES=<u64>  End the run after this many frames";
 
 /// What the command line asks for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     /// Start the game.
     Run {
         /// Simulation seed.
         seed: u64,
+        /// Figure pack given with `--pack`, if any.
+        pack: Option<PathBuf>,
     },
     /// Print the usage text and exit successfully.
     Help,
@@ -41,10 +53,18 @@ pub enum ConfigError {
     InvalidSeed(String),
     /// `--seed` was given more than once.
     DuplicateSeed,
+    /// `--pack` was the last argument or had an empty value.
+    MissingPackValue,
+    /// `--pack` was given more than once.
+    DuplicatePack,
     /// An argument the executable does not know.
     UnknownArgument(String),
     /// The frame limit variable is set but not an unsigned 64-bit integer.
     InvalidMaxFrames(String),
+    /// Neither `--pack` nor [`PACK_VAR`] names a figure pack.
+    NoPack,
+    /// The figure pack path does not name a file.
+    PackNotFound(PathBuf),
 }
 
 impl fmt::Display for ConfigError {
@@ -57,10 +77,22 @@ impl fmt::Display for ConfigError {
                 u64::MAX
             ),
             Self::DuplicateSeed => write!(f, "--seed was given more than once"),
+            Self::MissingPackValue => write!(f, "--pack needs the path of a figure pack"),
+            Self::DuplicatePack => write!(f, "--pack was given more than once"),
             Self::UnknownArgument(argument) => write!(f, "unknown argument {argument:?}"),
             Self::InvalidMaxFrames(value) => write!(
                 f,
                 "invalid {MAX_FRAMES_VAR} {value:?}: expected an unsigned 64-bit integer"
+            ),
+            Self::NoPack => write!(
+                f,
+                "no figure pack given: the game needs a figure pack with the figures `soul` and \
+                 `imp`. Pass --pack <path to the .pack file> or set {PACK_VAR}=<path>"
+            ),
+            Self::PackNotFound(path) => write!(
+                f,
+                "figure pack {} does not exist or is not a file",
+                path.display()
             ),
         }
     }
@@ -74,6 +106,7 @@ impl std::error::Error for ConfigError {}
 /// A [`ConfigError`] describing the first invalid argument.
 pub fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<Command, ConfigError> {
     let mut seed = None;
+    let mut pack = None;
     let mut args = args.into_iter();
     while let Some(argument) = args.next() {
         let Some(text) = argument.to_str() else {
@@ -81,22 +114,50 @@ pub fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<Command, C
                 argument.to_string_lossy().into_owned(),
             ));
         };
-        let value = match text {
+        match text {
             "-h" | "--help" => return Ok(Command::Help),
-            "--seed" => args.next().ok_or(ConfigError::MissingSeedValue)?,
-            _ => match text.strip_prefix("--seed=") {
-                Some(value) => OsString::from(value),
-                None => return Err(ConfigError::UnknownArgument(text.to_owned())),
-            },
-        };
-        if seed.is_some() {
-            return Err(ConfigError::DuplicateSeed);
+            "--seed" => {
+                let value = args.next().ok_or(ConfigError::MissingSeedValue)?;
+                set_seed(&mut seed, &value)?;
+            }
+            "--pack" => {
+                let value = args.next().ok_or(ConfigError::MissingPackValue)?;
+                set_pack(&mut pack, value)?;
+            }
+            _ => {
+                if let Some(value) = text.strip_prefix("--seed=") {
+                    set_seed(&mut seed, &OsString::from(value))?;
+                } else if let Some(value) = text.strip_prefix("--pack=") {
+                    set_pack(&mut pack, OsString::from(value))?;
+                } else {
+                    return Err(ConfigError::UnknownArgument(text.to_owned()));
+                }
+            }
         }
-        seed = Some(parse_seed(&value)?);
     }
     Ok(Command::Run {
         seed: seed.unwrap_or(DEFAULT_SEED),
+        pack,
     })
+}
+
+fn set_seed(seed: &mut Option<u64>, value: &OsString) -> Result<(), ConfigError> {
+    if seed.is_some() {
+        return Err(ConfigError::DuplicateSeed);
+    }
+    *seed = Some(parse_seed(value)?);
+    Ok(())
+}
+
+fn set_pack(pack: &mut Option<PathBuf>, value: OsString) -> Result<(), ConfigError> {
+    if pack.is_some() {
+        return Err(ConfigError::DuplicatePack);
+    }
+    if value.is_empty() {
+        return Err(ConfigError::MissingPackValue);
+    }
+    *pack = Some(PathBuf::from(value));
+    Ok(())
 }
 
 fn parse_seed(value: &OsString) -> Result<u64, ConfigError> {
@@ -104,6 +165,35 @@ fn parse_seed(value: &OsString) -> Result<u64, ConfigError> {
         .to_str()
         .and_then(|text| text.parse().ok())
         .ok_or_else(|| ConfigError::InvalidSeed(value.to_string_lossy().into_owned()))
+}
+
+/// The figure pack to load: `--pack` wins over [`PACK_VAR`]; an empty variable counts as unset.
+///
+/// # Errors
+/// [`ConfigError::NoPack`] if neither names a pack.
+pub fn resolve_pack(
+    argument: Option<PathBuf>,
+    environment: Option<OsString>,
+) -> Result<PathBuf, ConfigError> {
+    argument
+        .or_else(|| {
+            environment
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
+        })
+        .ok_or(ConfigError::NoPack)
+}
+
+/// Checks that `path` names an existing file, so a typo fails before a window opens.
+///
+/// # Errors
+/// [`ConfigError::PackNotFound`] otherwise.
+pub fn check_pack_exists(path: &Path) -> Result<(), ConfigError> {
+    if path.is_file() {
+        Ok(())
+    } else {
+        Err(ConfigError::PackNotFound(path.to_path_buf()))
+    }
 }
 
 /// Interprets the value of [`MAX_FRAMES_VAR`]; `None` when the variable is not set.
@@ -129,23 +219,52 @@ mod tests {
         list.iter().map(OsString::from).collect()
     }
 
+    fn run(seed: u64, pack: Option<&str>) -> Result<Command, ConfigError> {
+        Ok(Command::Run {
+            seed,
+            pack: pack.map(PathBuf::from),
+        })
+    }
+
     #[test]
-    fn no_arguments_use_the_default_seed() {
-        assert_eq!(
-            parse_args(args(&[])),
-            Ok(Command::Run { seed: DEFAULT_SEED })
-        );
+    fn no_arguments_use_the_default_seed_and_no_pack() {
+        assert_eq!(parse_args(args(&[])), run(DEFAULT_SEED, None));
     }
 
     #[test]
     fn seed_is_accepted_as_separate_or_joined_value() {
-        assert_eq!(
-            parse_args(args(&["--seed", "42"])),
-            Ok(Command::Run { seed: 42 })
-        );
+        assert_eq!(parse_args(args(&["--seed", "42"])), run(42, None));
         assert_eq!(
             parse_args(args(&["--seed=18446744073709551615"])),
-            Ok(Command::Run { seed: u64::MAX })
+            run(u64::MAX, None)
+        );
+    }
+
+    #[test]
+    fn pack_is_accepted_as_separate_or_joined_value_next_to_the_seed() {
+        assert_eq!(
+            parse_args(args(&["--pack", "figures.pack", "--seed", "7"])),
+            run(7, Some("figures.pack"))
+        );
+        assert_eq!(
+            parse_args(args(&["--seed=3", "--pack=packs/figures r4.pack"])),
+            run(3, Some("packs/figures r4.pack"))
+        );
+    }
+
+    #[test]
+    fn invalid_pack_arguments_are_rejected() {
+        assert_eq!(
+            parse_args(args(&["--pack"])),
+            Err(ConfigError::MissingPackValue)
+        );
+        assert_eq!(
+            parse_args(args(&["--pack="])),
+            Err(ConfigError::MissingPackValue)
+        );
+        assert_eq!(
+            parse_args(args(&["--pack", "a", "--pack=b"])),
+            Err(ConfigError::DuplicatePack)
         );
     }
 
@@ -179,6 +298,34 @@ mod tests {
     }
 
     #[test]
+    fn the_pack_argument_wins_over_the_environment() {
+        assert_eq!(
+            resolve_pack(
+                Some(PathBuf::from("a.pack")),
+                Some(OsString::from("b.pack"))
+            ),
+            Ok(PathBuf::from("a.pack"))
+        );
+        assert_eq!(
+            resolve_pack(None, Some(OsString::from("b.pack"))),
+            Ok(PathBuf::from("b.pack"))
+        );
+        assert_eq!(
+            resolve_pack(None, Some(OsString::new())),
+            Err(ConfigError::NoPack)
+        );
+        assert_eq!(resolve_pack(None, None), Err(ConfigError::NoPack));
+    }
+
+    #[test]
+    fn a_missing_pack_file_is_reported_with_its_path() {
+        let path = Path::new("this/pack/does/not/exist.pack");
+        let error = check_pack_exists(path).expect_err("no such file");
+        assert_eq!(error, ConfigError::PackNotFound(path.to_path_buf()));
+        assert!(error.to_string().contains("exist.pack"));
+    }
+
+    #[test]
     fn max_frames_is_optional_and_validated() {
         assert_eq!(parse_max_frames(None), Ok(None));
         assert_eq!(parse_max_frames(Some(OsString::from("120"))), Ok(Some(120)));
@@ -198,5 +345,7 @@ mod tests {
                 .to_string()
                 .contains(MAX_FRAMES_VAR)
         );
+        let no_pack = ConfigError::NoPack.to_string();
+        assert!(no_pack.contains("--pack") && no_pack.contains(PACK_VAR));
     }
 }

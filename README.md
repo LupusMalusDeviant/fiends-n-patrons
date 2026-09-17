@@ -6,10 +6,12 @@ auf Kosten des Zorns der übrigen vier.
 
 Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Release-Tags).
 
-> Status: **Phase P0 — Fundament**. Das Spiel pinnt Grimoire `v0.1.1` über einen Git-Tag
-> ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Die P0-Demo „Beschwörungskreis“ belegt die
-> Engine-Anbindung (Fenster, Eingabe, Fixed-Timestep-Simulation, interpolierte Sprites), noch kein
-> Gameplay. Ein Determinismus-Test friert den Endhash für Seed 42 über 3.600 Ticks ein.
+> Status: **erster spielbarer Prototyp**. Die Seele läuft durch eine beleuchtete Arena, ein Imp
+> feuert ein Sigil-Pattern, ein Treffer beendet die Runde, nach 1,5 s beginnt sie neu. Das Spiel pinnt
+> Grimoire `v0.3.0` über einen Git-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Ein
+> Determinismus-Test friert den Endhash der Arena für Seed 42 über 3.600 Ticks ein. Die P0-Demo
+> „Beschwörungskreis“ (`FiendsGame`) mit ihrem eigenen Endhash besteht noch; sie entfällt in einem
+> eigenen Schritt (PO-Entscheid 2026-09-17).
 
 ## Einstieg
 
@@ -22,8 +24,8 @@ Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Rel
 
 | Pfad | Inhalt |
 |------|--------|
-| `crates/fnp_app` | Ausführbares Spiel `fiends-n-patrons`: startet Grimoire mit dem Spiel-Plugin |
-| `crates/fnp_game` | Spielzustände und Run-Logik; in P0 das Plugin `FiendsGame` (Demo „Beschwörungskreis“) |
+| `crates/fnp_app` | Ausführbares Spiel `fiends-n-patrons`: Kommandozeile, Laden des Figuren-Packs, Hauptschleife |
+| `crates/fnp_game` | Spielzustände und Run-Logik: Prototyp-Arena (`arena`), P0-Demo `FiendsGame` |
 | `crates/fnp_content` | Gameplay-Plugins: Waffen, Patrone, Items, Gegner |
 | `crates/fnp_sim_harness` | Headless-Bot-Läufe, Determinismus- und Balancing-Simulationen |
 | `content/` | Quell-Content (Sigil-Patterns, Wellen, Texte, Audio-Rezepte) |
@@ -37,25 +39,37 @@ GitHub-Repo. Cargo holt sie ohne Zugangsdaten am gepinnten Tag, ein frischer Klo
 ```bash
 cargo build --workspace --locked
 cargo test --workspace --locked
-cargo run --release -p fnp_app -- --seed 42
+cargo run --release -p fnp_app -- --pack <Pfad zu figures.pack> --seed 42
 ```
 
-Die Toolchain ist über `rust-toolchain.toml` gepinnt (1.98.1). Im Spiel:
+Das Spiel braucht ein Figuren-Pack mit den Figuren `soul` und `imp` (erzeugt von
+`assets_src/figure_pack/`, nicht versioniert). Ohne `--pack` und ohne `FNP_FIGURE_PACK` endet es mit
+einer Fehlermeldung und Exit-Code 2. Die Toolchain ist über `rust-toolchain.toml` gepinnt (1.98.1).
+Im Spiel:
 
 | Eingabe | Wirkung |
 |---------|---------|
-| `WASD` oder Pfeiltasten | Spieler bewegen (mit leichtem Nachgleiten) |
-| `Leertaste` halten | Ritual kanalisieren: der Schwarm kreist schneller |
+| `WASD` oder Pfeiltasten | Seele bewegen (mit leichtem Nachgleiten) |
 | `Escape` | Beenden |
+
+Gamepads liest die Plattformschicht der Engine noch nicht; der linke Stick folgt, sobald sie es tut.
 
 | Argument oder Umgebungsvariable | Wirkung |
 |---------------------------------|---------|
+| `--pack <Pfad>` oder `FNP_FIGURE_PACK=<Pfad>` | Figuren-Pack (Pflicht); das Argument gewinnt |
 | `--seed <u64>` | Seed der Simulation (Standard 0); ungültige Werte beenden mit Fehlermeldung und Exit-Code 2 |
 | `GRIMOIRE_EXAMPLE_MAX_FRAMES=<n>` | Lauf nach `n` Frames beenden |
+| `GRIMOIRE_GPU_ADAPTER=software` | Software-Adapter der Plattform statt der Grafikkarte |
 | `GRIMOIRE_WINDOW_MONITOR=secondary`, `GRIMOIRE_WINDOW_FOCUS=0` | Fenster auf dem Zweitmonitor und ohne Fokus öffnen (Konvention für Läufe auf dem Entwicklungsrechner) |
 
-Ohne Fenster läuft dieselbe Simulation über `fnp_sim_harness::run_seed(seed, ticks)`; die
-Determinismus-Tests liegen in `crates/fnp_sim_harness/tests/determinism.rs`.
+Bullets laufen über den Weg der Engine: Der Adapter `grimoire::adapters::sigil_render` füllt den
+Bullet-Kanal, der Bullet-Pass zeichnet sie als Billboards auf Ebene 6 und leitet die Geschoss-Lichter
+selbst ab. Vorläufig im Prototyp: Die Figuren haben keine Animation, nur Ruhe- und Treffer-Pose.
+
+Ohne Fenster läuft dieselbe Simulation über `fnp_sim_harness::run_arena(seed, ticks, input)`
+(Prototyp) bzw. `fnp_sim_harness::run_seed(seed, ticks)` (P0-Demo); die Determinismus-Tests liegen in
+`crates/fnp_sim_harness/tests/`. Eine Bildfolge eines geskripteten Laufs rendert
+`crates/fnp_app/tests/offscreen_capture.rs` ohne Fenster (Aufruf im Dateikopf).
 
 ## Lizenz
 

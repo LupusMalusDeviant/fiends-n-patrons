@@ -1,0 +1,60 @@
+sigil 1
+// imp_volley: the attack of the imp in the first playable prototype (PRD-0007 role "Schuetze":
+// stationary, aimed patterns). An aimed fan the player sidesteps, and a slowly winding ring of
+// thorns in between that forces the player to find a gap.
+// Distances in world units (1u = 1 m), times in ticks at 60 Hz.
+// Silhouette and palette names follow the engine's bullet pass tables: the compiler numbers them
+// per unit in alphabetical order and the render adapter maps by identity (docs/formats/sigil.md,
+// section 11, open point 5), so orb 0 and rice 1, hex_magenta 0 and poison_lime 1 land on the
+// table rows of the same name. fnp_content's tests check the alignment.
+
+meta {
+  name = "Imp Volley"
+  difficulty = [easy, opener]
+  density = 140 // estimated bullets on screen at peak
+}
+
+// Ember: round orb in hex magenta (style bible palette H0), aimed at the player.
+bullet ember {
+  silhouette = orb
+  palette = enemy.hex_magenta
+  glow = 0.8
+  radius = 0.22u
+  damage = 1
+  flags = [grazeable]
+}
+
+// Thorn: elongated rice shape in poison lime (style bible palette H1), fired as a ring.
+bullet thorn {
+  silhouette = rice
+  palette = enemy.poison_lime
+  glow = 0.6
+  radius = 0.16u
+  damage = 1
+  flags = [grazeable, smashable]
+}
+
+emitter volley {
+  bullet = ember
+  delay = 60t // one second of calm after a round starts
+  repeat = forever
+  interval = 50t
+  speed = 0.09u/t
+  block aimed {
+    count = 5
+    spread = 36deg // total spread of the fan around the aim line
+  }
+}
+
+emitter ring {
+  bullet = thorn
+  delay = 85t
+  repeat = forever
+  interval = 100t
+  speed = 0.06u/t
+  block spiral {
+    arms = 14
+    step = 9deg // the ring winds a little further every volley
+    start = 0deg
+  }
+}
