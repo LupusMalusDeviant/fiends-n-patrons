@@ -12,6 +12,9 @@
 #   * the moment a pinned tag does carry the compiler, the file itself becomes an error and has to
 #     go, which turns the gate on for good.
 #
+# That is what happened with the pin to v0.5.0: the file is gone and every tag from here on carries
+# the compiler, so this script now only guards against a pin that reaches back behind it.
+#
 # Usage: asset-tools-ready.sh <pinned tag> [engine directory]
 set -euo pipefail
 

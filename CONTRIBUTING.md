@@ -178,12 +178,9 @@ bricht den Lauf**; ein Pack wird nur geschrieben, wenn es vollständig zu seinen
 - **Cache.** Schlüssel ist der Engine-Tag plus der Hash von `Cargo.lock` und
   `engine/tools/global.json` — also genau die Angaben, die entscheiden, was gebaut wird. Der
   NuGet-Cache hängt an den Lock-Dateien der Werkzeug-Suite.
-- **Noch nicht scharf.** `grimoire-ac` ist jünger als der aktuell gepinnte Engine-Tag `v0.4.0`. Bis
-  der Pin einen Tag erreicht, der den Asset-Compiler mitbringt, läuft genau dieser eine Tag ohne
-  Gate — sichtbar als Warnung und im Job-Summary, nie stillschweigend. Erlaubt ist das nur für den
-  Tag, der in `.github/asset-gate-bootstrap` steht; jeder andere Pin ohne Compiler ist ein Fehler,
-  und sobald ein gepinnter Tag den Compiler mitbringt, macht diese Datei die CI rot, bis sie
-  gelöscht ist. Die Ausnahme kann also nicht liegenbleiben.
+- **Voraussetzung am Pin.** Der gepinnte Engine-Tag muss den Asset-Compiler mitbringen; seit
+  `v0.5.0` tut das jeder. Ein Pin auf einen älteren Tag ist ein Fehler mit klarer Meldung
+  (`.github/scripts/asset-tools-ready.sh`), kein stillschweigend übersprungener Job.
 - **Laufzeit.** Der erste Lauf eines Engine-Tags baut `sigilc` und die Werkzeuge vollständig;
   danach zieht der Cache. Richtwert bleibt R13: Standard-Push unter 15 Minuten pro Plattform. Die
   Zeit des Übersetzens selbst steht als `grimoire-ac timings:` im Job-Protokoll.
@@ -341,9 +338,8 @@ Stolperfallen:
    winit usw.) denen der Engine-CI entsprechen. Beim Upgrade die Versionen gegen
    `git show vX.Y.Z:Cargo.lock` im Engine-Repo vergleichen und Abweichungen mit
    `cargo update -p <crate> --precise <version>` angleichen.
-4. Bringt der neue Tag den Asset-Compiler mit (Engine ab WP9.2), `.github/asset-gate-bootstrap`
-   löschen: Die CI besteht darauf und ist sonst rot. Ab da übersetzt das Gate `content/` bei jedem
-   Push.
+4. Der Zieltag muss den Asset-Compiler mitbringen (Engine ab `v0.5.0`), sonst bleibt das Asset-Gate
+   rot; die Meldung nennt den Grund.
 5. Determinismus-Lints abgleichen (siehe „Determinismus-Lints“): Die `clippy.toml` der Fassade im
    Ziel-Tag muss mit jeder Kopie im Spiel übereinstimmen.
    ```bash
