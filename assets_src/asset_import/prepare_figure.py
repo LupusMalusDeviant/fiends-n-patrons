@@ -6,8 +6,9 @@
         [--swap-sides] [--blender <blender executable>] [--texture-variants 512,2048]
 
 1. **Textures** (this process, numpy and Pillow): base colour and metallic-roughness of the rigged
-   file's material are decoded and reduced by an exact box filter to `--texture-size`; base colour
-   is averaged in linear light, like the engine's own mip chain. Written as PNG.
+   file's material are decoded and reduced to `--texture-size` with the figure pack's exact box
+   filter (`../figure_pack/textures.py`: base colour in linear light like the engine's mip chain,
+   integer arithmetic). Written as PNG.
 2. **Geometry, normal map and export** (`blender_prepare.py` in a headless Blender process).
 3. **Gate:** the stage-1 check (`check_asset.py`) runs on the exported figure with `--role`; a
    failing check fails this script.
@@ -37,6 +38,7 @@ sys.path.insert(0, str(HERE.parent / "figures"))
 
 import check_asset  # noqa: E402
 import palette  # noqa: E402
+import textures  # noqa: E402
 from glb_facts import GlbError, load_glb, measure_glb  # noqa: E402
 
 Image.MAX_IMAGE_PIXELS = None  # the sources are trusted 8K atlases, 67M pixels each
@@ -69,34 +71,13 @@ def material_images(glb_path: Path) -> dict[str, bytes]:
     return out
 
 
-_SRGB_TO_LINEAR = np.array(
-    [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in np.arange(256) / 255.0]
-)
-
-
-def _linear_to_srgb(linear: np.ndarray) -> np.ndarray:
-    linear = np.clip(linear, 0.0, 1.0)
-    return np.where(linear <= 0.0031308, linear * 12.92, 1.055 * linear ** (1.0 / 2.4) - 0.055)
-
-
 def box_reduce(pixels: np.ndarray, size: int, *, srgb: bool) -> np.ndarray:
-    """Exact box filter from a square power-of-two image to `size` (HxWx3 uint8 in and out).
-
-    sRGB data is averaged in linear light and converted back, as the engine does for mip levels
-    of sRGB textures. Rows are processed in blocks to keep memory at a few hundred megabytes.
-    """
-    height, width, channels = pixels.shape
+    """Reduces a square power-of-two HxWx3 image to `size` with the figure pack's exact box filter
+    (`../figure_pack/textures.py`: sRGB averaged in linear light, integer arithmetic)."""
+    height, width, _channels = pixels.shape
     if height != width or width % size or (width & (width - 1)) or (size & (size - 1)):
         raise PrepareError(f"cannot box-reduce {width}x{height} to {size}: not square powers of two")
-    factor = width // size
-    out = np.empty((size, size, channels), dtype=np.uint8)
-    for row in range(size):
-        block = pixels[row * factor : (row + 1) * factor]
-        values = _SRGB_TO_LINEAR[block] if srgb else block.astype(np.float64) / 255.0
-        mean = values.reshape(factor, size, factor, channels).mean(axis=(0, 2))
-        encoded = _linear_to_srgb(mean) if srgb else mean
-        out[row] = np.round(encoded * 255.0).astype(np.uint8)
-    return out
+    return textures.box_reduce(pixels, width // size, srgb=srgb)
 
 
 def prepare_textures(rigged: Path, out_dir: Path, name: str, sizes: list[int]) -> dict:

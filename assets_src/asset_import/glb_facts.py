@@ -229,14 +229,18 @@ def facing_from_joints(
     return result
 
 
-def _float_vec3_values(glb: Glb, accessor_index: int) -> array:
-    """POSITION values as a flat `array('f')` (x0, y0, z0, x1, ...), fast for plain float views."""
+_FLOAT_WIDTHS = {"VEC2": 2, "VEC3": 3, "VEC4": 4}
+
+
+def _float_values(glb: Glb, accessor_index: int) -> array:
+    """A float accessor as a flat `array('f')` (x0, y0, z0, x1, ...), fast for plain float views."""
     accessor = _accessor(glb.json_doc, accessor_index)
     view_index = accessor.get("bufferView")
+    width = _FLOAT_WIDTHS.get(accessor.get("type"), 0)
     if (
         view_index is not None
         and accessor.get("componentType") == 5126
-        and accessor.get("type") == "VEC3"
+        and width
         and "sparse" not in accessor
         and not glb.json_doc["bufferViews"][int(view_index)].get("byteStride")
         and sys.byteorder == "little"
@@ -244,7 +248,7 @@ def _float_vec3_values(glb: Glb, accessor_index: int) -> array:
         view = glb.json_doc["bufferViews"][int(view_index)]
         start = int(view.get("byteOffset", 0)) + int(accessor.get("byteOffset", 0))
         values = array("f")
-        values.frombytes(glb.bin_chunk[start : start + int(accessor["count"]) * 12])
+        values.frombytes(glb.bin_chunk[start : start + int(accessor["count"]) * 4 * width])
         return values
     values = array("f")
     for point in read_accessor(glb, accessor_index):
@@ -302,6 +306,19 @@ def facing_from_toes(points: list[array], height: float, floor: float) -> dict[s
     return result
 
 
+def invalid_tangents(values: array) -> int:
+    """Tangents the figure-pack converter rejects: neither a unit `xyz` with `w` of +1 or -1 nor the
+    all-zero "no tangent" value (tolerance 1e-3, as in `pack_payloads.py`)."""
+    invalid = 0
+    for i in range(0, len(values), 4):
+        x, y, z, w = values[i], values[i + 1], values[i + 2], values[i + 3]
+        if x == 0.0 and y == 0.0 and z == 0.0 and w == 0.0:
+            continue
+        if abs(math.sqrt(x * x + y * y + z * z) - 1.0) > 1e-3 or abs(abs(w) - 1.0) > 1e-3:
+            invalid += 1
+    return invalid
+
+
 def combine_facing(methods: list[dict[str, Any]]) -> dict[str, Any]:
     """One facing verdict from several methods: agreement, a single answer, or a conflict."""
     axes = sorted({m["axis"] for m in methods if m.get("axis")})
@@ -357,6 +374,7 @@ def measure_glb(path: Path) -> dict[str, Any]:
     mesh_nodes: list[int] = []
     skin_indices: set[int] = set()
     uv_without_tangent = 0
+    bad_tangents = 0
     uv_without_tangent_with_normal_map = 0
     position_sources: list[tuple[int, Mat4 | None]] = []
 
@@ -407,6 +425,8 @@ def measure_glb(path: Path) -> dict[str, Any]:
 
             if "TEXCOORD_0" in attributes and "TANGENT" not in attributes:
                 uv_without_tangent += 1
+            if "TANGENT" in attributes:
+                bad_tangents += invalid_tangents(_float_values(glb, int(attributes["TANGENT"])))
             if "material" in primitive:
                 used_materials.add(int(primitive["material"]))
                 material = materials[int(primitive["material"])]
@@ -452,6 +472,7 @@ def measure_glb(path: Path) -> dict[str, Any]:
         "sparse_accessors": sparse_accessors,
         "primitives_without_material": primitives_without_material,
         "primitives_with_uv_but_no_tangent": uv_without_tangent,
+        "invalid_tangents": bad_tangents,
         "primitives_with_uv_and_normal_map_but_no_tangent": uv_without_tangent_with_normal_map,
         "attributes": {name: coverage(name) for name in TRACKED_ATTRIBUTES},
         "gpu_mesh_bytes": gpu_mesh_bytes,
@@ -477,7 +498,7 @@ def measure_glb(path: Path) -> dict[str, Any]:
     # --- geometric facing hint, from the vertex data itself
     point_arrays: list[array] = []
     for accessor_index, node_world in position_sources:
-        values = _float_vec3_values(glb, accessor_index)
+        values = _float_values(glb, accessor_index)
         if node_world is not None and node_world != IDENTITY:
             moved = array("f")
             for i in range(0, len(values), 3):

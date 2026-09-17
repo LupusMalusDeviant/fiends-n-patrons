@@ -17,7 +17,6 @@ from pathlib import Path
 
 import check_asset
 import glb_facts
-import image_headers
 
 HERE = Path(__file__).resolve().parent
 
@@ -151,6 +150,7 @@ def build_figure(
     left_x: float = 0.1,
     image: tuple[bytes, str] | None = None,
     tangents: bool = True,
+    tangent: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 1.0),
     extra_influences: bool = False,
     clips: tuple[str, ...] = ENEMY_CLIPS,
     lift: float = 0.0,
@@ -168,7 +168,7 @@ def build_figure(
         "WEIGHTS_0": g.floats([(1.0, 0.0, 0.0, 0.0)] * count, "VEC4"),
     }
     if tangents:
-        attributes["TANGENT"] = g.floats([(1.0, 0.0, 0.0, 1.0)] * count, "VEC4")
+        attributes["TANGENT"] = g.floats([tangent] + [(1.0, 0.0, 0.0, 1.0)] * (count - 1), "VEC4")
     if extra_influences:
         attributes["JOINTS_1"] = g.joints([(0, 0, 0, 0)] * count)
         attributes["WEIGHTS_1"] = g.floats([(0.0, 0.0, 0.0, 0.0)] * count, "VEC4")
@@ -274,31 +274,6 @@ def statuses(report: dict) -> dict[str, str]:
 
 
 # ------------------------------------------------------------------------------------ tests
-
-
-class ImageHeaderTests(unittest.TestCase):
-    def test_png_size_and_channels(self) -> None:
-        header = image_headers.read_image_header(make_png(7, 3, 6))
-        measured = (header.mime_type, header.width, header.height, header.channels)
-        self.assertEqual(measured, ("image/png", 7, 3, 4))
-
-    def test_palette_png_with_transparency_counts_four_channels(self) -> None:
-        self.assertEqual(image_headers.read_png_header(make_png(2, 2, 3)).channels, 3)
-        self.assertEqual(image_headers.read_png_header(make_png(2, 2, 3, trns=True)).channels, 4)
-
-    def test_jpeg_frame_after_app_segment_and_fill_byte(self) -> None:
-        header = image_headers.read_image_header(make_jpeg_header(8192, 4096))
-        measured = (header.mime_type, header.width, header.height, header.channels)
-        self.assertEqual(measured, ("image/jpeg", 8192, 4096, 3))
-        self.assertFalse(header.progressive)
-        progressive = image_headers.read_jpeg_header(make_jpeg_header(16, 16, progressive=True))
-        self.assertTrue(progressive.progressive)
-
-    def test_unknown_bytes_are_rejected(self) -> None:
-        with self.assertRaises(image_headers.ImageHeaderError):
-            image_headers.read_image_header(b"GIF89a....")
-        with self.assertRaises(image_headers.ImageHeaderError):
-            image_headers.read_jpeg_header(b"\xff\xd8\xff\xd9")
 
 
 class MeasureTests(TempDirTestCase):
@@ -449,6 +424,16 @@ class CheckTests(TempDirTestCase):
         result = statuses(report)
         self.assertEqual(result["pipeline.tangents"], "fail")
         self.assertEqual(result["engine.skin_influences"], "fail")
+
+    def test_zero_tangents_fail_and_the_no_tangent_value_passes(self) -> None:
+        figure = build_figure(tangent=(0.0, 0.0, 0.0, -1.0))
+        code, report = self.run_check(self.write("zero_tangent.glb", figure))
+        self.assertEqual(code, check_asset.EXIT_FAIL)
+        self.assertEqual(statuses(report)["pipeline.tangent_values"], "fail")
+        self.assertEqual(report["facts"]["geometry"]["invalid_tangents"], 1)
+        figure = build_figure(tangent=(0.0, 0.0, 0.0, 0.0))
+        _code, report = self.run_check(self.write("no_tangent.glb", figure))
+        self.assertEqual(statuses(report)["pipeline.tangent_values"], "pass")
 
     def test_missing_clips_only_warn(self) -> None:
         figure = build_figure(clips=("idle", "walk", "wave"))

@@ -11,7 +11,7 @@
   },
   "pipeline": {
     "source": "assets_src/figure_pack (Konverter) und die Figuren der Runde 4",
-    "accepted_image_types": ["image/png"],
+    "accepted_image_types": ["image/png", "image/jpeg"],
     "front_axis": "+Z",
     "front_axis_note": "glTF-Standard und Annahme von fnp_game present.rs facing_yaw (Engine -Y); die Figuren der Runde 4 schauen gemessen nach -Z (README, Blickrichtung)",
     "foot_level_tolerance_share": 0.02,

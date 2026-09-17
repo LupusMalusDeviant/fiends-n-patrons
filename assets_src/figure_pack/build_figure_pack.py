@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Stage 1 of the figure-pack converter (figuren-in-engine-spec.md, "Strang A").
 
-Reads `<name><suffix>` (default `_r3b_low.glb`) for each figure (glTF 2 binary, standard-library only: no
-`pygltflib`, `numpy` or `Pillow`), decodes every accessor and embedded PNG by hand, and writes
-one payload file per pack entry plus an `index.json` naming path/kind/kind_version/file for each.
+Reads `<name><suffix>` (default `_r3b_low.glb`) for each figure, plus any `--figure NAME=PATH`
+(glTF 2 binary; no `pygltflib`), decodes every accessor and embedded PNG by hand, and writes one
+payload file per pack entry plus an `index.json` naming path/kind/kind_version/file for each.
+PNG figures that need no texture reduction still need nothing but the standard library; JPEG
+textures use Pillow and `--max-texture-size` uses numpy (`textures.py`).
 Stage 2 (`crates/fnp_content/src/bin/figure_pack_builder.rs`) reads that `index.json` and hands
 the payload bytes, unchanged, to the engine's own `grimoire_assets::PackWriter` -- this script
 never builds the pack container itself.
@@ -71,7 +73,7 @@ from pack_payloads import (
     encode_skeleton,
     encode_texture_raw,
 )
-from png_decode import PngError, decode_png
+from png_decode import PngError
 from rig_math import (
     apply_axis_correction_vec3,
     compose_trs,
@@ -83,6 +85,7 @@ from rig_math import (
 )
 from skeleton import SkeletonError, build_skeleton, remap_joint_indices
 from stable_id import asset_id_for_path
+from textures import TextureError, TexturePlan, decode_texture, plan_texture
 
 FIGURE_NAMES = ("soul", "imp", "brute")
 GLB_SUFFIX = "_r3b_low.glb"
@@ -127,6 +130,7 @@ class FigureReport:
     fk_tangent_max_error: float = 0.0
     tangent_primitive_count: int = 0
     no_tangent_primitive_count: int = 0
+    textures: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
 
@@ -174,12 +178,72 @@ class TextureUse:
     slot: str  # for error messages only
 
 
+# Material slots the converter packs (`FNP_MATERIAL`): glTF location -> engine colour space.
+_TEXTURE_SLOTS = (
+    (("pbrMetallicRoughness", "baseColorTexture"), 0),
+    (("normalTexture",), 1),
+    (("pbrMetallicRoughness", "metallicRoughnessTexture"), 1),
+)
+
+
+def material_image_uses(glb: Glb) -> dict[int, int]:
+    """Image index -> colour space (0 sRGB, 1 linear) for every image a material slot uses."""
+    doc = glb.json_doc
+    uses: dict[int, int] = {}
+    for material in doc.get("materials", []):
+        for location, color_space in _TEXTURE_SLOTS:
+            ref: Any = material
+            for key in location:
+                ref = ref.get(key) if isinstance(ref, dict) else None
+            if ref is None:
+                continue
+            textures = doc.get("textures", [])
+            if not (0 <= ref["index"] < len(textures)):
+                raise BuildError(f"texture index {ref['index']} out of range")
+            uses.setdefault(textures[ref["index"]]["source"], color_space)
+    return uses
+
+
+def image_bytes(glb: Glb, image_index: int, *, figure: str) -> tuple[bytes, str]:
+    """Encoded bytes and a label (`figure/image name`) of one embedded image."""
+    image = glb.json_doc.get("images", [])[image_index]
+    if "bufferView" not in image:
+        raise BuildError(
+            f"{figure}: image {image_index} is not embedded (no bufferView) -- "
+            "external image URIs are not supported"
+        )
+    view = glb.json_doc["bufferViews"][image["bufferView"]]
+    start = view.get("byteOffset", 0)
+    label = f"{figure}/{image.get('name', f'image_{image_index}')}"
+    return glb.bin_chunk[start : start + view["byteLength"]], label
+
+
+def plan_figure_textures(name: str, glb: Glb, max_size: int | None) -> dict[int, TexturePlan]:
+    """Reads every used texture's header and checks it against the engine, before any decoding.
+
+    Collects every problem of the figure into one `BuildError`, so a run over several oversized
+    8K textures names all of them at once.
+    """
+    plans: dict[int, TexturePlan] = {}
+    problems: list[str] = []
+    for image_index in sorted(material_image_uses(glb)):
+        data, label = image_bytes(glb, image_index, figure=name)
+        try:
+            plans[image_index] = plan_texture(data, label=label, max_size=max_size)
+        except TextureError as error:
+            problems.append(str(error))
+    if problems:
+        raise BuildError("\n".join(problems))
+    return plans
+
+
 class FigureBuilder:
     """Accumulates the dedup tables and pack entries for one figure while walking its glTF."""
 
-    def __init__(self, name: str, glb: Glb) -> None:
+    def __init__(self, name: str, glb: Glb, texture_plans: dict[int, TexturePlan]) -> None:
         self.name = name
         self.glb = glb
+        self.texture_plans = texture_plans
         self.entries: list[PackEntry] = []
         self.report = FigureReport(name=name)
         self._material_dedup: dict[int, int] = {}  # gltf material index -> local material id
@@ -254,26 +318,21 @@ class FigureBuilder:
         return local_id
 
     def finish_textures(self) -> None:
-        images = self.glb.json_doc.get("images", [])
         for local_id, image_index in enumerate(self._texture_order):
-            image = images[image_index]
-            if "bufferView" not in image:
-                raise BuildError(
-                    f"{self.name}: image {image_index} is not embedded (no bufferView) -- "
-                    "external image URIs are not supported"
-                )
-            view = self.glb.json_doc["bufferViews"][image["bufferView"]]
-            start = view.get("byteOffset", 0)
-            end = start + view["byteLength"]
-            png_bytes = self.glb.bin_chunk[start:end]
-            label = f"{self.name}/{image.get('name', f'image_{image_index}')}"
-            decoded = decode_png(png_bytes, label=label)
+            data, label = image_bytes(self.glb, image_index, figure=self.name)
+            plan = self.texture_plans.get(image_index)
+            if plan is None:  # pragma: no cover - every material slot was planned up front
+                raise BuildError(f"{label}: texture was not planned")
             color_space = self._texture_dedup[image_index].color_space
+            try:
+                rgba = decode_texture(data, plan, srgb=color_space == 0, label=label)
+            except TextureError as error:
+                raise BuildError(str(error)) from error
             payload = encode_texture_raw(
-                width=decoded.width,
-                height=decoded.height,
+                width=plan.out_width,
+                height=plan.out_height,
                 color_space=color_space,
-                rgba=decoded.rgba,
+                rgba=rgba,
                 label=label,
             )
             self.entries.append(
@@ -281,6 +340,10 @@ class FigureBuilder:
                     self.path("texture", str(local_id)), FNP_TEXTURE_RAW, KIND_VERSION, payload
                 )
             )
+            note = f"{plan.mime_type} {plan.width}x{plan.height}"
+            if plan.factor > 1:
+                note += f" -> {plan.out_width}x{plan.out_height}"
+            self.report.textures.append(f"{label}: {note}")
         self.report.texture_count = len(self._texture_order)
 
     def texture_ids(self) -> list[int]:
@@ -450,11 +513,14 @@ def _forward_kinematics_check(
                 )
 
 
-def build_figure(name: str, glb_path: Path) -> tuple[list[PackEntry], FigureReport]:
+def build_figure(
+    name: str, glb_path: Path, max_texture_size: int | None = None
+) -> tuple[list[PackEntry], FigureReport]:
     try:
         glb = load_glb(glb_path)
     except GlbError as error:
         raise BuildError(str(error)) from error
+    texture_plans = plan_figure_textures(name, glb, max_texture_size)
 
     skin_indices = {
         node["skin"] for node in glb.json_doc.get("nodes", []) if "mesh" in node and "skin" in node
@@ -469,7 +535,7 @@ def build_figure(name: str, glb_path: Path) -> tuple[list[PackEntry], FigureRepo
         raise BuildError(str(error)) from error
     joint_count = len(skeleton_result.joints)
 
-    builder = FigureBuilder(name, glb)
+    builder = FigureBuilder(name, glb, texture_plans)
     parts: list[tuple[int, int]] = []
     bounds_min = [float("inf")] * 3
     bounds_max = [float("-inf")] * 3
@@ -654,17 +720,39 @@ def _print_report(reports: list[FigureReport]) -> None:
             f"  mesh parts with TANGENT: {report.tangent_primitive_count}, "
             f"without (no UV, [0,0,0,0]): {report.no_tangent_primitive_count}"
         )
+        for texture in report.textures:
+            print(f"  texture {texture}")
         for note in report.notes:
             print(f"  note: {note}")
+
+
+def parse_figure_sources(args: argparse.Namespace) -> list[tuple[str, Path]]:
+    """`(name, path)` for every figure: `--source`/`--suffix`/`--figures`, then each `--figure`."""
+    sources: list[tuple[str, Path]] = []
+    if args.source is not None:
+        names = [n.strip() for n in args.figures.split(",") if n.strip()]
+        sources += [(name, glb_path_for(args.source, name, args.suffix)) for name in names]
+    for item in args.figure:
+        name, separator, path = item.partition("=")
+        if not separator or not name.strip() or not path.strip():
+            raise BuildError(f"--figure expects NAME=PATH, got {item!r}")
+        sources.append((name.strip(), Path(path.strip())))
+    if not sources:
+        raise BuildError("no figures: pass --source (with --figures) or --figure NAME=PATH")
+    seen: set[str] = set()
+    for name, _path in sources:
+        if name in seen:
+            raise BuildError(f"figure name {name!r} given twice")
+        seen.add(name)
+    return sources
 
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--source",
-        required=True,
         type=Path,
-        help="directory containing <name><suffix> for soul/imp/brute",
+        help="directory containing <name><suffix> for every name in --figures",
     )
     parser.add_argument(
         "--suffix",
@@ -677,22 +765,44 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--figures",
         default=",".join(FIGURE_NAMES),
-        help="comma-separated figure base names (default: soul,imp,brute)",
+        help="comma-separated figure base names under --source (default: soul,imp,brute)",
+    )
+    parser.add_argument(
+        "--figure",
+        action="append",
+        default=[],
+        metavar="NAME=PATH",
+        help="one more figure from any .glb, packed under NAME (repeatable)",
+    )
+    parser.add_argument(
+        "--max-texture-size",
+        type=int,
+        help="reduce textures whose longer side exceeds this by a power of two (needs numpy)",
     )
     args = parser.parse_args(argv)
 
-    names = [n.strip() for n in args.figures.split(",") if n.strip()]
     all_entries: dict[str, list[PackEntry]] = {}
     reports: list[FigureReport] = []
     try:
-        for name in names:
-            glb_path = glb_path_for(args.source, name, args.suffix)
+        sources = parse_figure_sources(args)
+        for name, glb_path in sources:
             if not glb_path.is_file():
                 raise BuildError(f"source file not found: {glb_path}")
-            entries, report = build_figure(name, glb_path)
+        # Every texture of every figure against the engine limits first, from the headers alone.
+        problems: list[str] = []
+        for name, glb_path in sources:
+            try:
+                plan_figure_textures(name, load_glb(glb_path), args.max_texture_size)
+            except (BuildError, GlbError) as error:
+                problems.extend(str(error).splitlines())
+        if problems:
+            listing = "\n  ".join(problems)
+            raise BuildError(f"{len(problems)} texture problem(s), nothing packed:\n  {listing}")
+        for name, glb_path in sources:
+            entries, report = build_figure(name, glb_path, args.max_texture_size)
             all_entries[name] = entries
             reports.append(report)
-    except (BuildError, GlbError, SkeletonError, PayloadError, PngError) as error:
+    except (BuildError, GlbError, SkeletonError, PayloadError, PngError, TextureError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 

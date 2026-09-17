@@ -28,10 +28,12 @@ Steps, in this order:
    reduced mesh. Applied to the mesh data, the rest pose of the armature, the location channels
    of every clip and the high source, never as an object transform, so the exported joints need
    no correction later.
-6. **Shape normal map** from the high source onto the reduced mesh with the round-4 tooling
+6. **Tangents:** faces with a corner whose MikkTSpace tangent comes out zero (folded slivers
+   after the reduction) are shaded flat, so every exported tangent is valid for the converter.
+7. **Shape normal map** from the high source onto the reduced mesh with the round-4 tooling
    (`../figures/shapenormal.py`): nearest high surface point per texel, expressed in the reduced
    mesh's MikkTSpace frame. No Cycles bake.
-7. **Material and export:** the downscaled base colour and metallic-roughness PNGs replace the
+8. **Material and export:** the downscaled base colour and metallic-roughness PNGs replace the
    8K originals, the normal map is added, and the figure is exported as glTF binary with
    tangents and all clips.
 
@@ -292,6 +294,40 @@ def surface_distances(high_surface: dict, ob: bpy.types.Object) -> dict:
     return percentiles(distances, (50, 90, 99, 100), 3)
 
 
+def repair_degenerate_tangents(ob: bpy.types.Object) -> int:
+    """Shades flat every face with a corner whose MikkTSpace tangent is not unit length.
+
+    Reducing folds a few sliver triangles over, so a corner's smooth normal lies almost in the
+    triangle's own plane (measured: 1 corner in the witch, 1 in the imp). MikkTSpace then projects
+    the tangent onto that normal and gets a zero vector, which the figure-pack converter rightly
+    rejects. A flat face takes its own normal, and its tangent is well defined again. Repeats
+    while flattening changes neighbouring smooth normals; returns the number of faces shaded flat.
+    """
+    me = ob.data
+    uv_name = me.uv_layers.active.name
+    starts = np.empty(len(me.polygons), dtype=np.int32)
+    totals = np.empty(len(me.polygons), dtype=np.int32)
+    me.polygons.foreach_get("loop_start", starts)
+    me.polygons.foreach_get("loop_total", totals)
+    loop_face = np.repeat(np.arange(len(me.polygons)), totals)
+    flattened: set[int] = set()
+    for _attempt in range(8):
+        me.calc_tangents(uvmap=uv_name)
+        tangents = np.empty(len(me.loops) * 3, dtype=np.float32)
+        me.loops.foreach_get("tangent", tangents)
+        lengths = np.linalg.norm(tangents.reshape(-1, 3).astype(np.float64), axis=1)
+        faces = sorted(set(loop_face[np.abs(lengths - 1.0) > 1e-3].tolist()))
+        me.free_tangents()
+        if not faces:
+            return len(flattened)
+        if flattened.issuperset(faces):
+            raise RuntimeError(f"faces {faces[:8]} keep degenerate tangents even when shaded flat")
+        for face in faces:
+            me.polygons[face].use_smooth = False
+        flattened.update(faces)
+    raise RuntimeError("degenerate tangents remain after 8 rounds of flat shading")
+
+
 def uv_overlap(frames: dict, res: int) -> dict:
     """Share of used texels that two triangles claim (sampled at texel centres)."""
     uv = frames["uv"][frames["tri_loops"]]
@@ -443,6 +479,7 @@ def main() -> None:
     lod.data.transform(matrix)
     high_ob.data.transform(matrix)
     report["grounding"]["location_channels_scaled"] = transform_rig(arm, matrix, scale)
+    report["game_mesh"]["faces_shaded_flat_for_tangents"] = repair_degenerate_tangents(lod)
 
     surface = SN.high_surface(high_ob)
     report["game_mesh"]["distance_to_high_surface_mm"] = surface_distances(surface, lod)

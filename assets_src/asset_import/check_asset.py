@@ -147,6 +147,8 @@ def evaluate(facts: dict[str, Any], budgets: dict[str, Any], role: str) -> list[
             "mesh parts without a material")
     add("pipeline.normals", attributes["NORMAL"] == "all", attributes["NORMAL"], "all",
         "mesh parts with a NORMAL attribute")
+    at_most("pipeline.tangent_values", geometry["invalid_tangents"], 0,
+            "tangents neither unit length with w = +-1 nor [0, 0, 0, 0] (the converter aborts)")
     at_most("pipeline.tangents", geometry["primitives_with_uv_but_no_tangent"], 0,
             "mesh parts with TEXCOORD_0 but no TANGENT (the converter aborts on these)")
     at_most("pipeline.single_skin", len(skins), 1, "skins used by the scene")
