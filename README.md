@@ -8,7 +8,7 @@ Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Rel
 
 > Status: **erster spielbarer Prototyp**. Die Seele läuft durch eine beleuchtete Arena, ein Imp
 > feuert ein Sigil-Pattern, ein Treffer beendet die Runde, nach 1,5 s beginnt sie neu. Das Spiel pinnt
-> Grimoire `v0.3.0` über einen Git-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Ein
+> Grimoire `v0.4.0` über einen Git-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Ein
 > Determinismus-Test friert den Endhash der Arena für Seed 42 über 3.600 Ticks ein.
 
 ## Einstieg
