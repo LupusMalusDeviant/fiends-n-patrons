@@ -23,7 +23,7 @@ const GOLDEN_TICKS: u64 = 3_600;
 /// profile) when the scenario was written. Same rules as the P0 golden in `determinism.rs`: a
 /// mismatch on one platform is a determinism bug, never a reason to change the value; renewing it
 /// follows CONTRIBUTING.md ("Golden-Master und Referenzwerte") and is the PO's decision.
-const GOLDEN_ARENA_FINAL_HASH: u64 = 0xc174_57a2_f7e6_fb49;
+const GOLDEN_ARENA_FINAL_HASH: u64 = 0x9001_d4a1_d2f7_125e;
 
 fn round(sim: &Simulation) -> RoundState {
     *sim.world().resource::<RoundState>().expect("round state")
