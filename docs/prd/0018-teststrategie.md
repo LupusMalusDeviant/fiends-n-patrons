@@ -73,9 +73,10 @@ monoton korrekt, Zorn-Kurven im Definitionsbereich, keine Entity-Leaks über Rau
 ```
 Given Golden-Master-Replay GM-007 (Boss 1, Seed 4242, Bot "Pattern-Kenner")
 When ein PR die Kollisions-Broadphase umbaut
-Then vergleicht CI Zustands-Hashes alle 600 Ticks; bei Abweichung ab Tick 18.600
-     meldet der Report "grimoire_collide" als ersten abweichenden Subsystem-Hash
-     und hängt das Diff-Replay als Artefakt an
+Then vergleicht CI Zustands-Hashes alle 60 Ticks; bei Abweichung ab Tick 18.600
+     grenzt der Report je System je Tick über das erste abweichende Fenster ein
+     (Engine-ADR-0018), meldet "grimoire_collide" als ersten abweichenden
+     Subsystem-Hash und hängt das Diff-Replay als Artefakt an
 ```
 
 ## Akzeptanzkriterien / Success Metrics
@@ -88,7 +89,8 @@ Then vergleicht CI Zustands-Hashes alle 600 Ticks; bei Abweichung ab Tick 18.600
 
 ## Offene Fragen
 
-- **OF-18.1:** Subsystem-Hash-Granularität (pro System pro Tick vs. alle N Ticks) — Kosten/Nutzen-Spike in P1.
+- **OF-18.1:** Subsystem-Hash-Granularität (pro System pro Tick vs. alle N Ticks) — Kosten/Nutzen-Spike in P1. **Entschieden am 2026-09-18 mit Engine-ADR-0018** (Plan 0002 WP7.2, Engine-PR #56): erkennen alle **60 Ticks**, bei einer Abweichung je System je Tick über das erste abweichende Fenster eingrenzen; Golden Master speichern keine System-Hashes, die Referenz wird im Fehlerfall neu gebaut.
+  *Gemessen im Spike (CI-Lauf 35247178166, 10.000 Geschosse):* ein Zustands-Hash alle 60 Ticks kostet die 1,03-fache Instruktionszahl eines Simulationsschritts, je System je Tick die 6,07-fache. Das Beispiel oben ist entsprechend von 600 auf 60 Ticks nachgezogen.
 - **OF-18.2:** Render-Snapshot-Referenzen pro GPU-Treiber-Familie nötig (CI-Runner-Varianz)? **Beantwortet in P1 (Plan 0002 WP3.6, M2).**
   *Erste Daten (Plan 0002, WP2.1, Engine-PR #5, CI-Lauf 35015614138, Stand 2026-09-15):* Die Offscreen-Tests melden den gewählten Adapter je Runner im Job-Summary.
 
