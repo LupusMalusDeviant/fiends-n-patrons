@@ -9,9 +9,7 @@ Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Rel
 > Status: **erster spielbarer Prototyp**. Die Seele läuft durch eine beleuchtete Arena, ein Imp
 > feuert ein Sigil-Pattern, ein Treffer beendet die Runde, nach 1,5 s beginnt sie neu. Das Spiel pinnt
 > Grimoire `v0.3.0` über einen Git-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Ein
-> Determinismus-Test friert den Endhash der Arena für Seed 42 über 3.600 Ticks ein. Die P0-Demo
-> „Beschwörungskreis“ (`FiendsGame`) mit ihrem eigenen Endhash besteht noch; sie entfällt in einem
-> eigenen Schritt (PO-Entscheid 2026-09-17).
+> Determinismus-Test friert den Endhash der Arena für Seed 42 über 3.600 Ticks ein.
 
 ## Einstieg
 
@@ -25,7 +23,7 @@ Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Rel
 | Pfad | Inhalt |
 |------|--------|
 | `crates/fnp_app` | Ausführbares Spiel `fiends-n-patrons`: Kommandozeile, Laden des Figuren-Packs, Hauptschleife |
-| `crates/fnp_game` | Spielzustände und Run-Logik: Prototyp-Arena (`arena`), P0-Demo `FiendsGame` |
+| `crates/fnp_game` | Spielzustände und Run-Logik: Prototyp-Arena (`arena`) |
 | `crates/fnp_content` | Gameplay-Plugins: Waffen, Patrone, Items, Gegner |
 | `crates/fnp_sim_harness` | Headless-Bot-Läufe, Determinismus- und Balancing-Simulationen |
 | `content/` | Quell-Content (Sigil-Patterns, Wellen, Texte, Audio-Rezepte) |
@@ -66,9 +64,8 @@ Bullets laufen über den Weg der Engine: Der Adapter `grimoire::adapters::sigil_
 Bullet-Kanal, der Bullet-Pass zeichnet sie als Billboards auf Ebene 6 und leitet die Geschoss-Lichter
 selbst ab. Vorläufig im Prototyp: Die Figuren haben keine Animation, nur Ruhe- und Treffer-Pose.
 
-Ohne Fenster läuft dieselbe Simulation über `fnp_sim_harness::run_arena(seed, ticks, input)`
-(Prototyp) bzw. `fnp_sim_harness::run_seed(seed, ticks)` (P0-Demo); die Determinismus-Tests liegen in
-`crates/fnp_sim_harness/tests/`. Eine Bildfolge eines geskripteten Laufs rendert
+Ohne Fenster läuft dieselbe Simulation über `fnp_sim_harness::run_arena(seed, ticks, input)`; der
+Determinismus-Test liegt in `crates/fnp_sim_harness/tests/determinism.rs`. Eine Bildfolge eines geskripteten Laufs rendert
 `crates/fnp_app/tests/offscreen_capture.rs` ohne Fenster (Aufruf im Dateikopf).
 
 ## Lizenz

@@ -1,139 +1,119 @@
-//! Determinism gate of the game (PRD-0018 FR-04a): identical runs, seed and input sensitivity and
-//! a golden final hash through the facade's headless path, also on thread pools with 1, 2 and N
-//! threads (engine ADR-0006, building block 7).
-//!
-//! Seed and input sensitivity compare game state (positions and the circle centre), never state
-//! hashes: the hash also covers the seed and the stored `TickInput`, so it differs between seeds
-//! or inputs even if the game ignored them.
+//! Determinism gate of the game (PRD-0018 FR-04a): identical runs, input sensitivity,
+//! thread-count independence (engine ADR-0006, building block 7) and a golden final hash, over the
+//! arena scenario, in which the Sigil interpreter fires, the broadphase finds hits and rounds
+//! restart. CI runs it in the dev profile on three operating systems; the nightly and release
+//! workflows repeat it in the release profile (`--test determinism`).
 
-use fnp_game::{Player, Position, RitualCircle};
+use fnp_game::arena::{Phase, RoundState};
+use fnp_game::{Player, Position};
 use fnp_sim_harness::{
-    HASH_EVERY, bot_input, run_seed, run_seed_with_executor, run_with_input, simulate,
+    HASH_EVERY, arena_bot_input, run_arena, run_arena_with_executor, simulate_arena,
 };
 use grimoire::prelude::*;
+use grimoire::sigil::BulletPool;
 use grimoire_exec::gate_executors;
 
-/// Seed of the golden run.
+/// Seed of the golden arena run.
 const GOLDEN_SEED: u64 = 42;
 
-/// Length of the golden run: one minute of simulation at 60 Hz.
+/// Length of the golden arena run: one minute at 60 Hz.
 const GOLDEN_TICKS: u64 = 3_600;
 
-/// Final state hash of `run_seed(GOLDEN_SEED, GOLDEN_TICKS)`.
+/// Final state hash of `run_arena(GOLDEN_SEED, GOLDEN_TICKS, arena_bot_input)`.
 ///
-/// This is a frozen expectation (golden master). The value was captured locally on Windows (debug
-/// and release profile) and confirmed by CI on Windows, Linux and macOS in the debug profile (game
-/// CI run 34903989101); the nightly workflow repeats the check in the release profile. A mismatch
-/// on a single platform is a determinism bug and never a reason to change the value.
+/// A frozen expectation (golden master), captured locally on Windows (debug and release profile)
+/// and confirmed by CI on Windows, Linux and macOS in the debug profile (game CI run 35197999985).
+/// Renewed once, from `0xc17457a2f7e6fb49`, after the imp's palettes were renamed to match the
+/// bullet pass tables (a change of the unit's content identity only), confirmed by the PO on
+/// 2026-09-17.
 ///
+/// A mismatch on a single platform is a determinism bug and never a reason to change the value.
 /// Renew it only deliberately, following CONTRIBUTING.md ("Golden-Master und Referenzwerte"):
-/// understand and name the cause first (intended change to the demo scenario or the bot, or an
-/// engine upgrade whose CHANGELOG announces a hash change), then renew it in a separate commit
-/// `test(golden): renew <what> after <why>` right after the causing change, stating old and new
-/// value and the first diverging checkpoint. Never renew it for one platform or to make CI green;
-/// agents do not renew golden masters on their own, the PO decides.
-const GOLDEN_FINAL_HASH: u64 = 0x5270_20ae_cf76_4ca7;
+/// name the cause first, renew in a separate `test(golden)` commit stating old and new value and
+/// the first diverging checkpoint. Agents do not renew golden masters on their own; the PO decides.
+const GOLDEN_ARENA_FINAL_HASH: u64 = 0x9001_d4a1_d2f7_125e;
+
+fn round(sim: &Simulation) -> RoundState {
+    *sim.world().resource::<RoundState>().expect("round state")
+}
 
 #[test]
-fn identical_runs_give_identical_reports() {
-    let first = run_seed(GOLDEN_SEED, 1_200);
-    let second = run_seed(GOLDEN_SEED, 1_200);
+fn identical_arena_runs_give_identical_reports() {
+    let first = run_arena(GOLDEN_SEED, 1_200, &mut arena_bot_input);
+    let second = run_arena(GOLDEN_SEED, 1_200, &mut arena_bot_input);
     assert_eq!(first, second);
-    assert_eq!(first.final_tick, 1_200);
-    let ticks: Vec<u64> = first.hashes.iter().map(|&(tick, _)| tick).collect();
-    assert_eq!(
-        ticks,
-        (1..=1_200 / HASH_EVERY)
-            .map(|i| i * HASH_EVERY)
-            .collect::<Vec<_>>()
-    );
-}
-
-/// Every position in the world (motes and player, in query order); contains no seed or input.
-fn positions(sim: &Simulation) -> Vec<Vec2> {
-    sim.world()
-        .query::<&Position>()
-        .map(|position| position.at)
-        .collect()
-}
-
-fn player_position(sim: &Simulation) -> Vec2 {
-    sim.world()
-        .query::<(&Position, &Player)>()
-        .next()
-        .map(|(position, _)| position.at)
-        .expect("the player exists")
-}
-
-fn circle_center(sim: &Simulation) -> Vec2 {
-    sim.world()
-        .resource::<RitualCircle>()
-        .expect("the ritual circle exists")
-        .center
+    assert_eq!(first.hashes.len() as u64, 1_200 / HASH_EVERY);
 }
 
 #[test]
-fn simulate_matches_the_headless_report() {
-    for ticks in [0, 1, 600] {
-        let sim = simulate(GOLDEN_SEED, ticks, &mut bot_input);
-        let report = run_seed(GOLDEN_SEED, ticks);
+fn simulate_arena_matches_the_headless_report() {
+    for ticks in [0, 1, 700] {
+        let sim = simulate_arena(GOLDEN_SEED, ticks, &mut arena_bot_input);
+        let report = run_arena(GOLDEN_SEED, ticks, &mut arena_bot_input);
         assert_eq!(sim.tick(), report.final_tick);
         assert_eq!(sim.state_hash(), report.final_hash);
 
-        let idle_sim = simulate(GOLDEN_SEED, ticks, &mut |_| TickInput::default());
-        let idle_report = run_with_input(GOLDEN_SEED, ticks, &mut |_| TickInput::default());
+        let idle_sim = simulate_arena(GOLDEN_SEED, ticks, &mut |_| TickInput::default());
+        let idle_report = run_arena(GOLDEN_SEED, ticks, &mut |_| TickInput::default());
         assert_eq!(idle_sim.state_hash(), idle_report.final_hash);
     }
 }
 
 #[test]
-fn different_seeds_give_different_game_states() {
-    let seeds = [1, 2, GOLDEN_SEED, u64::MAX];
-    let states: Vec<Vec<Vec2>> = seeds
-        .into_iter()
-        .map(|seed| positions(&simulate(seed, 600, &mut bot_input)))
-        .collect();
-    for (index, state) in states.iter().enumerate() {
-        for (other_index, other) in states.iter().enumerate().skip(index + 1) {
-            assert_ne!(
-                state, other,
-                "seeds {} and {} give identical positions after 600 ticks",
-                seeds[index], seeds[other_index]
-            );
-        }
+fn the_seed_reaches_the_state_hash() {
+    // The arena draws no randomness of its own yet, so different seeds play the same; the seed
+    // must still be part of every state hash, so replays and golden masters name their seed.
+    let first = run_arena(1, 120, &mut arena_bot_input);
+    let second = run_arena(2, 120, &mut arena_bot_input);
+    assert_eq!(first.final_tick, second.final_tick);
+    assert_ne!(first.final_hash, second.final_hash);
+    assert_eq!(first, run_arena(1, 120, &mut arena_bot_input));
+}
+
+#[test]
+fn the_bot_scenario_covers_bullets_hits_and_restarts() {
+    let mut sim = simulate_arena(GOLDEN_SEED, 0, &mut arena_bot_input);
+    let mut peak_bullets = 0;
+    let mut saw_hit = false;
+    for _ in 0..GOLDEN_TICKS {
+        sim.step(arena_bot_input(sim.tick()));
+        let pool = sim.world().resource::<BulletPool>().expect("pool");
+        peak_bullets = peak_bullets.max(pool.len());
+        saw_hit |= matches!(round(&sim).phase, Phase::Hit { .. });
     }
-    assert_eq!(
-        states[2],
-        positions(&simulate(GOLDEN_SEED, 600, &mut bot_input))
+    let state = round(&sim);
+    assert!(saw_hit, "the bot is hit at least once");
+    assert!(state.hits >= 1 && state.round >= 2, "{state:?}");
+    assert!(peak_bullets > 50, "peak bullets {peak_bullets}");
+    println!(
+        "arena bot scenario: {} rounds, {} hits, peak {peak_bullets} bullets",
+        state.round, state.hits
     );
 }
 
 #[test]
-fn different_seeds_already_differ_after_spawning() {
-    let first = positions(&simulate(1, 0, &mut bot_input));
-    assert_ne!(first, positions(&simulate(2, 0, &mut bot_input)));
-    assert_eq!(first, positions(&simulate(1, 0, &mut bot_input)));
+fn input_changes_the_arena_outcome() {
+    let bot = simulate_arena(GOLDEN_SEED, 90, &mut arena_bot_input);
+    let idle = simulate_arena(GOLDEN_SEED, 90, &mut |_| TickInput::default());
+    let player = |sim: &Simulation| {
+        sim.world()
+            .query::<(&Position, &Player)>()
+            .next()
+            .map(|(position, _)| position.at)
+            .expect("the player exists")
+    };
+    assert_ne!(player(&bot), player(&idle));
 }
 
 #[test]
-fn bot_input_changes_the_outcome() {
-    let bot = simulate(GOLDEN_SEED, 600, &mut bot_input);
-    let idle = simulate(GOLDEN_SEED, 600, &mut |_| TickInput::default());
-    assert_eq!(player_position(&idle), Vec2::ZERO, "idle player stays put");
-    assert_ne!(player_position(&bot), player_position(&idle));
-    assert_ne!(circle_center(&bot), circle_center(&idle));
-    assert_ne!(positions(&bot), positions(&idle));
-}
-
-#[test]
-fn golden_final_hash_for_seed_42() {
-    let report = run_seed(GOLDEN_SEED, GOLDEN_TICKS);
+fn golden_arena_final_hash_for_seed_42() {
+    let report = run_arena(GOLDEN_SEED, GOLDEN_TICKS, &mut arena_bot_input);
     assert_eq!(report.final_tick, GOLDEN_TICKS);
     assert_eq!(
         report.final_hash,
-        GOLDEN_FINAL_HASH,
-        "golden final hash changed: expected {GOLDEN_FINAL_HASH:#018x}, got {:#018x}.\n\
-         Compare these checkpoints with a platform that passes to find the first diverging tick:\n{}",
+        GOLDEN_ARENA_FINAL_HASH,
+        "golden arena hash changed: expected {GOLDEN_ARENA_FINAL_HASH:#018x}, got {:#018x}.\n\
+         Checkpoints for comparison with a platform that passes:\n{}",
         report.final_hash,
         report
             .hashes
@@ -144,28 +124,14 @@ fn golden_final_hash_for_seed_42() {
     );
 }
 
-/// Hash gate of engine ADR-0006, building block 7: the golden run on real thread pools with 1, 2
-/// and N threads (`gate_executors`, N = 4 or `GRIMOIRE_GATE_THREADS`).
-///
-/// Every executor must reproduce the unchanged golden final hash and every checkpoint of the run
-/// on the default sequential executor. A mismatch is a determinism bug, never a reason to renew
-/// the golden master.
+/// Hash gate of engine ADR-0006 for the arena: the golden run on thread pools with 1, 2 and N
+/// threads must reproduce every checkpoint of the sequential run.
 #[test]
-fn golden_final_hash_for_seed_42_with_1_2_and_n_threads() {
-    let sequential = run_seed(GOLDEN_SEED, GOLDEN_TICKS);
+fn golden_arena_run_with_1_2_and_n_threads() {
+    let sequential = run_arena(GOLDEN_SEED, GOLDEN_TICKS, &mut arena_bot_input);
     for (label, executor) in gate_executors() {
         let threads = executor.threads();
-        let report = run_seed_with_executor(GOLDEN_SEED, GOLDEN_TICKS, executor);
-        assert_eq!(
-            report.final_tick, GOLDEN_TICKS,
-            "{threads} threads ({label})"
-        );
-        assert_eq!(
-            report.final_hash, GOLDEN_FINAL_HASH,
-            "golden final hash with {threads} threads ({label}): expected \
-             {GOLDEN_FINAL_HASH:#018x}, got {:#018x}",
-            report.final_hash
-        );
+        let report = run_arena_with_executor(GOLDEN_SEED, GOLDEN_TICKS, executor);
         assert_eq!(
             report.hashes, sequential.hashes,
             "checkpoints with {threads} threads ({label}) differ from the sequential run"
