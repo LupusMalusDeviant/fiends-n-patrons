@@ -1,19 +1,14 @@
 //! Fiends n Patrons — executable entry point.
 //!
 //! Opens the game window, loads the figure pack and runs the first playable prototype
-//! ([`fnp_game::arena::ArenaGame`]). `Escape` exits; see [`cli::USAGE`] for arguments and
+//! ([`fnp_game::arena::ArenaGame`]) in the engine's main loop. `Escape` exits, `V` toggles the
+//! imp's curtain mode, `F3` the engine's stats overlay; see [`cli::USAGE`] for arguments and
 //! environment variables.
 
 use std::process::ExitCode;
-use std::time::Instant;
 
 use fnp_app::cli::{self, Command, MAX_FRAMES_VAR, PACK_VAR, USAGE};
-use fnp_app::figures::load_visuals;
-use fnp_app::game_loop::{GameLoop, LoopConfig, LoopError};
-use fnp_app::window_renderer;
-use fnp_game::GAME_TITLE;
-use grimoire::platform::{PlatformContext, WindowConfig, run_desktop};
-use grimoire::render::Renderer;
+use fnp_app::stage::{ArenaConfig, Figures, arena_app};
 
 /// Exit code for invalid arguments or environment (as in the BSD `sysexits` `EX_USAGE` spirit).
 const EXIT_USAGE: u8 = 2;
@@ -44,36 +39,12 @@ fn main() -> ExitCode {
         Err(error) => return usage_error(&error),
     };
 
-    let factory = Box::new(move |ctx: &mut dyn PlatformContext| {
-        let window = ctx.window().ok_or(LoopError::NoWindow)?;
-        let mut renderer = window_renderer(&window)?;
-        eprintln!("fiends-n-patrons: renderer {}", renderer.backend_name());
-        let started = Instant::now();
-        let (visuals, summary) = load_visuals(&mut renderer, &pack)?;
-        eprintln!(
-            "fiends-n-patrons: figure pack loaded in {:.1} s (soul: {} parts, {} joints, \
-             {:.2} m; imp: {} parts, {:.2} m)",
-            started.elapsed().as_secs_f64(),
-            summary.soul_parts,
-            summary.soul_joints,
-            summary.soul_height,
-            summary.imp_parts,
-            summary.imp_height
-        );
-        Ok((renderer, visuals))
+    let (app, _stats) = arena_app(ArenaConfig {
+        seed,
+        figures: Figures::Pack(pack),
+        max_frames,
     });
-    let game = GameLoop::new(LoopConfig { seed, max_frames }, factory);
-    let error = game.error();
-    let window = WindowConfig {
-        title: String::from(GAME_TITLE),
-        ..WindowConfig::default()
-    };
-    let result = run_desktop(window, game);
-    if let Some(error) = error.borrow_mut().take() {
-        eprintln!("fiends-n-patrons: {error}");
-        return ExitCode::FAILURE;
-    }
-    match result {
+    match app.run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("fiends-n-patrons: {error}");

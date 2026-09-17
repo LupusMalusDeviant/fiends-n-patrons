@@ -7,9 +7,10 @@ auf Kosten des Zorns der übrigen vier.
 Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Release-Tags).
 
 > Status: **erster spielbarer Prototyp**. Die Seele läuft durch eine beleuchtete Arena, ein Imp
-> feuert ein Sigil-Pattern, ein Treffer beendet die Runde, nach 1,5 s beginnt sie neu. Das Spiel pinnt
-> Grimoire `v0.4.0` über einen Git-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Ein
-> Determinismus-Test friert den Endhash der Arena für Seed 42 über 3.600 Ticks ein.
+> feuert Sigil-Patterns, ein Treffer beendet die Runde, nach 1,5 s beginnt sie neu; ein Vorhang-Modus
+> zeigt rund 10.000 Bullets. Das Spiel läuft in der Hauptschleife der Engine und pinnt Grimoire
+> `v0.4.0` über einen Git-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Der
+> Determinismus-Test friert die Endhashes der Arena und des Vorhangs für Seed 42 ein.
 
 ## Einstieg
 
@@ -22,7 +23,7 @@ Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Rel
 
 | Pfad | Inhalt |
 |------|--------|
-| `crates/fnp_app` | Ausführbares Spiel `fiends-n-patrons`: Kommandozeile, Laden des Figuren-Packs, Hauptschleife |
+| `crates/fnp_app` | Ausführbares Spiel `fiends-n-patrons`: Kommandozeile, Laden des Figuren-Packs über den Asset-Haken der Engine, Darstellungs-Plugin der Arena |
 | `crates/fnp_game` | Spielzustände und Run-Logik: Prototyp-Arena (`arena`) |
 | `crates/fnp_content` | Gameplay-Plugins: Waffen, Patrone, Items, Gegner |
 | `crates/fnp_sim_harness` | Headless-Bot-Läufe, Determinismus- und Balancing-Simulationen |
@@ -48,6 +49,8 @@ Im Spiel:
 | Eingabe | Wirkung |
 |---------|---------|
 | `WASD` oder Pfeiltasten | Seele bewegen (mit leichtem Nachgleiten) |
+| `V` | Vorhang-Modus des Imps ein/aus: rund 10.000 Bullets, die Seele ist dabei unverwundbar |
+| `F3` | Stats-Overlay der Engine ein/aus (Profiler-Scopes mit Budgetbalken) |
 | `Escape` | Beenden |
 
 Gamepads liest die Plattformschicht der Engine noch nicht; der linke Stick folgt, sobald sie es tut.
@@ -60,13 +63,17 @@ Gamepads liest die Plattformschicht der Engine noch nicht; der linke Stick folgt
 | `GRIMOIRE_GPU_ADAPTER=software` | Software-Adapter der Plattform statt der Grafikkarte |
 | `GRIMOIRE_WINDOW_MONITOR=secondary`, `GRIMOIRE_WINDOW_FOCUS=0` | Fenster auf dem Zweitmonitor und ohne Fokus öffnen (Konvention für Läufe auf dem Entwicklungsrechner) |
 
-Bullets laufen über den Weg der Engine: Der Adapter `grimoire::adapters::sigil_render` füllt den
-Bullet-Kanal, der Bullet-Pass zeichnet sie als Billboards auf Ebene 6 und leitet die Geschoss-Lichter
-selbst ab. Vorläufig im Prototyp: Die Figuren haben keine Animation, nur Ruhe- und Treffer-Pose.
+Das Spiel läuft über `App::run` der Engine: Das Plugin `ArenaStage` lädt die Figuren über den
+Asset-Haken (`register_assets`, `load_figure_into`), `ArenaGame` ist die Simulation. Die Imp-Patterns
+(`content/sigil/`) sind aus den Referenz-Patterns der Engine abgeleitet und nutzen nur
+Katalognamen, die der Bullet-Pass zeichnet. Bullets laufen über den Adapter
+`grimoire::adapters::sigil_render` in den Bullet-Pass, der auch die Geschoss-Lichter ableitet.
+Vorläufig im Prototyp: Die Figuren haben keine Animation, nur Ruhe- und Treffer-Pose.
 
 Ohne Fenster läuft dieselbe Simulation über `fnp_sim_harness::run_arena(seed, ticks, input)`; der
-Determinismus-Test liegt in `crates/fnp_sim_harness/tests/determinism.rs`. Eine Bildfolge eines geskripteten Laufs rendert
-`crates/fnp_app/tests/offscreen_capture.rs` ohne Fenster (Aufruf im Dateikopf).
+Determinismus-Test liegt in `crates/fnp_sim_harness/tests/determinism.rs`. Eine Bildfolge eines
+geskripteten Laufs rendert `crates/fnp_app/tests/offscreen_capture.rs` über `run_offscreen` der
+Engine, ohne Fenster (Aufruf im Dateikopf).
 
 ## Lizenz
 

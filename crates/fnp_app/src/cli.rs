@@ -24,6 +24,8 @@ Options:
 
 Controls:
   WASD or arrow keys  Move the soul
+  V                   Toggle the imp's curtain mode (about 10,000 bullets, soul invulnerable)
+  F3                  Toggle the engine's stats overlay
   Escape              Quit
 
 Environment:
