@@ -82,6 +82,10 @@ python -B -m unittest discover -s assets_src/figure_pack -t assets_src/figure_pa
 python -B -m unittest discover -s assets_src/asset_import -t assets_src/asset_import
 ```
 
+Wer etwas unter `content/` ändert, übersetzt den Content zusätzlich mit dem Asset-Compiler der
+Engine (siehe „Asset-Gate" unten); die CI tut dasselbe bei jedem Push, und jede Diagnose bricht den
+Lauf.
+
 Die Pflichtprüfungen laufen nur mit **auskommentiertem** `[patch]` in `<Arbeitsordner>\.cargo\config.toml`;
 ein aktiver Patch lässt jeden `--locked`-Aufruf scheitern. Vor dem Commit zusätzlich prüfen, dass
 `Cargo.lock` weder eine Pfad-Quelle für `grimoire` noch einen `[[patch.unused]]`-Eintrag enthält
@@ -91,8 +95,8 @@ ein aktiver Patch lässt jeden `--locked`-Aufruf scheitern. Vor dem Commit zusä
 
 | Workflow | Auslöser | Inhalt |
 |----------|----------|--------|
-| `ci.yml` | Push auf `main`, Pull Request, manuell | `fmt`; `assets` (Linux, Python-Tests von `assets_src/figure_pack` und `assets_src/asset_import`); `test` auf Windows/Linux/macOS mit clippy, Tests (`--no-fail-fast`) und Build; unter Linux zusätzlich der Abgleich der `clippy.toml`-Kopien mit dem gepinnten Engine-Tag |
-| `nightly.yml` | täglich 02:47 UTC, manuell | Determinismus-Test im Release-Profil, dann Release-Build von `fiends-n-patrons` für drei Systeme als Artefakt (7 Tage), Kurz-Changelog im Job-Summary; geplante Läufe entfallen, wenn `main` 24 h nicht bewegt wurde (Push oder Merge laut Aktivitäts-API, nicht Commit-Datum) |
+| `ci.yml` | Push auf `main`, Pull Request, manuell | `fmt`; `assets` (Linux, Python-Tests von `assets_src/figure_pack` und `assets_src/asset_import`); `content` (Linux, Asset-Gate über `content/` und der Negativnachweis, je ein eigener Job); `test` auf Windows/Linux/macOS mit clippy, Tests (`--no-fail-fast`) und Build; unter Linux zusätzlich der Abgleich der `clippy.toml`-Kopien mit dem gepinnten Engine-Tag |
+| `nightly.yml` | täglich 02:47 UTC, manuell | Asset-Gate auf Windows/Linux/macOS (beide Fälle), Determinismus-Test im Release-Profil, dann Release-Build von `fiends-n-patrons` für drei Systeme als Artefakt (7 Tage), Kurz-Changelog im Job-Summary; geplante Läufe entfallen, wenn `main` 24 h nicht bewegt wurde (Push oder Merge laut Aktivitäts-API, nicht Commit-Datum) |
 | `release.yml` | Tag `vX.Y.Z` | Versionsprüfung, Determinismus-Test im Release-Profil und Release-Builds für drei Systeme, **Entwurf** eines GitHub-Release mit git-cliff-Notes und Binaries |
 
 - Der Job `assets` läuft bei jedem Auslöser des Workflows, nicht nur bei Änderungen unter
@@ -149,6 +153,59 @@ keine eigene Action** dafür.
   bekommen. Soll die Engine wieder privat werden, braucht es ein neues ADR.
 - Engine-Tags werden nie verschoben oder gelöscht (ADR-0009). Seit das Repo öffentlich ist, bräche
   ein fehlender Tag auch alle fremden Klone.
+
+### Asset-Gate (Content)
+
+Der Content des Spiels wird in der CI mit dem **Compiler der Engine am gepinnten Tag** übersetzt
+(Plan 0002 WP9.3, [ADR-0010](docs/adr/0010-sigil-compiler-hoheit.md)): Der Job holt die Engine in
+`engine/`, baut `sigilc` und den Asset-Compiler `grimoire-ac` und ruft ihn auf. **Jede Diagnose
+bricht den Lauf**; ein Pack wird nur geschrieben, wenn es vollständig zu seinen Quellen passt.
+`packs/` ist reines Build-Artefakt (7 Tage Aufbewahrung) und steht in `.gitignore`.
+
+- **Zwei Jobs, zwei Fälle.** `asset compiler (content/)` übersetzt `content/`.
+  `asset compiler (negative proof)` übersetzt `tests/fixtures/sigil-broken/` und ist **nur grün,
+  wenn der Compiler ablehnt** und die in `expected-codes.txt` genannten Diagnosen meldet. Ohne
+  diesen zweiten Job wäre das Gate auch dann grün, wenn gar kein Compiler liefe.
+- **Pin.** Tag und Commit kommen aus `Cargo.lock` (`.github/scripts/engine-pin.sh`), nie aus dem
+  Workflow: Ein `cargo update -p grimoire` bewegt das Gate mit dem Rest des Builds. Ein eigener
+  Schritt prüft, dass der Tag genau auf den Commit aus `Cargo.lock` zeigt (Tags werden nie
+  verschoben, [ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)).
+- **Zugriff.** Der zweite `actions/checkout` holt das öffentliche Engine-Repo
+  ([ADR-0013](docs/adr/0013-oeffentliche-repos-anonymer-engine-abruf.md)) — **kein Secret, kein
+  Deploy-Key**, nur das automatische, lesende Workflow-Token, das nicht gespeichert wird
+  (`persist-credentials: false`). Scheitert dieser Schritt, ist fast nie der Code schuld: Die Engine
+  ist nicht öffentlich erreichbar oder der gepinnte Tag fehlt.
+- **Cache.** Schlüssel ist der Engine-Tag plus der Hash von `Cargo.lock` und
+  `engine/tools/global.json` — also genau die Angaben, die entscheiden, was gebaut wird. Der
+  NuGet-Cache hängt an den Lock-Dateien der Werkzeug-Suite.
+- **Noch nicht scharf.** `grimoire-ac` ist jünger als der aktuell gepinnte Engine-Tag `v0.4.0`. Bis
+  der Pin einen Tag erreicht, der den Asset-Compiler mitbringt, läuft genau dieser eine Tag ohne
+  Gate — sichtbar als Warnung und im Job-Summary, nie stillschweigend. Erlaubt ist das nur für den
+  Tag, der in `.github/asset-gate-bootstrap` steht; jeder andere Pin ohne Compiler ist ein Fehler,
+  und sobald ein gepinnter Tag den Compiler mitbringt, macht diese Datei die CI rot, bis sie
+  gelöscht ist. Die Ausnahme kann also nicht liegenbleiben.
+- **Laufzeit.** Der erste Lauf eines Engine-Tags baut `sigilc` und die Werkzeuge vollständig;
+  danach zieht der Cache. Richtwert bleibt R13: Standard-Push unter 15 Minuten pro Plattform. Die
+  Zeit des Übersetzens selbst steht als `grimoire-ac timings:` im Job-Protokoll.
+
+Lokal dasselbe (die Werkzeuge einmal aus dem gepinnten Tag bauen, danach nur noch das letzte
+Kommando):
+
+```bash
+tag=$(bash .github/scripts/engine-pin.sh | sed -n 's/^tag=//p')
+git -c credential.helper= clone --depth 1 --branch "$tag" https://github.com/LupusMalusDeviant/grimoire engine
+cargo build --release -p grimoire_sigilc --bin sigilc --locked --manifest-path engine/Cargo.toml
+dotnet build engine/tools/src/Grimoire.AssetCompiler/Grimoire.AssetCompiler.csproj -c Release
+
+export GRIMOIRE_SIGILC="$PWD/engine/target/release/sigilc"
+export GRIMOIRE_AC="$PWD/engine/tools/src/Grimoire.AssetCompiler/bin/Release/net10.0/grimoire-ac"
+bash .github/scripts/asset-gate.sh content packs pass
+bash .github/scripts/asset-gate.sh tests/fixtures/sigil-broken packs/negative fail tests/fixtures/sigil-broken/expected-codes.txt
+```
+
+`engine/` gehört nicht ins Repo; wer es dauerhaft braucht, legt es außerhalb ab und zeigt mit den
+beiden Variablen darauf. Der Compiler selbst bleibt Sache der Engine: `grimoire-ac` entdeckt,
+normalisiert, ruft auf und packt, kennt aber keine Sigil-Grammatik (ADR-0010).
 
 ## CI-Überwachung (Pflicht)
 
@@ -284,7 +341,10 @@ Stolperfallen:
    winit usw.) denen der Engine-CI entsprechen. Beim Upgrade die Versionen gegen
    `git show vX.Y.Z:Cargo.lock` im Engine-Repo vergleichen und Abweichungen mit
    `cargo update -p <crate> --precise <version>` angleichen.
-4. Determinismus-Lints abgleichen (siehe „Determinismus-Lints“): Die `clippy.toml` der Fassade im
+4. Bringt der neue Tag den Asset-Compiler mit (Engine ab WP9.2), `.github/asset-gate-bootstrap`
+   löschen: Die CI besteht darauf und ist sonst rot. Ab da übersetzt das Gate `content/` bei jedem
+   Push.
+5. Determinismus-Lints abgleichen (siehe „Determinismus-Lints“): Die `clippy.toml` der Fassade im
    Ziel-Tag muss mit jeder Kopie im Spiel übereinstimmen.
    ```bash
    git -C ../grimoire show vX.Y.Z:crates/grimoire/clippy.toml > /tmp/facade-clippy.toml
@@ -292,8 +352,8 @@ Stolperfallen:
    ```
    Bei Abweichung die Datei aus dem Tag in jede Kopie übernehmen; sie gehört in den Upgrade-Commit.
    Neue Einträge können bestehenden Spiel-Code rot machen, das ist gewollt.
-5. Lokale Pflichtprüfungen; bei gebrochenen Golden-Mastern gilt die Golden-Master-Regel.
-6. Commit `build(engine): bump grimoire to vX.Y.Z` mit `Cargo.toml`, `Cargo.lock` und gegebenenfalls
+6. Lokale Pflichtprüfungen; bei gebrochenen Golden-Mastern gilt die Golden-Master-Regel.
+7. Commit `build(engine): bump grimoire to vX.Y.Z` mit `Cargo.toml`, `Cargo.lock` und gegebenenfalls
    den `clippy.toml`-Kopien, pushen und den CI-Lauf überwachen.
 
 ## Determinismus-Lints
@@ -361,7 +421,8 @@ erlaubt, solange kein veröffentlichtes Release zu dem Tag existiert.
 ## Versionen der GitHub Actions
 
 Actions sind gepinnt: `actions/checkout@v7`, `actions/setup-python@v7`,
-`actions/upload-artifact@v7`, `actions/download-artifact@v8`, `Swatinem/rust-cache@v2` (auf den
+`actions/setup-dotnet@v6`, `actions/cache@v6`, `actions/upload-artifact@v7`,
+`actions/download-artifact@v8`, `Swatinem/rust-cache@v2` (auf den
 Commit, nicht nur das Tag), `orhun/git-cliff-action@v4`. Aktuelle
 Stände prüfen mit `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`. Ein Wechsel ist ein
 eigener `ci:`-Commit, nachdem die Release-Notes gelesen wurden.
