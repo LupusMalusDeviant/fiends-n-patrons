@@ -1,10 +1,10 @@
 # Asset-Import-Pilot: fremd erzeugte Figuren ins Spiel (parallel zu M3)
 
 - **Stand:** 2026-09-17 (Agentenlauf)
-- **Status:** Stufen 1 bis 3 gemergt, Stufe 4 offen. Rollenbudgets, Texturgrößen und Zielhöhen sind **vorläufig (PO-Freigabe ausstehend)**; die gemessenen Werte in §3 sind gemessen, nicht geschätzt.
+- **Status:** Alle vier Stufen gemergt. Die **Rollenbudgets bleiben nach dem PO-Entscheid vom 2026-09-18 vorläufig** und werden nach der GPU-Messsitzung bestätigt; Texturgrößen sind seit Stufe 4 in der Engine belegt, und für Gegner gilt künftig eine Zielhöhe von 1,3 m. Die Werte in §2 und §3 sind gemessen, nicht geschätzt.
 - **Bezug:** [Plan 0002](0002-phase-p1-sichtbarer-kern.md) (PO-Entscheide vom Abend des 2026-09-17, Meilenstein M3), [PRD-0003](../prd/0003-rendering-und-art.md) (Look, Kamera, Figuren), [PRD-0002](../prd/0002-grimoire-engine-architektur.md) (Budgets), Engine-Vertrag `crate-vertraege.md` §6 (`FNP_MESH`, Knochenverformung, Texturgrenzen) und §12 (Pack v1), Engine-Formatdoku `pack.md`.
 - **Warum ein eigenes Dokument:** Der Pilot ist kein Arbeitspaket aus den P1-PRDs, sondern Spiel-Repo-Arbeit, die der PO am Abend des 2026-09-17 parallel zu M3 beauftragt hat. Plan 0002 verweist darauf (PO-Entscheide vom Abend des 2026-09-17), statt seine WP-Nummerierung zu dehnen; alle Werkzeuge liegen unter `assets_src/`, kein Rust ist betroffen.
-- **Nicht getan:** Die vier Pilot-PRs ändern kein Rust und keinen Engine-Code (insbesondere nicht `crates/fnp_game/src/arena/present.rs` und nicht `crates/fnp_content/`; der Prototyp-Neubau in Spiel-PR #12 hat beides unabhängig davon angefasst); kein Blender und keine Grafikkarte in der CI; keine Messung auf Referenz-Hardware; die Ergebnisdateien der Stufen 2 und 3 liegen außerhalb des Repos, weil sie aus Quellen, Skripten und Manifest reproduzierbar sind.
+- **Nicht getan:** Die vier Pilot-PRs ändern kein Rust und keinen Engine-Code (insbesondere nicht `crates/fnp_game/src/arena/present.rs` und nicht `crates/fnp_content/`; der Prototyp-Neubau in Spiel-PR #12 hat beides unabhängig davon angefasst); kein Blender und keine Grafikkarte in der CI; keine Messung auf Referenz-Hardware; die Ergebnis- und Bilddateien der Stufen 2 bis 4 liegen außerhalb des Repos, weil sie aus Quellen, Skripten und Manifest reproduzierbar sind.
 
 ## 1. Auftrag
 
@@ -46,11 +46,27 @@ Die 94 Python-Tests der Asset-Werkzeuge liefen bisher nirgends außer auf dem En
 
 **Der Job ist nachweislich scharf:** Ein absichtlich falscher Erwartungswert (`187` statt der korrekten `188` für halbes Weiß in linearem Licht) machte Lauf 35257719286 genau in diesem Job rot, während `rustfmt` und alle drei `test`-Jobs grün blieben; die Rücknahme ist in Lauf 35257974400 wieder grün. **Bewusste Abweichung von der Vorgabe:** Der Job läuft bei jedem Auslöser des Workflows statt nur bei Änderungen unter `assets_src/**`, weil GitHub Actions keinen Pfadfilter je Job kennt und ein Filter am Workflow für jede andere Änderung gar keinen Status melden würde — genau die Branch-Schutz-Falle aus `CONTRIBUTING.md`. Der saubere Weg zur Pfadbindung wäre ein eigener Workflow `assets.yml`; offen, ob der PO das will.
 
-### Stufe 4 — Engine-Bild und Massentest (offen)
+### Stufe 4 — Engine-Bild und Massentest (Spiel-PR #17, Merge-Commit `a4cd0de`)
 
-Noch nicht begonnen: die gepackten Figuren in der Engine rendern (gegen den echten Boden, Helligkeit der Hexe messen), eine Menge davon als Crowd-Test messen und daraus die Rollenbudgets bestätigen. Erst diese Stufe beantwortet die Fragen 1 (Budgets) und 7 (Helligkeit) aus §5; die Blickrichtung aus Stufe 1 ist inzwischen anderweitig entschieden. Der Prototyp läuft seit Spiel-PR #12 (`835117a`) wieder in der Hauptschleife der Engine und lädt Figuren über den Asset-Haken — das ist der Weg, auf dem Stufe 4 die Pilotfiguren ins Bild bringt, und die Kamera-Vorgabe C (45° / 11 m, Figur 248 px hoch bei 1080p) ist die Ansicht, in der der PO sie vergleichen will.
+Die gepackte Hexe und der Hi3D-Imp werden von der Engine selbst gezeichnet — offscreen, Software-Adapter, MSAA 4x, an allen drei Kamera-Vorgaben, neben den Figuren der Runde 4. Kein Fenster, keine echte GPU, kein Abspielen von Clips: die eine Pose ist offline abgetastet. Dazu zwei Werkzeuge ohne Engine und ohne Blender — `sample_pose.py` tastet ein Bild eines Clips in die Gelenkreihenfolge des Pakets ab (`LINEAR`, Slerp, `STEP`; `CUBICSPLINE` wird abgelehnt statt genähert), `measure_capture.py` misst eine Aufnahme gegen den leeren Boden — und 23 Tests für beide.
 
-## 3. Gemessene Werte (Stufen 2 und 3)
+**Gemessen:**
+
+- **Größe auf dem Bildschirm** (1080p, Figurenhöhe in Pixeln, Kamera A/B/C): **Hexe 132/173/216**, dieselbe Hexe in der abgetasteten Pose 130/156/189, **Hi3D-Imp 92/107/127**; zum Vergleich `soul` 136/179/221 und `imp` der Runde 4 104/130/153. Die neuen Figuren spielen in der Größe der alten.
+- **CPU-Seite im Gedränge** (30 Imps plus Hexe = 31 Figuren, 32 Netz-Instanzen, 811 Gelenkmatrizen zu 51.904 Byte je Bild): **Extraktion 0,011 ms im Mittel**, 0,032 ms im Maximum, gegen das Budget von **0,5 ms**. Über die Figurenzahl wächst sie linear mit rund 0,1 µs je Figur.
+- **Helligkeit gegen den echten Arenaboden** (Boden 0,0215): Die Hexe liegt bei 0,0095–0,0104 und hebt sich mit **1,18–1,20 : 1** ab, etwas besser als die `soul` mit 1,10 : 1 — sie verschwindet also nicht. Aber **ihr hellstes Zehntel kommt nur auf 1,02–1,05 : 1**, gegen 1,51 : 1 beim Imp der Runde 4: Sie liest sich als Silhouette, nicht als Gestalt.
+- **Texturgröße gegengeprüft:** Hexe 1024 gegen 512 ändert an Kamera A 1,2 % ihrer Pixel (höchstens 8 sRGB-Stufen), an Kamera C 3,9 % (22 Stufen), am dichtesten an Oberkörper und Gürtel. **1024 bleibt richtig** — jetzt in der Engine belegt statt in einer Vorschau.
+- **MSAA 4x gegen ohne:** 29,6 % der Figurenpixel ändern sich, am Silhouettenrand 56,4 % und dort im Mittel um 6,5 sRGB-Stufen, höchstens 84 — genau die dünnen Teile: Haarsträhnen, Fransen, Hörner.
+
+**Die Vorschau aus Stufe 2 führte in die Irre:** Sie zeigte die Hexe **heller** als ihren Boden (0,0181 gegen 0,0111), in der Engine ist es **umgekehrt** (0,0104 gegen 0,0215) — die Helligkeitsbeziehung war also vertauscht. Die Vorschau kennt weder Umgebungslicht noch Bodenfarbe der Arena; übertragbar war aus ihr nur die Aussage über Texturgrößen und Mip-Stufen. Die Helligkeitsfrage ist damit erst in der Engine beantwortet, und Vorschauwerte gehören künftig nur noch zum Vergleich zweier Varianten, nie als absolute Aussage.
+
+**Nicht gemessen:** Alle Renderer-Zeiten dieser Stufe sind Wanduhrzeiten der Software-Rasterung (160–270 ms je Bild bei 1080p) und sagen über eine GPU nichts. In Messsitzung 1 gehört gemessen: die GPU-Zeit eines Bildes mit 30 gehäuteten Figuren und MSAA 4x gegen das 8-ms-Budget aus Plan 0002, mit und ohne Schattenwürfe, und ob das Hochladen der Gelenkmatrizen auffällt.
+
+**Entschieden (PO, 2026-09-18):** Die Rollenbudgets bleiben vorläufig (§4). Vor weiteren Importen werden **Gegner auf eine Zielhöhe von 1,3 m** gebracht — der Hi3D-Imp steht heute auf 1,0 m und misst an Kamera A nur 92 px. Die Lesbarkeit der Hexe wird **über das Licht gelöst, ein Rim-Light, nicht über die Figur**: Textur, Grundfarbe und Reduktion bleiben, wie sie sind.
+
+Zwei Läufe des Aufnahmetests ergeben bytegleiche Bilder; Push-Lauf auf `main` 35268356586 grün.
+
+## 3. Gemessene Werte der Vorbereitung (Stufen 2 und 3)
 
 | | Hexe | Imp |
 |---|---|---|
@@ -76,17 +92,17 @@ Die PRDs nennen keine Zahlen je Rolle. `assets_src/asset_import/budgets.json` f�
 | `boss` | 50.000 | 6 | 2048 | 160 MiB |
 | `prop` | 5.000 | 3 | 1024 | 20 MiB |
 
-*Vorläufig, PO-Freigabe ausstehend.* **Empfehlung:** als vorläufige Budgets übernehmen und nach dem Massentest (Stufe 4) und der GPU-Messsitzung bestätigen. Das Budget gilt für neue Importe; die Figuren der Runde 4 werden dafür jetzt nicht umgebaut.
+**Entschieden (PO, 2026-09-18):** Die Budgets bleiben **vorläufig**; bestätigt werden sie nach der GPU-Messsitzung. Sie gelten für neue Importe; die Figuren der Runde 4 werden dafür nicht umgebaut. Dazu gehört seit demselben Entscheid eine **Zielhöhe von 1,3 m für Gegner** — die Tabelle oben begrenzt Dreiecke, Texturen und Speicher, nicht die Größe im Bild, und Stufe 4 hat gezeigt, dass ein 1,0-m-Gegner an der Vorgabekamera nur 92 px hoch ist.
 
 ## 5. Offene PO-Fragen (je mit Empfehlung)
 
-1. **Rollenbudgets** aus §4 als vorläufige Werte übernehmen. *Empfehlung:* ja, Bestätigung nach Stufe 4 und GPU-Messsitzung.
+1. **Rollenbudgets** aus §4 als vorläufige Werte übernehmen. *Entschieden (PO, 2026-09-18):* ja, sie bleiben vorläufig; bestätigt wird nach der GPU-Messsitzung, nicht schon nach Stufe 4.
 2. **Blickrichtung +Z oder −Z.** *Erledigt (2026-09-17)* mit Spiel-PR #12 (`835117a`): Die Konvention bleibt +Z; die Packs der Runden 3 und 4 sind als `MinusZ` markiert und werden zur Darstellung gedreht, statt ihren Export zu ändern. Neue Importe liefern +Z.
-3. **Zielhöhe der Hexe** — Hi3D normiert jede Figur auf 1,0 m. *Empfehlung:* 1,8 m wie die Verdammte Seele, damit Kapsel und Kamera unverändert passen; der Imp bleibt bei 1,0 m, der Fußpunkt beider kommt auf y = 0.
+3. **Zielhöhe der Hexe** — Hi3D normiert jede Figur auf 1,0 m. *Empfehlung:* 1,8 m wie die Verdammte Seele, damit Kapsel und Kamera unverändert passen; der Imp bleibt bei 1,0 m, der Fußpunkt beider kommt auf y = 0. *Nachtrag (PO, 2026-09-18):* Für **Gegner** gilt künftig eine Zielhöhe von **1,3 m**, bevor weitere Figuren importiert werden; die 1,8 m der Hexe bleiben.
 4. **Gespiegelte Seitennamen im Imp-Rig.** *Empfehlung:* in der Vorbereitungsstufe `.L`/`.R` tauschen, nicht in den Quelldateien.
 5. **Fehlende Clip-Namen** als Warnung oder Fehler. *Empfehlung:* Warnung, bis das Animations-ADR entschieden ist.
 6. **Texturgrößen Hexe 1024, Imp 512** (gemessen, §2 Stufe 2). *Empfehlung:* so übernehmen; 2048 nur, wenn Nahaufnahmen der Spielerfigur geplant sind.
-7. **Die Hexe ist sehr dunkel** (Grundfarbe im Median HSV-Value 6,7 %, Imp 20,4 %; die Stilbibel nennt für den Boden rund 24 %). *Empfehlung:* erst das Engine-Bild aus Stufe 4 gegen den echten Boden messen; falls sie verschwindet, eine dokumentierte Kanalverstärkung.
+7. **Die Hexe ist sehr dunkel** (Grundfarbe im Median HSV-Value 6,7 %, Imp 20,4 %; die Stilbibel nennt für den Boden rund 24 %). *Entschieden (PO, 2026-09-18):* Die Lesbarkeit wird **über das Licht gelöst — ein Rim-Light —, nicht über die Figur**; keine Kanalverstärkung, keine neue Textur. Stufe 4 hat den Befund beziffert: 1,18–1,20 : 1 gegen den Boden, aber nur 1,02–1,05 : 1 im hellsten Zehntel.
 8. **Speicherort der Ergebnisse.** *Empfehlung:* vorerst außerhalb des Repos; Git LFS erst, wenn das Pack in der CI aus ihnen gebaut werden soll.
 9. **Rissige Arbeitskopien.** *Empfehlung:* vor dem Reduzieren nach Position verschweißen lassen; diese Stufe braucht es nicht mehr, Gewichtsmalerei und Animation auf einem geschlossenen Netz werden aber sauberer.
 10. **Blender-Fassung (OF-16.3).** *Empfehlung:* 5.2 LTS pinnen, Manifest-Abweichungen nach einem Blender-Wechsel bewusst erneuern.
@@ -99,4 +115,4 @@ Die PRDs nennen keine Zahlen je Rolle. `assets_src/asset_import/budgets.json` f�
 - [Plan 0002 Phase P1](0002-phase-p1-sichtbarer-kern.md) — PO-Entscheide vom Abend des 2026-09-17, Meilenstein M3
 - [PRD-0003 Rendering & Art](../prd/0003-rendering-und-art.md) · [PRD-0002 Engine](../prd/0002-grimoire-engine-architektur.md) · [PRD-0016 Tooling](../prd/0016-tooling-suite.md)
 - Werkzeuge im Repo: `assets_src/asset_import/` (Prüfung und Vorbereitung, `README.md` mit allen Messungen), `assets_src/figure_pack/` (Konverter), `assets_src/textures/requirements.txt` (gepinnte Python-Pakete)
-- Spiel-PRs: #11 (`05d2db8`), #13 (`7a559f2`), #14 (`80e005a`), #15 (`dcc3e3b`)
+- Spiel-PRs: #11 (`05d2db8`), #13 (`7a559f2`), #14 (`80e005a`), #15 (`dcc3e3b`), #17 (`a4cd0de`, Stufe 4)
