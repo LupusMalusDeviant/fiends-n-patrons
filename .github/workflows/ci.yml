@@ -140,8 +140,6 @@ jobs:
             echo "::error title=Engine-Tag verschoben::Tag ${{ steps.pin.outputs.tag }} zeigt auf $actual, Cargo.lock pinnt $EXPECTED."
             exit 1
           fi
-      # Engine tag plus the two files that decide what is built: the lock file (which engine) and the
-      # SDK pin of the tooling suite.
       # `grimoire-ac` is younger than the engine tag this game pins; until the pin reaches a tag that
       # ships it, exactly the tag named in .github/asset-gate-bootstrap runs without the gate, loudly.
       # That file becomes an error the moment a pinned tag carries the compiler, so the exemption
@@ -149,6 +147,8 @@ jobs:
       - name: Does the pinned tag carry the asset compiler?
         id: tools
         run: bash .github/scripts/asset-tools-ready.sh "${{ steps.pin.outputs.tag }}"
+      # Engine tag plus the two files that decide what is built: the lock file (which engine) and the
+      # SDK pin of the tooling suite.
       - uses: actions/cache@v6
         if: steps.tools.outputs.ready == 'true'
         with:

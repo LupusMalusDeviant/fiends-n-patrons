@@ -1,6 +1,9 @@
 /target
 **/target
 /packs
+# Local clone of the engine for the asset gate (CONTRIBUTING, "Asset-Gate"); the CI checks it out
+# per run, and it never belongs in the repository.
+/engine
 *.swp
 .idea/
 .vscode/
