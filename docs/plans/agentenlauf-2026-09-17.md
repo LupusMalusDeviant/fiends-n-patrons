@@ -46,4 +46,9 @@ Der Zweig bindet die Engine an einen Commit auf `main` statt an einen Tag und bl
 
 ### Engine — WP3.5 und WP5.3
 
-Läuft.
+Gemergt als Engine-PR #29 (`a01495c`), CI auf `main` samt GIF-Job und Benchmark-Gate grün. Der Renderer hat jetzt
+den fest verdrahteten Pass-Graph mit eigener Geschoss-Ebene: Billboards mit Distanzfeld-Silhouetten, Stilbibel-Paletten,
+Kern, Rand und Leuchthof, gezeichnet nur im gegnerischen Palettenraum, dazu höchstens acht abgeleitete
+Geschoss-Lichter über den einzigen erlaubten Weg. Der Fassaden-Adapter Sigil → Render extrahiert 10.000 Geschosse
+in rund 0,04 ms auf dem CI-Runner. Einzelheiten und offene Punkte in den Einträgen WP3.5 und WP5.3 von
+[Plan 0002](0002-phase-p1-sichtbarer-kern.md). Der Prototyp-Zweig wird anschließend auf diese Geschoss-Ebene umgestellt.
