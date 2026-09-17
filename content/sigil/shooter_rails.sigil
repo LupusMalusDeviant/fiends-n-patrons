@@ -1,0 +1,96 @@
+sigil 1
+// shooter_rails: the second shooter's pattern (PRD-0007 role "Schuetze": stationary, directed
+// patterns; the imp's aimed volley is the first). Derived from the engine's reference pattern
+// 05-rail-sweep (crates/grimoire_sigilc/tests/reference/ at engine v0.5.0): two rails of spikes
+// fired from the shooter's flanks, slowed in the middle of their flight so the lane between them
+// is a real choice rather than a gap that closes by itself.
+// Distances in world units (1u = 1 m), times in ticks at 60 Hz, directions absolute (270deg is
+// down). Only drawn catalogue names (sigil.md §10.10).
+//
+// Despawn: no turning modifier at all — every spike keeps its heading and leaves the arena's
+// despawn box (13.5u x 10u around the arena centre) at the latest after the speed curve returns it
+// to full speed.
+
+meta {
+  name = "Shooter Rails"
+  difficulty = [normal, pressure]
+  density = 60 // 4 volleys of 7 per rail, plus the closing darts
+}
+
+// Spike: the rail itself, drawn as a grain so a rail reads as a dotted line.
+bullet spike {
+  silhouette = rice
+  palette = enemy.hex_magenta
+  glow = 0.7
+  radius = 0.16u
+  damage = 1
+  flags = [grazeable]
+}
+
+// Dart: the closing shot down the lane the rails leave open.
+bullet dart {
+  silhouette = diamond
+  palette = enemy.poison_lime
+  glow = 0.85
+  radius = 0.17u
+  damage = 2
+  flags = [grazeable]
+}
+
+// Left rail, fired from the shooter's left flank.
+emitter left_rail {
+  bullet = spike
+  offset = (x = -3.5u, y = 0u)
+  repeat = 4
+  interval = 55t
+  speed = 0.12u/t
+  block line {
+    count = 7
+    spacing = 0.65u
+    direction = 270deg
+  }
+  modifier speed_curve {
+    keys = [
+      (at = 0t, mul = 1.0),
+      (at = 35t, mul = 0.15), // the rail hangs in the arena
+      (at = 80t, mul = 1.3),  // then snaps down and leaves
+    ]
+    interp = linear
+  }
+}
+
+// Right rail, the mirror of the left one; both hang at the same time.
+emitter right_rail {
+  bullet = spike
+  offset = (x = 3.5u, y = 0u)
+  repeat = 4
+  interval = 55t
+  speed = 0.12u/t
+  block line {
+    count = 7
+    spacing = 0.65u
+    direction = 270deg
+  }
+  modifier speed_curve {
+    keys = [
+      (at = 0t, mul = 1.0),
+      (at = 35t, mul = 0.15),
+      (at = 80t, mul = 1.3),
+    ]
+    interp = linear
+  }
+}
+
+// While both rails hang, a narrow fan takes the lane between them.
+emitter lane {
+  bullet = dart
+  delay = 40t
+  repeat = 4
+  interval = 55t
+  speed = 0.14u/t
+  block fan {
+    count = 3
+    spread = 18deg
+    center = 270deg
+  }
+}

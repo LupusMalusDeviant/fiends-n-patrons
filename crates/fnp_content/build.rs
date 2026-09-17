@@ -14,8 +14,13 @@ use grimoire_sigilc::compiler::{LoadError, SourceLoader, compile};
 /// Canonical content paths (relative to `content/`) of every unit this crate embeds, with the
 /// file name each compiled unit gets in `OUT_DIR`.
 const UNITS: &[(&str, &str)] = &[
-    ("sigil/imp_volley.sigil", "imp_volley.unit"),
+    ("sigil/breaker_toll.sigil", "breaker_toll.unit"),
+    ("sigil/harrier_scatter.sigil", "harrier_scatter.unit"),
     ("sigil/imp_curtain.sigil", "imp_curtain.unit"),
+    ("sigil/imp_volley.sigil", "imp_volley.unit"),
+    ("sigil/shooter_rails.sigil", "shooter_rails.unit"),
+    ("sigil/summoner_bloom.sigil", "summoner_bloom.unit"),
+    ("sigil/swarm_weave.sigil", "swarm_weave.unit"),
 ];
 
 /// Loads imported sources relative to the content root.
