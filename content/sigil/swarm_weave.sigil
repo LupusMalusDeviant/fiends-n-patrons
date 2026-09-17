@@ -1,0 +1,74 @@
+sigil 1
+// swarm_weave: the swarmers' pattern (PRD-0007 role "Schwaermer": cheap, fast, dense). Derived from
+// the engine's reference pattern 04-bending-wave (crates/grimoire_sigilc/tests/reference/ at engine
+// v0.5.0): a bending wave front, but thinner, faster and repeated in bursts, so a swarm reads as
+// several passes instead of one wall.
+// The wave front sweeps down the arena; stragglers fan in behind it and force a second dodge.
+// Distances in world units (1u = 1 m), times in ticks at 60 Hz, directions absolute (270deg is
+// down, towards the player's half). Only drawn catalogue names (sigil.md §10.10).
+//
+// Despawn: `curve.turn` is 0.1deg/t at 0.09u/t, a turning circle of about 52u radius — more than
+// three times the arena's despawn box (13.5u x 10u around the arena centre), so every bullet still
+// leaves. A turn rate that closes its circle inside the box would keep the bullet alive for good
+// (engine WP6.6), which is why the front bends only gently.
+
+meta {
+  name = "Swarm Weave"
+  difficulty = [normal, swarm]
+  density = 120 // 8 passes of 11, plus the stragglers
+}
+
+// Mote: the swarm itself, long along its flight so a pass reads as a moving line.
+bullet mote {
+  silhouette = rice
+  palette = enemy.poison_lime
+  glow = 0.6
+  radius = 0.15u
+  damage = 1
+  flags = [grazeable]
+}
+
+// Straggler: rounder and slower, the second beat of every pass.
+bullet straggler {
+  silhouette = orb
+  palette = enemy.hex_magenta
+  glow = 0.45
+  radius = 0.19u
+  damage = 1
+  flags = [grazeable]
+}
+
+// Eight passes: the swarm keeps coming, but the emitter ends, so the pattern has a last bullet.
+emitter passes {
+  bullet = mote
+  repeat = 8
+  interval = 20t
+  speed = 0.09u/t
+  block wave {
+    count = 11
+    amplitude = 1.1u
+    wavelength = 4.5u
+    direction = 270deg
+  }
+  modifier curve {
+    turn = 0.1deg/t // bends the front just enough to break the straight line
+  }
+}
+
+// Behind every pass, a wide fan that closes the gaps the wave leaves at its edges.
+emitter stragglers {
+  bullet = straggler
+  delay = 10t
+  repeat = 8
+  interval = 20t
+  speed = 0.055u/t
+  block fan {
+    count = 5
+    spread = 110deg
+    center = 270deg
+  }
+  modifier accelerate {
+    rate = 0.0009u/t2
+    max_speed = 0.1u/t // capped so the stragglers stay readable
+  }
+}
