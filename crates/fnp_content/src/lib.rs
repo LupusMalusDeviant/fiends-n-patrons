@@ -39,14 +39,16 @@ pub mod sigil {
         pub const EMBER: u16 = 0;
         /// Bullet type `thorn`.
         pub const THORN: u16 = 1;
-        /// Silhouette index of `orb` (the ember).
+        /// Silhouette index of `orb` (the ember); equals `grimoire::render::bullet_silhouette::ORB`.
         pub const SILHOUETTE_ORB: u16 = 0;
-        /// Silhouette index of `rice` (the thorn).
+        /// Silhouette index of `rice` (the thorn); equals `grimoire::render::bullet_silhouette::RICE`.
         pub const SILHOUETTE_RICE: u16 = 1;
-        /// Palette index of `enemy.lime` (style bible H1, the thorn).
-        pub const PALETTE_LIME: u16 = 0;
-        /// Palette index of `enemy.magenta` (style bible H0, the ember).
-        pub const PALETTE_MAGENTA: u16 = 1;
+        /// Palette index of `enemy.hex_magenta` (style bible H0, the ember); equals
+        /// `grimoire::render::bullet_palette::HEX_MAGENTA`.
+        pub const PALETTE_HEX_MAGENTA: u16 = 0;
+        /// Palette index of `enemy.poison_lime` (style bible H1, the thorn); equals
+        /// `grimoire::render::bullet_palette::POISON_LIME`.
+        pub const PALETTE_POISON_LIME: u16 = 1;
     }
 
     /// Decodes [`IMP_VOLLEY_BYTES`].
@@ -85,8 +87,8 @@ pub mod sigil {
             // PRD-0003 rules 3 and 4: an own silhouette per type, enemy palette space only.
             assert_eq!(ember.visual.silhouette, imp_volley::SILHOUETTE_ORB);
             assert_eq!(thorn.visual.silhouette, imp_volley::SILHOUETTE_RICE);
-            assert_eq!(ember.visual.palette, imp_volley::PALETTE_MAGENTA);
-            assert_eq!(thorn.visual.palette, imp_volley::PALETTE_LIME);
+            assert_eq!(ember.visual.palette, imp_volley::PALETTE_HEX_MAGENTA);
+            assert_eq!(thorn.visual.palette, imp_volley::PALETTE_POISON_LIME);
             for bullet in types {
                 assert_eq!(bullet.visual.palette_space, 1);
                 assert!(bullet.collision_radius <= bullet.radius);
@@ -94,6 +96,26 @@ pub mod sigil {
             }
             assert!((ember.radius - 0.22).abs() < 1.0e-6);
             assert!((thorn.radius - 0.16).abs() < 1.0e-6);
+        }
+
+        #[test]
+        fn the_unit_catalogue_lines_up_with_the_bullet_pass_tables() {
+            // The render adapter maps silhouette and palette by identity; a mismatch would draw
+            // the wrong shape or colour, or drop the bullet as invalid.
+            use grimoire::adapters::sigil_render::map_visual;
+            use grimoire::render::{bullet_palette, bullet_silhouette, palette_space};
+
+            assert_eq!(imp_volley::SILHOUETTE_ORB, bullet_silhouette::ORB);
+            assert_eq!(imp_volley::SILHOUETTE_RICE, bullet_silhouette::RICE);
+            assert_eq!(imp_volley::PALETTE_HEX_MAGENTA, bullet_palette::HEX_MAGENTA);
+            assert_eq!(imp_volley::PALETTE_POISON_LIME, bullet_palette::POISON_LIME);
+            let unit = imp_volley().expect("the embedded unit decodes");
+            for bullet in unit.bullet_types() {
+                let mapped = map_visual(bullet.visual).expect("every imp bullet maps");
+                assert_eq!(mapped.silhouette, bullet.visual.silhouette);
+                assert_eq!(mapped.palette, bullet.visual.palette);
+                assert_eq!(mapped.palette_space, palette_space::HOSTILE);
+            }
         }
     }
 }

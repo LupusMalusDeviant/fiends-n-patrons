@@ -749,7 +749,7 @@ fn push_bullets(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut S
         } else {
             [radius, radius, radius]
         };
-        let material = if visual.palette == imp_volley::PALETTE_LIME {
+        let material = if visual.palette == imp_volley::PALETTE_POISON_LIME {
             slot::THORN
         } else {
             slot::EMBER
