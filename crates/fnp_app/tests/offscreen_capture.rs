@@ -11,7 +11,8 @@
 //! ```
 //!
 //! Optional: `FNP_CAPTURE_EVERY=<n>` keeps every n-th frame (default 2), `FNP_CAPTURE_SIZE=<w>x<h>`
-//! (default 960x540), `FNP_CAPTURE_FRAMES=<n>` (default 1080). Frames are written as binary PPM
+//! (default 960x540), `FNP_CAPTURE_FRAMES=<n>` (default 1080), `FNP_CAPTURE_CAMERA=<0|1|2>`
+//! (camera preset A, B or C, default A). Frames are written as binary PPM
 //! (`frame_00000.ppm`, ...), which any image tool turns into a GIF or video; this crate
 //! deliberately adds no image dependency for it.
 
@@ -94,6 +95,7 @@ fn capture_a_scripted_run() {
         seed: 42,
         figures: Figures::Pack(PathBuf::from(pack)),
         max_frames: None,
+        camera_preset: env_or("FNP_CAPTURE_CAMERA", 0),
     });
     let frame_delta = Duration::from_nanos(1_000_000_000 / u64::from(TICK_RATE_HZ));
     let mut run = OffscreenRun::new(size.0, size.1, frames, frame_delta);

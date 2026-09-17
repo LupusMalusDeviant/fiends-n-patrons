@@ -83,6 +83,12 @@ pub const BULLET_CAPACITY: u32 = 16_384;
 /// Input button that toggles the curtain mode (bound to a key by the executable).
 pub const CURTAIN_BUTTON: u8 = 3;
 
+/// Input button that cycles the camera presets (bound to a key by the executable).
+///
+/// Presentation only: the stage plugin reads it from the tick input; no system of the simulation
+/// looks at it, so the camera never changes what happens in the arena.
+pub const CAMERA_BUTTON: u8 = 4;
+
 /// How far outside the arena bullets live before the interpreter despawns them.
 pub const BULLET_BOUNDS_MARGIN: f32 = 3.0;
 

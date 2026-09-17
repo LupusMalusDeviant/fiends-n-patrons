@@ -25,6 +25,7 @@ Options:
 Controls:
   WASD or arrow keys  Move the soul
   V                   Toggle the imp's curtain mode (about 10,000 bullets, soul invulnerable)
+  C                   Cycle the camera presets A (60 deg, 14.5 m), B (52, 12.5), C (45, 11)
   F3                  Toggle the engine's stats overlay
   Escape              Quit
 

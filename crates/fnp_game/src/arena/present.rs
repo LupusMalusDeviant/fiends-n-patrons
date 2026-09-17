@@ -355,18 +355,62 @@ impl ArenaVisuals {
     }
 }
 
-/// Camera of the prototype; the engine's follow spring replaces `target` every frame
-/// (`AppBuilder::camera25d`), driven by the camera focus point of the executable's stage plugin.
+/// One of the camera settings the player can cycle through.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CameraPreset {
+    /// Short name shown in the window title.
+    pub name: &'static str,
+    /// Tilt against the ground in degrees (90 looks straight down).
+    pub tilt_degrees: f32,
+    /// Distance from the follow point along the view direction, in world units.
+    pub distance: f32,
+}
+
+/// Field of view of every camera preset.
+pub const CAMERA_FOV_Y_DEGREES: f32 = 42.0;
+
+/// The camera presets in cycling order; the first is the default.
+///
+/// A (60 degrees, 14.5 m) shows the most arena; a 1.8 m figure is about 144 px tall at 1080p.
+/// C (45 degrees, 11 m) shows it about 230 to 245 px tall, with less arena in view. B lies in
+/// between. The PO compares the character designs at game size with them (decision 2026-09-17).
+pub const CAMERA_PRESETS: [CameraPreset; 3] = [
+    CameraPreset {
+        name: "A",
+        tilt_degrees: 60.0,
+        distance: 14.5,
+    },
+    CameraPreset {
+        name: "B",
+        tilt_degrees: 52.0,
+        distance: 12.5,
+    },
+    CameraPreset {
+        name: "C",
+        tilt_degrees: 45.0,
+        distance: 11.0,
+    },
+];
+
+/// Camera of preset `index` (wrapping), aimed at the follow point of the player's start; the
+/// stage plugin moves `target` every frame with a follow spring.
 #[must_use]
-pub fn camera_template() -> Camera25D {
+pub fn camera_preset(index: usize) -> Camera25D {
+    let preset = CAMERA_PRESETS[index % CAMERA_PRESETS.len()];
     let mut camera = Camera25D::default();
     camera.target = camera_focus(crate::arena::PLAYER_START).to_array();
-    camera.tilt_degrees = 60.0;
-    camera.fov_y_degrees = 42.0;
-    camera.distance = 14.5;
+    camera.tilt_degrees = preset.tilt_degrees;
+    camera.fov_y_degrees = CAMERA_FOV_Y_DEGREES;
+    camera.distance = preset.distance;
     camera.look_ahead_max = 1.0;
     camera.look_ahead_smoothing = 0.3;
     camera
+}
+
+/// The default camera, preset A.
+#[must_use]
+pub fn camera_template() -> Camera25D {
+    camera_preset(0)
 }
 
 /// The camera's follow point for an interpolated player position: mostly the player, pulled
@@ -896,6 +940,39 @@ mod tests {
         ];
         assert!((turned[0] - 1.0).abs() < 1.0e-5 && turned[1].abs() < 1.0e-5);
         assert_eq!(AuthoredFront::PlusZ.correction(), IDENTITY);
+    }
+
+    #[test]
+    fn mouse_aim_hits_the_same_ground_point_under_every_camera_preset() {
+        // Aim is sampled through the rendered camera (engine contract §9.4): the cursor over a
+        // ground point must give the direction from the player to that point, whichever preset
+        // draws the frame, even though the camera looks at the pulled follow point, not the player.
+        let viewport = [1920.0, 1080.0];
+        let player = Vec2::new(2.5, -3.0);
+        for offset in [
+            Vec2::new(3.0, 2.0),
+            Vec2::new(-4.0, 0.5),
+            Vec2::new(0.25, -1.5),
+        ] {
+            let expected = grimoire::quantize_aim(offset);
+            for index in 0..CAMERA_PRESETS.len() {
+                let mut camera = camera_preset(index);
+                camera.target = camera_focus(player).to_array();
+                let pixel = camera
+                    .ground_to_screen((player + offset).to_array(), viewport)
+                    .expect("the ground point is in front of the camera");
+                let aim = grimoire::sample_aim(&camera, pixel, viewport, player)
+                    .expect("the cursor lies on the ground");
+                for axis in 0..2 {
+                    assert!(
+                        (i32::from(aim[axis]) - i32::from(expected[axis])).abs() <= 2,
+                        "preset {index}, offset {offset:?}: {aim:?} vs {expected:?}"
+                    );
+                }
+            }
+        }
+        assert_eq!(camera_template(), camera_preset(0));
+        assert_eq!(camera_preset(3), camera_preset(0), "the index wraps");
     }
 
     #[test]

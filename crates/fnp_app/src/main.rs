@@ -2,8 +2,8 @@
 //!
 //! Opens the game window, loads the figure pack and runs the first playable prototype
 //! ([`fnp_game::arena::ArenaGame`]) in the engine's main loop. `Escape` exits, `V` toggles the
-//! imp's curtain mode, `F3` the engine's stats overlay; see [`cli::USAGE`] for arguments and
-//! environment variables.
+//! imp's curtain mode, `C` cycles the camera presets, `F3` toggles the engine's stats overlay; see
+//! [`cli::USAGE`] for arguments and environment variables.
 
 use std::process::ExitCode;
 
@@ -43,6 +43,7 @@ fn main() -> ExitCode {
         seed,
         figures: Figures::Pack(pack),
         max_frames,
+        camera_preset: 0,
     });
     match app.run() {
         Ok(()) => ExitCode::SUCCESS,

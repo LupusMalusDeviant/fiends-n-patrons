@@ -50,6 +50,7 @@ Im Spiel:
 |---------|---------|
 | `WASD` oder Pfeiltasten | Seele bewegen (mit leichtem Nachgleiten) |
 | `V` | Vorhang-Modus des Imps ein/aus: rund 10.000 Bullets, die Seele ist dabei unverwundbar |
+| `C` | Kamera-Voreinstellung wechseln: A (60°, 14,5 m, Vorgabe), B (52°, 12,5 m), C (45°, 11 m); Blickwinkel immer 42°, die aktive Voreinstellung steht im Fenstertitel |
 | `F3` | Stats-Overlay der Engine ein/aus (Profiler-Scopes mit Budgetbalken) |
 | `Escape` | Beenden |
 
@@ -70,10 +71,16 @@ Katalognamen, die der Bullet-Pass zeichnet. Bullets laufen über den Adapter
 `grimoire::adapters::sigil_render` in den Bullet-Pass, der auch die Geschoss-Lichter ableitet.
 Vorläufig im Prototyp: Die Figuren haben keine Animation, nur Ruhe- und Treffer-Pose.
 
+Die Kamera führt `ArenaStage` selbst (Voreinstellung, Folgefeder, Zug zum Imp), der Zielanker fürs
+Mauszielen ist die Seele. Die Kamera ist reine Darstellung: Ein Test spielt denselben Lauf unter
+allen drei Voreinstellungen mit Wechseln mitten im Lauf und vergleicht den Zustands-Hash nach
+jedem Tick; ein zweiter prüft, dass derselbe Bodenpunkt unter dem Mauszeiger unter jeder
+Voreinstellung dieselbe Zielrichtung ergibt.
+
 Ohne Fenster läuft dieselbe Simulation über `fnp_sim_harness::run_arena(seed, ticks, input)`; der
 Determinismus-Test liegt in `crates/fnp_sim_harness/tests/determinism.rs`. Eine Bildfolge eines
 geskripteten Laufs rendert `crates/fnp_app/tests/offscreen_capture.rs` über `run_offscreen` der
-Engine, ohne Fenster (Aufruf im Dateikopf).
+Engine, ohne Fenster (Aufruf im Dateikopf; `FNP_CAPTURE_CAMERA=0|1|2` wählt die Voreinstellung).
 
 ## Lizenz
 
