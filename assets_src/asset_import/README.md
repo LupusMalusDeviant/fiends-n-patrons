@@ -275,10 +275,152 @@ Nachweise dieser Stufe:
 - **Alte Ergebnisse unverändert.** Die Figuren der Runde 4 packen zu bytegleichen 65 Nutzlasten und
   einem bytegleichen `figures.pack` wie vor der Änderung.
 
+## Stufe 4: Nachweis in der Engine
+
+Die gepackten Figuren werden in der Engine selbst gezeichnet: eigener Hauptschleifen-Durchlauf,
+eigener Renderer, MSAA 4x wie im Spiel, an den drei Kameravoreinstellungen der Arena. Offscreen,
+mit dem Software-Adapter, ohne Fenster. Abspielen von Clips ist nicht Teil dieser Stufe; die Engine
+hat noch kein Animationssystem, deshalb kommt die Pose aus einer Datei.
+
+### Aufruf
+
+```sh
+# Eine Pose eines Clips offline abtasten (ohne Blender, liest die Keyframes aus der .glb)
+python -B sample_pose.py --figure <ziel>/witch.glb --clip melee_1 --frame 6 --name witch
+    --out ../../crates/fnp_app/tests/data/witch_melee_1_frame_6.pose
+
+# Bild und Messwerte, aus dem Wurzelverzeichnis des Repos, immer mit Software-Adapter
+FNP_PILOT_PACK=<pfad>/vergleich.pack FNP_PILOT_DIR=<ausgabe> FNP_PILOT_CAMERA=0
+    FNP_PILOT_TAG=vergleich_kamera_a FNP_PILOT_JSON=<ausgabe>/vergleich_kamera_a.json
+    GRIMOIRE_GPU_ADAPTER=software
+    cargo test --release -p fnp_app --test pilot_showcase -- --ignored --nocapture
+
+# Größe auf dem Bildschirm und Helligkeit gegen den Boden
+python -B measure_capture.py --capture <ausgabe>/vergleich_kamera_a_01.ppm
+    --floor <ausgabe>/boden_kamera_a_01.ppm --labels soul,imp,witch,witch_pose,imp_hi3d
+    --png <ausgabe>/vergleich_kamera_a.png
+```
+
+(Je Aufruf eine Zeile.) Der Test liegt in `../../crates/fnp_app/tests/pilot_showcase.rs`, ist
+`#[ignore]`t und braucht ein Figurenpaket; seine Umgebungsvariablen (`FNP_PILOT_SCENE`
+`comparison|crowd|floor`, `FNP_PILOT_CAMERA`, `FNP_PILOT_SIZE`, `FNP_PILOT_FRAMES`,
+`FNP_PILOT_FIGURES`, `FNP_PILOT_CROWD`, `FNP_PILOT_MSAA`, `FNP_PILOT_POSE`) stehen in seinem Kopf.
+Bilder schreibt er als PPM wie die Arena-Aufnahme, die Messwerte als JSON.
+
+`sample_pose.py` tastet einen Clip an einem Zeitpunkt ab und schreibt die lokalen Transformationen
+aller Gelenke in der Gelenkreihenfolge des Pakets (`../figure_pack/skeleton.py`), mit der
+Achskorrektur des Wurzelgelenks, die der Konverter auch der Ruhepose gibt. Interpolation wie glTF:
+`LINEAR`, Slerp für Drehungen, `STEP` hält den vorigen Keyframe; `CUBICSPLINE` wird abgelehnt statt
+genähert. Die abgetastete Pose der Hexe (`melee_1`, Bild 6 bei 24 fps) liegt als Testdatei im Repo.
+
+### Größe auf dem Bildschirm
+
+1080p, Figurenhöhe in Pixeln, gemessen an der Maske gegen eine Aufnahme des leeren Bodens:
+
+| Figur | Kamera A (60°, 14,5 m) | Kamera B (52°, 12,5 m) | Kamera C (45°, 11 m) |
+|---|---:|---:|---:|
+| `soul` (Runde 4) | 136 px | 179 px | 221 px |
+| `imp` (Runde 4) | 104 px | 130 px | 153 px |
+| **Hexe, Ruhepose** | **132 px** | **173 px** | **216 px** |
+| Hexe, abgetastete Pose | 130 px | 156 px | 189 px |
+| **Imp (Hi3D)** | **92 px** | **107 px** | **127 px** |
+
+Die neuen Figuren spielen also in der Größe der Figuren aus Runde 4: die Hexe bleibt mit 1,80 m
+wenige Pixel unter der `soul` (1,96 m), der Imp ist mit seiner Zielhöhe von 1,0 m die kleinste
+Figur im Bild. Die abgetastete Pose ist niedriger als die Ruhepose, weil die Hexe darin für den
+Schlag nach vorn gebeugt steht — an der nächsten Kamera 27 px.
+
+### Helligkeit gegen den Arenaboden
+
+Der Boden der Arena ist vom Blickwinkel unabhängig (zwischen den Voreinstellungen unterscheidet er
+sich um höchstens 1 sRGB-Stufe), seine relative Leuchtdichte liegt bei **0,0215**. Kontrast nach
+WCAG, Median der Figurenpixel gegen den Boden daneben, Kamera A / B / C:
+
+| Figur | Leuchtdichte (Median) | Kontrast zum Boden | hellstes Zehntel |
+|---|---:|---:|---:|
+| `soul` | 0,0154 | 1,10 : 1 | 1,11 : 1 |
+| `imp` (Runde 4) | 0,0140–0,0146 | 1,11–1,12 : 1 | **1,51–1,53 : 1** |
+| Hexe | 0,0095–0,0104 | **1,18–1,20 : 1** | 1,02–1,05 : 1 |
+| Imp (Hi3D) | 0,0114–0,0116 | 1,16 : 1 | 1,08 : 1 |
+
+Antwort auf die Frage aus Stufe 2: **die Hexe verschwindet nicht.** Sie ist dunkler als der Boden,
+und gerade daraus entsteht ihr Kontrast — er ist sogar etwas höher als der der `soul`, die heute im
+Spiel steht. Was ihr fehlt, ist ein heller Bereich: das hellste Zehntel der `soul` hebt sich mit
+1,11 : 1 ab, das des Runde-4-Imps mit 1,51 : 1, das der Hexe nur mit 1,02–1,05 : 1. Sie liest sich
+als Silhouette, nicht als Gestalt. Alle Werte liegen weit unter den 3 : 1, die WCAG für
+unterscheidbare Flächen nennt; das ist eine Entscheidung über Beleuchtung und Spielstil, keine der
+Asset-Pipeline (offene Frage an die PO).
+
+### Kosten auf der CPU-Seite
+
+Gedränge: 30 Imps und die Hexe in einer Pose, 1080p, MSAA 4x. Gemessen mit der Uhr des Testlaufs,
+weil der Offscreen-Lauf die Profiler-Uhr selbst stellt und die Profiler-Bereiche dort 0 zeigen.
+
+| Szene | Figuren | Netz-Instanzen | Gelenkmatrizen | Bytes je Bild | Extraktion Ø / max |
+|---|---:|---:|---:|---:|---:|
+| Vergleich, 1080p | 5 | 17 | 135 | 8.640 | 0,006 / 0,011 ms |
+| **Gedränge, 1080p** | **31** | **32** | **811** | **51.904** | **0,011 / 0,032 ms** |
+| eine Figur, 1080p | 1 | 2 | 31 | 1.984 | 0,001 / 0,003 ms |
+
+Dieselbe Reihe bei 64×64 Pixeln, wo die Software-Rasterung nicht mehr ins Gewicht fällt, über die
+Figurenzahl: 1 Figur 0,0005 ms, 11 Figuren 0,0015 ms, 31 Figuren 0,0030 ms, 61 Figuren 0,0063 ms.
+Die Extraktion wächst also linear, rund 0,1 µs je Figur (bei 1080p rund 0,3 µs, dort steckt
+Messrauschen der belasteten Maschine drin), und bleibt weit unter dem Budget von 0,5 ms je Bild aus
+Plan 0002. Die Gelenkmatrizen sind der größere Posten: 64 Bytes je Gelenk und Bild, bei 30 Imps und
+einer Hexe 51.904 Bytes, die in jedem Bild neu hochgeladen werden.
+
+**Nicht gemessen und nicht messbar auf dieser Maschine:** die Zeit der GPU. Der Software-Adapter
+hat keine Zeitstempel, die Zahl `renderer_ms` in den JSON-Dateien ist die Wanduhr des
+Zeichenaufrufs, also fast ausschließlich Software-Rasterung (160–270 ms je Bild bei 1080p). Sie
+sagt über eine echte GPU nichts aus und gehört in keinen Vergleich mit dem Bildbudget.
+
+### MSAA 4x gegen keine Kantenglättung
+
+Dieselbe Szene zweimal, einmal mit der Voreinstellung der Engine (`Msaa::X4`), einmal ohne:
+
+- **29,6 %** aller Figurenpixel ändern sich, im Mittel um 1,6 sRGB-Stufen, höchstens um 84.
+- Aufgeteilt: von den Randpixeln der Silhouette ändern sich **56,4 %** und im Mittel um 6,5 Stufen,
+  von den inneren 27,7 % und im Mittel um 1,3 Stufen.
+- Kosten in der Software-Rasterung, drei Läufe je Einstellung: 208–212 ms gegen 179–192 ms je Bild,
+  also rund ein Zehntel bis ein Fünftel mehr. Auf einer GPU ist das Verhältnis ein anderes; das
+  misst erst die Messsitzung auf dem Rechner der PO.
+
+MSAA trifft genau das, was bei diesen Figuren dünn ist: Haarsträhnen, Stofffransen, Hörner. Die
+Vorschau aus Stufe 2 (`render_game_view.py`, vier Abtastungen je Pixel in numpy) hat das ähnlich
+gezeigt, aber **die Helligkeit gegen den Boden falsch herum**: dort war die Hexe mit 0,0181 heller
+als ihr Boden mit 0,0111, in der Engine ist sie mit 0,0104 dunkler als der Boden mit 0,0215. Die
+Vorschau kennt weder das Umgebungslicht noch die Bodenfarbe der Arena. Übertragbar war aus ihr nur
+die Aussage über Texturgrößen und Mip-Stufen, nicht die über Helligkeit oder Kontrast.
+
+### Texturgröße, in der Engine gegengeprüft
+
+Die Entscheidung aus Stufe 2 (Hexe 1024) noch einmal im Engine-Bild mit MSAA 4x, Hexe mit 1024
+gegen dieselbe Hexe mit 512:
+
+| | geänderte Figurenpixel | größte Abweichung |
+|---|---:|---:|
+| Kamera A | 1,2 % | 8 sRGB-Stufen |
+| Kamera C | 3,9 % | 22 sRGB-Stufen |
+
+Die Abweichungen sitzen im mittleren Drittel der Figur, an Oberkörper und Gürtel: dort ändern sich
+an Kamera C 7,6 % der Pixel, im oberen Drittel 2,4 %, im unteren 1,0 %. An Kamera A ist der
+Unterschied mit höchstens 8 Stufen auf 1,2 % der Pixel im Bild nicht mehr zu sehen, an Kamera C mit
+22 Stufen auf 3,9 % gerade noch. 1024 bleibt die richtige Wahl, aber knapp: fiele die Entscheidung über
+Texturspeicher später anders aus, kostete 512 die Hexe an der nächsten Kamera wenig.
+
+### Grenzen dieser Stufe
+
+- Alle Zeiten dieser Stufe stammen aus der Software-Rasterung. Was auf dem Rechner der PO gemessen
+  werden muss: die GPU-Zeit eines Bildes mit 30 gehäuteten Figuren und MSAA 4x gegen das Budget von
+  8 ms aus Plan 0002, mit und ohne Schattenwürfe, und ob das Hochladen der Gelenkmatrizen (51.904
+  Bytes je Bild) auffällt.
+- Die Figuren stehen still. Ein Clip wird nicht abgespielt; die eine Pose ist offline abgetastet.
+- Der Boden trägt nur sein eigenes Material und das Licht der Arena, keine Effekte, keine Geschosse.
+
 ## Tests
 
 ```sh
-python -B -m unittest test_check_asset.py test_prepare_tools.py
+python -B -m unittest test_check_asset.py test_prepare_tools.py test_pose_and_capture.py
 ```
 
 `test_check_asset.py` baut kleine `.glb`-Dateien im Speicher (Figur mit Skin, Zehen, Texturen und
@@ -286,3 +428,9 @@ Clips) und prüft Messung, Grenzen, Exit-Codes und Tangentenwerte. `test_prepare
 Blender: Kastenfilter und Linearlicht, Materialbilder, Seitennamen, Tangentenrahmen und
 Texturorientierung, Mip-Stufen und das Verwerfen von Rückseiten. `blender_prepare.py` selbst
 prüfen die Pilotläufe über ihre Berichte und die Stufe-1-Prüfung der fertigen Figur.
+`test_pose_and_capture.py` prüft Stufe 4 ohne Engine: Slerp und Abtastung der Animationskanäle
+(`LINEAR`, `STEP`, abgelehntes `CUBICSPLINE`), die Achskorrektur des Wurzelgelenks in der
+abgetasteten Pose, das Posenformat, das Lesen der PPM-Aufnahmen, Leuchtdichte und Kontrast sowie
+das Zerlegen einer Aufnahme in Figurenbänder. Den Engine-Teil prüfen die Einheitentests in
+`../../crates/fnp_app/tests/pilot_showcase.rs` (Posendatei, Reihenpositionen, Gedrängeraster); das
+Bild selbst entsteht nur im `#[ignore]`ten Lauf.
