@@ -1,0 +1,65 @@
+sigil 1
+// imp_curtain: the imp's curtain mode, a stress pattern with about ten thousand live bullets.
+// The emitter curtain is the engine's reference pattern 02-spiral-curtain
+// (crates/grimoire_sigilc/tests/reference/ at engine v0.4.0) with more arms, a volley every tick
+// and a slower flight, so the curtain fills the arena; beneath it a counter-turning orb spiral
+// like the one in the engine's sigil_curtain showcase makes the drifting lanes visible.
+// Not meant to be survivable: the arena makes the soul invulnerable while this unit plays.
+// Distances in world units (1u = 1 m), times in ticks at 60 Hz. Only drawn catalogue names.
+
+meta {
+  name = "Imp Curtain"
+  difficulty = [hard, curtain]
+  density = 10000
+}
+
+// Rice grain: long along its flight, so each arm reads as a stream.
+bullet grain {
+  silhouette = rice
+  palette = enemy.poison_lime
+  glow = 1.0
+  radius = 0.14u
+  damage = 1
+  flags = [grazeable]
+}
+
+// Orb of the counter spiral: larger and slower than the grain.
+bullet orb {
+  silhouette = orb
+  palette = enemy.hex_magenta
+  glow = 0.8
+  radius = 0.2u
+  damage = 1
+  flags = [grazeable]
+}
+
+emitter curtain {
+  bullet = grain
+  repeat = forever
+  interval = 1t
+  speed = 0.05u/t
+  block spiral {
+    arms = 24
+    step = 7deg // added every volley
+    start = 90deg
+  }
+  modifier rotate {
+    rate = 0.2deg/t // the whole figure drifts
+  }
+}
+
+emitter counter {
+  bullet = orb
+  delay = 12t
+  repeat = forever
+  interval = 1t
+  speed = 0.04u/t
+  block spiral {
+    arms = 12
+    step = -11deg // turns against the curtain
+    start = 270deg
+  }
+  modifier rotate {
+    rate = -0.15deg/t // slow enough that every orb leaves the arena
+  }
+}

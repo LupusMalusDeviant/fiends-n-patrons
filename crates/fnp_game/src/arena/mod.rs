@@ -1,4 +1,4 @@
-//! First playable prototype: one arena, the player soul, one imp firing a Sigil pattern.
+//! First playable prototype: one arena, the player soul, one imp firing Sigil patterns.
 //!
 //! [`ArenaGame`] is the simulation side (a [`GamePlugin`] whose [`GamePlugin::build`] installs
 //! everything); [`present`] turns a world into a [`grimoire::render::StageFrame`] and never feeds
@@ -8,6 +8,9 @@
 //!
 //! Systems run in this order, each as its own exclusive stage:
 //!
+//! 0. `arena.toggle_mode`: a fresh press of button [`CURTAIN_BUTTON`] switches the imp between its
+//!    normal attack (`imp_volley`) and the curtain mode (`imp_curtain`, about ten thousand live
+//!    bullets, the soul invulnerable): the imp's emitters are replaced and every bullet cleared.
 //! 1. `arena.remember_previous`: positions become the interpolation start.
 //! 2. `arena.steer_player`: input axes 0/1 steer the soul with light momentum (PRD-0005 FR-01),
 //!    confined to the arena and kept out of the imp; frozen while the round is lost.
@@ -17,7 +20,7 @@
 //! 5. `arena.broadphase`: every live bullet enters the [`SpatialGrid`] (the game-side stand-in for
 //!    the facade's `collide.broadphase`, contract §9.6, which is not implemented yet).
 //! 6. `arena.player_hit`: a bullet overlapping the player's capsule ends the round: the imp's
-//!    emitters pause, every bullet is cleared through a [`ClearRequest`].
+//!    emitters pause, every bullet is cleared through a [`ClearRequest`]. Not in curtain mode.
 //! 7. `arena.restart_round`: [`HIT_RECOVERY_TICKS`] after a hit, the player returns to the start
 //!    and the emitters restart.
 //!
@@ -37,7 +40,7 @@ use grimoire::collide::{
 use grimoire::prelude::*;
 use grimoire::sigil::{
     AimTarget, BehaviorRegistryBuilder, BulletPool, ClearFilter, ClearRequest, Emitter,
-    SigilConfig, SigilContent, SigilLibrary, install,
+    SigilConfig, SigilContent, SigilLibrary, UnitId, install,
 };
 
 use crate::{DT, Player, Position, PreviousPosition, Velocity};
@@ -74,8 +77,11 @@ pub const IMP_BODY_RADIUS: f32 = 0.9;
 /// Ticks between a hit and the restart of the round (1.5 s at 60 Hz).
 pub const HIT_RECOVERY_TICKS: u64 = 90;
 
-/// Capacity of the bullet pool.
-pub const BULLET_CAPACITY: u32 = 4096;
+/// Capacity of the bullet pool: the curtain mode keeps about ten thousand bullets alive.
+pub const BULLET_CAPACITY: u32 = 16_384;
+
+/// Input button that toggles the curtain mode (bound to a key by the executable).
+pub const CURTAIN_BUTTON: u8 = 3;
 
 /// How far outside the arena bullets live before the interpreter despawns them.
 pub const BULLET_BOUNDS_MARGIN: f32 = 3.0;
@@ -94,6 +100,44 @@ const FACING_INPUT_SQUARED: f32 = 0.04;
 
 /// Direction the player faces at the start of a round: towards the imp.
 const START_FACING: Vec2 = Vec2::new(0.0, 1.0);
+
+/// Which pattern the imp plays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mode {
+    /// The normal attack, `content/sigil/imp_volley.sigil`.
+    Volley,
+    /// The curtain stress mode, `content/sigil/imp_curtain.sigil`; the soul cannot be hit.
+    Curtain,
+}
+
+impl StableHash for Mode {
+    fn stable_hash(&self, hasher: &mut StableHasher) {
+        match self {
+            Mode::Volley => 0_u8.stable_hash(hasher),
+            Mode::Curtain => 1_u8.stable_hash(hasher),
+        }
+    }
+}
+
+/// Resource: the imp's current pattern and the edge detector of the toggle button.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ArenaMode {
+    /// Pattern playing now.
+    pub mode: Mode,
+    /// Whether [`CURTAIN_BUTTON`] was held in the previous tick (a press toggles once).
+    pub toggle_held: bool,
+}
+impl_stable_hash!(ArenaMode { mode, toggle_held });
+
+/// Resource: the unit ids of the imp's two patterns, as loaded into the Sigil library.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ImpUnits {
+    /// `imp_volley`.
+    pub volley: UnitId,
+    /// `imp_curtain`.
+    pub curtain: UnitId,
+}
+impl_stable_hash!(ImpUnits { volley, curtain });
 
 /// Direction the player faces, a unit vector on the ground plane.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -320,6 +364,12 @@ fn player_hit(world: &mut World) {
     if round.phase != Phase::Fighting {
         return;
     }
+    if world
+        .resource::<ArenaMode>()
+        .is_some_and(|mode| mode.mode == Mode::Curtain)
+    {
+        return;
+    }
     let (Some(player), Some(grid)) = (player_position(world), world.resource::<SpatialGrid>())
     else {
         return;
@@ -383,6 +433,77 @@ fn restart_round(world: &mut World) {
     }
 }
 
+/// Spawns one emitter entity per emitter of the unit `mode` plays, all starting at `started_at`.
+///
+/// Every emitter fires with rotation 0: the patterns give absolute directions.
+fn spawn_emitters(world: &mut World, units: ImpUnits, mode: Mode, started_at: u64) {
+    let (unit, emitters): (UnitId, &[u16]) = match mode {
+        Mode::Volley => (
+            units.volley,
+            &[
+                fnp_content::sigil::imp_volley::AIMED,
+                fnp_content::sigil::imp_volley::FAN,
+                fnp_content::sigil::imp_volley::RING,
+            ],
+        ),
+        Mode::Curtain => (
+            units.curtain,
+            &[
+                fnp_content::sigil::imp_curtain::COUNTER,
+                fnp_content::sigil::imp_curtain::CURTAIN,
+            ],
+        ),
+    };
+    for &emitter in emitters {
+        world.spawn((Emitter {
+            unit,
+            emitter,
+            origin: IMP_POSITION,
+            rotation: 0.0,
+            started_at,
+        },));
+    }
+}
+
+/// Switches the imp's pattern on a fresh press of [`CURTAIN_BUTTON`].
+fn toggle_mode(world: &mut World) {
+    let input = world.resource::<TickInput>().copied().unwrap_or_default();
+    let held = input.slots[0].is_pressed(CURTAIN_BUTTON);
+    let (Some(mut mode), Some(units)) = (
+        world.resource::<ArenaMode>().copied(),
+        world.resource::<ImpUnits>().copied(),
+    ) else {
+        return;
+    };
+    let pressed = held && !mode.toggle_held;
+    mode.toggle_held = held;
+    if pressed {
+        mode.mode = match mode.mode {
+            Mode::Volley => Mode::Curtain,
+            Mode::Curtain => Mode::Volley,
+        };
+        let tick = world.resource::<Tick>().map_or(0, |tick| tick.0);
+        // A lost round keeps its restart tick; the new emitters wait for it like the old ones.
+        let started_at = match world.resource::<RoundState>().map(|round| round.phase) {
+            Some(Phase::Hit { at_tick }) => at_tick.saturating_add(HIT_RECOVERY_TICKS),
+            _ => tick,
+        };
+        let old: Vec<Entity> = world
+            .query::<(Entity, &Emitter)>()
+            .map(|(entity, _)| entity)
+            .collect();
+        for entity in old {
+            world.despawn(entity);
+        }
+        spawn_emitters(world, units, mode.mode, started_at);
+        // Games request clears, they never clear the pool themselves (contract §2a, §11.4).
+        world.spawn((ClearRequest {
+            filter: ClearFilter::All,
+        },));
+    }
+    world.insert_resource(mode);
+}
+
 /// The first playable prototype's game plugin.
 #[derive(Debug, Default)]
 pub struct ArenaGame;
@@ -403,6 +524,10 @@ impl GamePlugin for ArenaGame {
     fn build(&mut self, sim: &mut Simulation) {
         let world = sim.world_mut();
         world.insert_resource(RoundState::first());
+        world.insert_resource(ArenaMode {
+            mode: Mode::Volley,
+            toggle_held: false,
+        });
         world.insert_resource(
             SpatialGrid::new(grid_config()).expect("the arena grid configuration is valid"),
         );
@@ -416,15 +541,20 @@ impl GamePlugin for ArenaGame {
             Player,
         ));
         sim.schedule_mut()
+            .add_system(system_fn("arena.toggle_mode", toggle_mode))
             .add_system(system_fn("arena.remember_previous", remember_previous))
             .add_system(system_fn("arena.steer_player", steer_player))
             .add_system(system_fn("arena.aim", aim_at_player));
 
-        let unit = fnp_content::sigil::imp_volley().expect("the embedded imp unit decodes");
-        let unit_id = unit.id();
+        let volley = fnp_content::sigil::imp_volley().expect("the embedded volley unit decodes");
+        let curtain = fnp_content::sigil::imp_curtain().expect("the embedded curtain unit decodes");
+        let units = ImpUnits {
+            volley: volley.id(),
+            curtain: curtain.id(),
+        };
         let registry = BehaviorRegistryBuilder::new(BEHAVIOR_REGISTRY_VERSION).build();
-        let library = SigilLibrary::new(vec![unit], Arc::clone(&registry))
-            .expect("the imp unit forms a valid library");
+        let library = SigilLibrary::new(vec![volley, curtain], Arc::clone(&registry))
+            .expect("the imp units form a valid library");
         let bounds = ARENA_HALF + Vec2::splat(BULLET_BOUNDS_MARGIN);
         install(
             sim,
@@ -435,30 +565,13 @@ impl GamePlugin for ArenaGame {
         .expect("the Sigil interpreter installs once");
 
         let world = sim.world_mut();
-        // The imp faces the player start; `rotation` only matters for unaimed blocks.
-        let rotation = dmath::atan2(
-            PLAYER_START.y - IMP_POSITION.y,
-            PLAYER_START.x - IMP_POSITION.x,
-        );
+        world.insert_resource(units);
         world.spawn((
             Position { at: IMP_POSITION },
             PreviousPosition { at: IMP_POSITION },
             Imp,
-            Emitter {
-                unit: unit_id,
-                emitter: fnp_content::sigil::imp_volley::VOLLEY,
-                origin: IMP_POSITION,
-                rotation,
-                started_at: 0,
-            },
         ));
-        world.spawn((Emitter {
-            unit: unit_id,
-            emitter: fnp_content::sigil::imp_volley::RING,
-            origin: IMP_POSITION,
-            rotation,
-            started_at: 0,
-        },));
+        spawn_emitters(world, units, Mode::Volley, 0);
 
         sim.schedule_mut()
             .add_system(system_fn("arena.broadphase", broadphase))

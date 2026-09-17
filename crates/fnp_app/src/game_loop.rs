@@ -557,6 +557,7 @@ mod tests {
             hits: 2,
             hit_pending: true,
             bullets: 10,
+            curtain: false,
         };
         assert_eq!(
             GameLoop::<NullRenderer>::title(hud, 59.7),

@@ -1,8 +1,8 @@
 //! Presentation of the arena: turns the simulated world into a [`StageFrame`].
 //!
 //! Everything here reads `&World` and writes only the frame; nothing flows back into the
-//! simulation. Registering meshes and textures needs the window renderer, so the executable
-//! registers them once ([`stage_mesh_data`], a figure pack) and hands the handles in as
+//! simulation. The executable's stage plugin registers the meshes and textures once through the
+//! engine's asset hook ([`stage_mesh_data`], a figure pack) and hands the handles in as
 //! [`ArenaVisuals`].
 //!
 //! **Bullets** go through the engine's path only: the facade adapter
@@ -25,8 +25,8 @@ use grimoire::render::{
 use grimoire::sigil::BulletPool;
 
 use super::{
-    ARENA_HALF, Facing, HIT_RECOVERY_TICKS, IMP_POSITION, Imp, PLAYER_HIT_HALF_WIDTH,
-    PLAYER_HIT_RADIUS, Phase, RoundState,
+    ARENA_HALF, ArenaMode, Facing, HIT_RECOVERY_TICKS, IMP_POSITION, Imp, Mode,
+    PLAYER_HIT_HALF_WIDTH, PLAYER_HIT_RADIUS, Phase, RoundState,
 };
 use crate::{Player, Position, PreviousPosition};
 
@@ -235,7 +235,7 @@ impl FigureVisual {
     }
 }
 
-/// Procedural geometry of the arena, registered once by the executable.
+/// Procedural geometry of the arena, registered once through the engine's asset hook.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StageMeshData {
     /// Square floor of stone tiles.
@@ -323,7 +323,8 @@ impl ArenaVisuals {
     }
 }
 
-/// Camera of the prototype; the executable replaces `target` with its follow spring every frame.
+/// Camera of the prototype; the engine's follow spring replaces `target` every frame
+/// (`AppBuilder::camera25d`), driven by the camera focus point of the executable's stage plugin.
 #[must_use]
 pub fn camera_template() -> Camera25D {
     let mut camera = Camera25D::default();
@@ -363,6 +364,8 @@ pub struct Hud {
     pub hit_pending: bool,
     /// Live bullets.
     pub bullets: u32,
+    /// Whether the imp plays its curtain mode.
+    pub curtain: bool,
 }
 
 /// Reads the [`Hud`] values from the world.
@@ -374,6 +377,9 @@ pub fn hud(world: &World) -> Hud {
         hits: round.map_or(0, |round| round.hits),
         hit_pending: round.is_some_and(|round| matches!(round.phase, Phase::Hit { .. })),
         bullets: world.resource::<BulletPool>().map_or(0, BulletPool::len),
+        curtain: world
+            .resource::<ArenaMode>()
+            .is_some_and(|mode| mode.mode == Mode::Curtain),
     }
 }
 
@@ -747,7 +753,7 @@ mod tests {
         // Walk away from the aimed fan so the round is still running.
         let mut input = TickInput::default();
         input.slots[0].axes[0] = i16::MAX;
-        for _ in 0..140 {
+        for _ in 0..170 {
             sim.step(input);
         }
         let visuals = ArenaVisuals::placeholder();
@@ -774,7 +780,7 @@ mod tests {
         assert!(stats.bullet_point_lights_drawn > 0);
         // Every mesh is arena, figure or marker: no bullet meshes.
         assert_eq!(frame.meshes.len(), 1 + 9 + 2 + 4 + 1 + 1 + 1 + 1);
-        // Both imp bullet types are on screen, each on its own table row.
+        // All three imp bullet types are on screen, each on its own table row.
         let mut rows: Vec<(u16, u16)> = frame
             .bullets
             .iter()
@@ -782,7 +788,11 @@ mod tests {
             .collect();
         rows.sort_unstable();
         rows.dedup();
-        assert_eq!(rows, vec![(0, 0), (1, 1)], "orb in magenta, rice in lime");
+        assert_eq!(
+            rows,
+            vec![(0, 1), (1, 0), (2, 0)],
+            "orb in lime, grain (rice) and dart (diamond) in magenta"
+        );
     }
 
     #[test]
