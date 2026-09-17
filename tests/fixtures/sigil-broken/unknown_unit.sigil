@@ -1,0 +1,32 @@
+sigil 1
+// Deliberately broken (Plan 0002 WP9.3, negative proof of the asset gate): `5s` names a unit the
+// language does not have. Everything else is a plain, valid pattern, so the run fails on this one
+// mistake and on nothing else. Expected diagnostic: SIG0006.
+// Never move this file into content/ — the gate compiles content/ and must stay green there.
+
+meta {
+  name = "Broken: unknown unit"
+  difficulty = [easy]
+  density = 10
+}
+
+bullet orb {
+  silhouette = orb
+  palette = enemy.poison_lime
+  glow = 0.5
+  radius = 0.2u
+  damage = 1
+  flags = [grazeable]
+}
+
+emitter ring {
+  bullet = orb
+  delay = 5s // the language knows t (ticks), not s (seconds)
+  repeat = forever
+  interval = 60t
+  speed = 0.05u/t
+  block ring {
+    count = 12
+    start = 0deg
+  }
+}

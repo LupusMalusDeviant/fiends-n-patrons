@@ -1,0 +1,6 @@
+# Diagnostic codes the asset gate's negative proof demands (Plan 0002 WP9.3): the run over this
+# directory must end with a non-zero exit code and report every code listed here. Further
+# diagnostics are allowed — a broken file often has consequences — but none of these may disappear.
+# Codes are stable for good (docs/formats/sigil.md §6.3 of the pinned engine).
+SIG0006
+SIG0014

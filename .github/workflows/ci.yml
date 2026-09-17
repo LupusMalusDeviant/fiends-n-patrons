@@ -80,6 +80,131 @@ jobs:
       - name: asset_import tests
         run: python -B -m unittest discover -v -s assets_src/asset_import -t assets_src/asset_import
 
+  # The asset gate (Plan 0002 WP9.3, PRD-0017 FR-02): the game's own content is compiled with the
+  # engine's compiler at the pinned tag, by the same asset compiler a developer runs locally, and
+  # every diagnostic fails the run. `packs/` is a build artefact, never a checked-in file.
+  #
+  # Two cases, two jobs, because a green gate alone proves nothing: it would be just as green with no
+  # compiler at all, with the wrong directory, or with a swallowed exit code. The second case
+  # compiles deliberately broken sources and is green only when they are rejected with the expected
+  # diagnostics (tests/fixtures/sigil-broken/README.md).
+  #
+  # Runs on every trigger like the other jobs, and on Linux only; the nightly repeats it on all three
+  # systems, where a difference between operating systems would show up.
+  content:
+    name: asset compiler (${{ matrix.case.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - name: content/
+            directory: content
+            out: packs
+            expect: pass
+            codes: ""
+          - name: negative proof
+            directory: tests/fixtures/sigil-broken
+            out: packs/negative
+            expect: fail
+            codes: tests/fixtures/sigil-broken/expected-codes.txt
+    steps:
+      - uses: actions/checkout@v7
+      # The pin lives in Cargo.lock (ADR-0009), so `cargo update -p grimoire` moves the gate with the
+      # rest of the build and no workflow has to be edited.
+      - name: Engine pin from Cargo.lock
+        id: pin
+        run: bash .github/scripts/engine-pin.sh | tee -a "$GITHUB_OUTPUT"
+      # Second checkout of the public engine repository (ADR-0013): no secret and no deploy key, only
+      # the automatic read-only workflow token, which is not persisted. A failure here almost never
+      # means the code is broken: the engine is not publicly reachable, or the pinned tag is gone.
+      - name: Check out the engine at the pinned tag
+        uses: actions/checkout@v7
+        with:
+          repository: LupusMalusDeviant/grimoire
+          ref: ${{ steps.pin.outputs.tag }}
+          path: engine
+          persist-credentials: false
+      # Engine tags are never moved (ADR-0009). If one ever were, the tag and the commit in
+      # Cargo.lock would disagree and everything built here would be something else than the game
+      # links against.
+      - name: The tag is the commit Cargo.lock pins
+        env:
+          EXPECTED: ${{ steps.pin.outputs.rev }}
+        run: |
+          set -euo pipefail
+          actual=$(git -C engine rev-parse HEAD)
+          echo "Tag ${{ steps.pin.outputs.tag }} -> $actual"
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "::error title=Engine-Tag verschoben::Tag ${{ steps.pin.outputs.tag }} zeigt auf $actual, Cargo.lock pinnt $EXPECTED."
+            exit 1
+          fi
+      # `grimoire-ac` is younger than the engine tag this game pins; until the pin reaches a tag that
+      # ships it, exactly the tag named in .github/asset-gate-bootstrap runs without the gate, loudly.
+      # That file becomes an error the moment a pinned tag carries the compiler, so the exemption
+      # cannot outlive its reason.
+      - name: Does the pinned tag carry the asset compiler?
+        id: tools
+        run: bash .github/scripts/asset-tools-ready.sh "${{ steps.pin.outputs.tag }}"
+      # Engine tag plus the two files that decide what is built: the lock file (which engine) and the
+      # SDK pin of the tooling suite.
+      - uses: actions/cache@v6
+        if: steps.tools.outputs.ready == 'true'
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            engine/target
+          key: asset-tools-${{ runner.os }}-${{ steps.pin.outputs.tag }}-${{ hashFiles('Cargo.lock', 'engine/tools/global.json') }}
+          restore-keys: |
+            asset-tools-${{ runner.os }}-${{ steps.pin.outputs.tag }}-
+      - name: Install the engine's pinned toolchain (rust-toolchain.toml)
+        if: steps.tools.outputs.ready == 'true'
+        run: rustup toolchain install
+        working-directory: engine
+      # Project ADR-0010: the compiler is the engine's, the C# side only orchestrates it.
+      - name: Build sigilc from the pinned tag
+        if: steps.tools.outputs.ready == 'true'
+        run: cargo build --release -p grimoire_sigilc --bin sigilc --locked
+        working-directory: engine
+      # No NuGet cache here on purpose: the asset compiler's project graph has no third-party
+      # package at all (only the tooling suite's test projects use one), so a restore downloads
+      # nothing, never creates the global packages folder, and the cache's post step would fail on
+      # the missing directory. What is worth caching — the engine build — the step above covers.
+      - uses: actions/setup-dotnet@v6
+        if: steps.tools.outputs.ready == 'true'
+        with:
+          global-json-file: engine/tools/global.json
+      - name: Build grimoire-ac from the pinned tag
+        if: steps.tools.outputs.ready == 'true'
+        working-directory: engine
+        run: |
+          set -euo pipefail
+          dotnet restore tools/src/Grimoire.AssetCompiler/Grimoire.AssetCompiler.csproj --locked-mode
+          dotnet build tools/src/Grimoire.AssetCompiler/Grimoire.AssetCompiler.csproj --no-restore --configuration Release
+      - name: Tool paths
+        if: steps.tools.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          {
+            echo "GRIMOIRE_SIGILC=$GITHUB_WORKSPACE/engine/target/release/sigilc"
+            echo "GRIMOIRE_AC=$GITHUB_WORKSPACE/engine/tools/src/Grimoire.AssetCompiler/bin/Release/net10.0/grimoire-ac"
+          } >>"$GITHUB_ENV"
+      - name: grimoire-ac build ${{ matrix.case.directory }}
+        if: steps.tools.outputs.ready == 'true'
+        run: bash .github/scripts/asset-gate.sh "${{ matrix.case.directory }}" "${{ matrix.case.out }}" "${{ matrix.case.expect }}" "${{ matrix.case.codes }}"
+      # `packs/` is a build artefact: it is produced here, kept for a week and never checked in.
+      - name: Upload packs
+        if: steps.tools.outputs.ready == 'true' && matrix.case.expect == 'pass'
+        uses: actions/upload-artifact@v7
+        with:
+          name: packs-${{ github.sha }}
+          path: packs/*.grimpack
+          if-no-files-found: error
+          retention-days: 7
+
   # Runs for every trigger, including pull requests from forks and Dependabot: the engine needs no
   # secret, so there is no skipped, green-but-empty variant of this job.
   test:
