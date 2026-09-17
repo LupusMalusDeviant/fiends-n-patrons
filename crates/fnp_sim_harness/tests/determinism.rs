@@ -24,16 +24,16 @@ const GOLDEN_TICKS: u64 = 3_600;
 /// Final state hash of `run_arena(GOLDEN_SEED, GOLDEN_TICKS, arena_bot_input)`.
 ///
 /// A frozen expectation (golden master), captured locally on Windows (debug and release profile)
-/// and confirmed by CI on Windows, Linux and macOS in the debug profile (game CI run 35197999985).
-/// Renewed once, from `0xc17457a2f7e6fb49`, after the imp's palettes were renamed to match the
-/// bullet pass tables (a change of the unit's content identity only), confirmed by the PO on
-/// 2026-09-17.
+/// and confirmed by CI on Windows, Linux and macOS in the debug profile. History: `0xc17457a2f7e6fb49`
+/// (first prototype), `0x9001d4a1d2f7125e` (imp palettes renamed to the bullet pass tables, content
+/// identity only, confirmed by the PO on 2026-09-17), the current value after the imp's patterns
+/// were rebuilt from the engine's reference patterns and the curtain unit joined the library.
 ///
 /// A mismatch on a single platform is a determinism bug and never a reason to change the value.
 /// Renew it only deliberately, following CONTRIBUTING.md ("Golden-Master und Referenzwerte"):
 /// name the cause first, renew in a separate `test(golden)` commit stating old and new value and
 /// the first diverging checkpoint. Agents do not renew golden masters on their own; the PO decides.
-const GOLDEN_ARENA_FINAL_HASH: u64 = 0x9001_d4a1_d2f7_125e;
+const GOLDEN_ARENA_FINAL_HASH: u64 = 0x59e2_9cde_b01f_1f8a;
 
 /// Length of the golden curtain run: 20 seconds at 60 Hz, long enough for the curtain to fill.
 const GOLDEN_CURTAIN_TICKS: u64 = 1_200;
