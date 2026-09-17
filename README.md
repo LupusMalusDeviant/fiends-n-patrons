@@ -63,9 +63,9 @@ Gamepads liest die Plattformschicht der Engine noch nicht; der linke Stick folgt
 | `GRIMOIRE_GPU_ADAPTER=software` | Software-Adapter der Plattform statt der Grafikkarte |
 | `GRIMOIRE_WINDOW_MONITOR=secondary`, `GRIMOIRE_WINDOW_FOCUS=0` | Fenster auf dem Zweitmonitor und ohne Fokus öffnen (Konvention für Läufe auf dem Entwicklungsrechner) |
 
-Vorläufig im Prototyp: Bullets zeichnet das Spiel als leuchtende Meshes mit Blob-Schatten, bis der
-Bullet-Pass der Engine (Plan 0002, WP3.5) gemergt ist (im Code `TEMPORARY(WP3.5)`); die
-Figuren haben keine Animation, nur Ruhe- und Treffer-Pose.
+Bullets laufen über den Weg der Engine: Der Adapter `grimoire::adapters::sigil_render` füllt den
+Bullet-Kanal, der Bullet-Pass zeichnet sie als Billboards auf Ebene 6 und leitet die Geschoss-Lichter
+selbst ab. Vorläufig im Prototyp: Die Figuren haben keine Animation, nur Ruhe- und Treffer-Pose.
 
 Ohne Fenster läuft dieselbe Simulation über `fnp_sim_harness::run_arena(seed, ticks, input)`
 (Prototyp) bzw. `fnp_sim_harness::run_seed(seed, ticks)` (P0-Demo); die Determinismus-Tests liegen in

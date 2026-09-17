@@ -231,4 +231,10 @@ fn capture_a_scripted_run() {
     );
     assert!(stats.round >= 2, "and a restart: {stats:?}");
     assert!(stats.peak_bullets > 0);
+    // Every bullet went through the engine path, and nothing was discarded on the way.
+    assert!(stats.bullets_drawn > 0);
+    assert!(stats.peak_bullet_lights > 0);
+    assert_eq!(stats.bullets_unmapped, 0, "{stats:?}");
+    assert_eq!(stats.bullets_rejected_invalid, 0, "{stats:?}");
+    assert_eq!(stats.bullets_rejected_palette_space, 0, "{stats:?}");
 }

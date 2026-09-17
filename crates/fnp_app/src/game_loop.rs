@@ -95,8 +95,20 @@ pub struct RunStats {
     pub max_frame_time: Duration,
     /// Most live bullets at the end of any frame.
     pub peak_bullets: u32,
-    /// Most point lights submitted in one frame (arena, figures and bullet lights).
+    /// Most point lights the renderer accepted in one frame (the arena's and the bullet lights it
+    /// derived itself).
     pub peak_point_lights: u32,
+    /// Most bullet lights the renderer derived in one frame.
+    pub peak_bullet_lights: u32,
+    /// Bullets the renderer drew, summed over all frames.
+    pub bullets_drawn: u64,
+    /// Discard counters summed over all frames: live bullets the Sigil render adapter could not
+    /// map, and bullets the bullet pass rejected (invalid, foreign palette space).
+    pub bullets_unmapped: u64,
+    /// See [`RunStats::bullets_unmapped`].
+    pub bullets_rejected_invalid: u64,
+    /// See [`RunStats::bullets_unmapped`].
+    pub bullets_rejected_palette_space: u64,
     /// Round at the end of the run.
     pub round: u32,
     /// Hits taken during the run.
@@ -121,15 +133,21 @@ impl RunStats {
     pub fn summary(&self) -> String {
         format!(
             "{} frames, {} ticks, mean frame time {:.2} ms (max {:.2} ms), peak {} bullets, \
-             peak {} point lights, round {}, {} hits",
+             peak {} point lights ({} bullet lights), round {}, {} hits; bullets drawn {}, \
+             discarded: unmapped {}, invalid {}, palette space {}",
             self.frames,
             self.ticks,
             self.mean_frame_time().as_secs_f64() * 1000.0,
             self.max_frame_time.as_secs_f64() * 1000.0,
             self.peak_bullets,
             self.peak_point_lights,
+            self.peak_bullet_lights,
             self.round,
-            self.hits
+            self.hits,
+            self.bullets_drawn,
+            self.bullets_unmapped,
+            self.bullets_rejected_invalid,
+            self.bullets_rejected_palette_space
         )
     }
 }
@@ -315,7 +333,7 @@ impl<R: Renderer> AppHandler for GameLoop<R> {
 
         self.stage.clear();
         let world = running.sim.world();
-        present::extract(world, plan.alpha, &running.visuals, &mut self.stage);
+        let extraction = present::extract(world, plan.alpha, &running.visuals, &mut self.stage);
         let template = present::camera_template();
         let mut camera = template;
         if let Some(player) = present::player_focus(world, plan.alpha) {
@@ -350,9 +368,15 @@ impl<R: Renderer> AppHandler for GameLoop<R> {
             stats.total_frame_time += frame_time;
             stats.max_frame_time = stats.max_frame_time.max(frame_time);
             stats.peak_bullets = stats.peak_bullets.max(hud.bullets);
-            stats.peak_point_lights = stats
-                .peak_point_lights
-                .max(u32::try_from(self.stage.point_lights.len()).unwrap_or(u32::MAX));
+            stats.peak_point_lights = stats.peak_point_lights.max(rendered.point_lights_drawn);
+            stats.peak_bullet_lights = stats
+                .peak_bullet_lights
+                .max(rendered.bullet_point_lights_drawn);
+            stats.bullets_drawn += u64::from(rendered.bullets_drawn);
+            stats.bullets_unmapped += u64::from(extraction.unmapped_visual);
+            stats.bullets_rejected_invalid += u64::from(rendered.bullets_rejected_invalid);
+            stats.bullets_rejected_palette_space +=
+                u64::from(rendered.bullets_rejected_palette_space);
             stats.round = hud.round;
             stats.hits = hud.hits;
             stats.last_stage = rendered;
@@ -436,6 +460,20 @@ mod tests {
     }
 
     const FRAME: Duration = Duration::from_nanos(1_000_000_000 / TICK_RATE_HZ as u64);
+
+    #[test]
+    fn bullets_are_drawn_without_discards_through_a_whole_round() {
+        // Three seconds without input: the imp fires, hits the soul, the round restarts.
+        let mut game = null_loop(Some(3 * u64::from(TICK_RATE_HZ)));
+        run_headless(&mut game, 1_000, FRAME).expect("runs");
+        let stats = *game.stats().borrow();
+        assert!(stats.bullets_drawn > 0, "{stats:?}");
+        assert!(stats.peak_bullet_lights > 0, "{stats:?}");
+        assert_eq!(stats.bullets_unmapped, 0);
+        assert_eq!(stats.bullets_rejected_invalid, 0);
+        assert_eq!(stats.bullets_rejected_palette_space, 0);
+        assert!(stats.hits >= 1, "{stats:?}");
+    }
 
     #[test]
     fn one_second_of_frames_runs_one_second_of_ticks() {

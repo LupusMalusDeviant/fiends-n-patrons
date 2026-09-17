@@ -92,7 +92,6 @@ pub fn load_visuals(
     let floor = register(meshes.floor)?;
     let pillar = register(meshes.pillar)?;
     let block = register(meshes.block)?;
-    let bullet = register(meshes.bullet)?;
     let marker_ring = register(meshes.marker_ring)?;
 
     let soul_visual = FigureVisual::from_loaded(&soul);
@@ -111,7 +110,6 @@ pub fn load_visuals(
             floor,
             pillar,
             block,
-            bullet,
             marker_ring,
         },
         summary,

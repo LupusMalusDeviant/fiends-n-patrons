@@ -5,26 +5,24 @@
 //! registers them once ([`stage_mesh_data`], a figure pack) and hands the handles in as
 //! [`ArenaVisuals`].
 //!
-//! **Temporary bullet rendering.** The engine's dedicated bullet pass (plan 0002 WP3.5) is not
-//! merged yet: `WgpuRenderer` validates and counts [`StageFrame::bullets`] but draws nothing for
-//! it. Until it lands, every bullet is additionally drawn as a small emissive mesh (an orb or a
-//! stretched "rice" shape, following the Sigil silhouette) with a blob shadow on the ground, and
-//! lit through the engine's own [`point_light_from_bullet`]. Search for `TEMPORARY(WP3.5)` to find
-//! every place to remove once the bullet pass draws the channel itself.
+//! **Bullets** go through the engine's path only: the facade adapter
+//! [`grimoire::adapters::sigil_render::extract_bullets`] turns the live pool into
+//! [`StageFrame::bullets`] (contract §9.9), the renderer's bullet pass draws them as billboards on
+//! layer 6 and derives the bullet lights itself through `point_light_from_bullet` (contract §6,
+//! WP3.5). The game builds no bullet meshes and no bullet lights.
 
-use fnp_content::sigil::imp_volley;
 use grimoire::adapters::figure_assets::{LoadedFigure, LoadedFigurePart};
+use grimoire::adapters::sigil_render::{BulletExtractionStats, extract_bullets};
 use grimoire::prelude::*;
 use grimoire::render::figure_format::{
     JointPose, SkeletonData, compute_skin_matrices, rest_pose_skin_matrices,
 };
-use grimoire::render::procedural::{altar_block, floor_tile_grid, icosphere, octagonal_pillar};
+use grimoire::render::procedural::{altar_block, floor_tile_grid, octagonal_pillar};
 use grimoire::render::{
-    AmbientLight, BlobShadowInstance, BulletInstance, DirectionalLight, MaterialHandle, MeshData,
-    MeshHandle, MeshInstance, MeshVertex, PbrMaterial, PointLight, ShadowConfig, ShadowMode,
-    SkinBinding, palette_space, point_light_from_bullet,
+    AmbientLight, BlobShadowInstance, DirectionalLight, MaterialHandle, MeshData, MeshHandle,
+    MeshInstance, MeshVertex, PbrMaterial, PointLight, ShadowConfig, ShadowMode, SkinBinding,
 };
-use grimoire::sigil::{BulletPool, SigilContent};
+use grimoire::sigil::BulletPool;
 
 use super::{
     ARENA_HALF, Facing, HIT_RECOVERY_TICKS, IMP_POSITION, Imp, PLAYER_HIT_HALF_WIDTH,
@@ -41,13 +39,6 @@ const IDENTITY: Mat4 = [
     [0.0, 0.0, 1.0, 0.0],
     [0.0, 0.0, 0.0, 1.0],
 ];
-
-/// Height above the ground at which bullets are drawn (chest height of the figures).
-pub const BULLET_DRAW_HEIGHT: f32 = 0.65;
-
-/// Most bullet lights submitted per frame; the renderer's `LightBudget::High` holds 256 lights
-/// including the arena's own.
-pub const MAX_BULLET_LIGHTS: usize = 200;
 
 /// Height of the imp's plinth.
 pub const PLINTH_HEIGHT: f32 = 0.3;
@@ -253,8 +244,6 @@ pub struct StageMeshData {
     pub pillar: MeshData,
     /// Unit box (1 x 1 x 1), scaled into curbs and the imp's plinth.
     pub block: MeshData,
-    /// Unit sphere, scaled into bullets (TEMPORARY(WP3.5)).
-    pub bullet: MeshData,
     /// Flat ring on the ground marking the player's hit capsule.
     pub marker_ring: MeshData,
 }
@@ -266,7 +255,6 @@ pub fn stage_mesh_data() -> StageMeshData {
         floor: floor_tile_grid(FLOOR_TILES, FLOOR_TILE_SIZE),
         pillar: octagonal_pillar(PILLAR_RADIUS, PILLAR_HEIGHT),
         block: altar_block(1.0, 1.0, 1.0),
-        bullet: icosphere(2, 1.0),
         marker_ring: flat_ring(0.82, 1.0, 40),
     }
 }
@@ -315,8 +303,6 @@ pub struct ArenaVisuals {
     pub pillar: MeshHandle,
     /// Registered [`StageMeshData::block`].
     pub block: MeshHandle,
-    /// Registered [`StageMeshData::bullet`].
-    pub bullet: MeshHandle,
     /// Registered [`StageMeshData::marker_ring`].
     pub marker_ring: MeshHandle,
 }
@@ -332,7 +318,6 @@ impl ArenaVisuals {
             floor: MeshHandle(0),
             pillar: MeshHandle(0),
             block: MeshHandle(0),
-            bullet: MeshHandle(0),
             marker_ring: MeshHandle(0),
         }
     }
@@ -398,9 +383,7 @@ mod slot {
     pub const PILLAR: u32 = 1;
     pub const PLINTH: u32 = 2;
     pub const MARKER: u32 = 3;
-    pub const EMBER: u32 = 4;
-    pub const THORN: u32 = 5;
-    pub const COUNT: u32 = 6;
+    pub const COUNT: u32 = 4;
 }
 
 /// Pushes the fixed materials in the order of [`slot`].
@@ -419,11 +402,6 @@ fn push_stage_materials(frame: &mut StageFrame) {
     frame
         .materials
         .push(material(marker, 0.5, scale3(marker, 0.55)));
-    // TEMPORARY(WP3.5): bullet bodies in the hostile palettes H0 and H1 of the style bible.
-    let magenta = linear(0xFF_2F_B4);
-    frame.materials.push(material(magenta, 0.4, magenta));
-    let lime = linear(0xB6_FF_2E);
-    frame.materials.push(material(lime, 0.4, lime));
     debug_assert_eq!(frame.materials.len(), slot::COUNT as usize);
 }
 
@@ -468,7 +446,7 @@ fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
     };
     let mut shadows = ShadowConfig::default();
     // Skinned figures cast no key-light shadow yet (engine gap, contract §6 skinning addendum),
-    // so the prototype uses the "Low" preset: blob shadows under figures, pillars and bullets.
+    // so the prototype uses the "Low" preset: blob shadows under figures and pillars.
     shadows.mode = ShadowMode::Blob;
     frame.shadow_config = shadows;
 
@@ -705,82 +683,23 @@ fn push_imp(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut Stage
     frame.point_lights.push(glow);
 }
 
-/// Every live bullet: the bullet channel, and TEMPORARY(WP3.5) meshes, blob shadows and lights.
-fn push_bullets(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut StageFrame) {
-    let (Some(pool), Some(content)) = (
-        world.resource::<BulletPool>(),
-        world.resource::<SigilContent>(),
-    ) else {
-        return;
-    };
-    let units = content.library().units();
-    let mut lights = 0_usize;
-    for bullet in pool.iter() {
-        let Some(bullet_type) = units
-            .get(usize::from(bullet.unit_index()))
-            .and_then(|unit| unit.bullet_types().get(usize::from(bullet.bullet_type())))
-        else {
-            continue;
-        };
-        let at = bullet.previous_position().lerp(bullet.position(), alpha);
-        let velocity = bullet.velocity();
-        let rotation = if velocity.length_squared() > 0.0 {
-            velocity.angle()
-        } else {
-            0.0
-        };
-        let visual = bullet_type.visual;
-        let instance = BulletInstance {
-            position: at.to_array(),
-            radius: bullet_type.radius,
-            rotation,
-            silhouette: visual.silhouette,
-            palette: visual.palette,
-            palette_space: palette_space::HOSTILE,
-            glow: visual.glow,
-            flags: 0,
-        };
-        frame.bullets.push(instance);
-
-        // TEMPORARY(WP3.5): draw the bullet as an emissive mesh until the bullet pass exists.
-        let radius = bullet_type.radius;
-        let shape = if visual.silhouette == imp_volley::SILHOUETTE_RICE {
-            [radius * 1.9, radius * 0.7, radius * 0.7]
-        } else {
-            [radius, radius, radius]
-        };
-        let material = if visual.palette == imp_volley::PALETTE_POISON_LIME {
-            slot::THORN
-        } else {
-            slot::EMBER
-        };
-        let transform = mul(
-            mul(
-                translation([at.x, at.y, BULLET_DRAW_HEIGHT]),
-                rotation_z(rotation),
-            ),
-            scale(shape),
-        );
-        frame.meshes.push(mesh(visuals.bullet, material, transform));
-        frame.blob_shadows.push(blob(at, radius * 1.4, 0.5));
-        if lights < MAX_BULLET_LIGHTS {
-            let mut light = point_light_from_bullet(&instance);
-            light.position[2] = BULLET_DRAW_HEIGHT;
-            frame.point_lights.push(light);
-            lights += 1;
-        }
-    }
-}
-
-/// Fills `frame` with the arena, the figures and the bullets of `world`, interpolated by `alpha`.
+/// Fills `frame` with the arena, the figures and the bullets of `world`, interpolated by `alpha`,
+/// and returns the counters of the bullet extraction.
 ///
-/// `frame` should come cleared ([`StageFrame::clear`]); the camera is left to the caller.
-pub fn extract(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut StageFrame) {
+/// Bullets reach [`StageFrame::bullets`] only through the engine's Sigil render adapter; the
+/// renderer draws them and derives their lights. `frame` should come cleared
+/// ([`StageFrame::clear`]); the camera is left to the caller.
+pub fn extract(
+    world: &World,
+    alpha: f32,
+    visuals: &ArenaVisuals,
+    frame: &mut StageFrame,
+) -> BulletExtractionStats {
     push_stage_materials(frame);
     push_arena(visuals, frame);
     push_imp(world, alpha, visuals, frame);
     push_player(world, alpha, visuals, frame);
-    push_bullets(world, alpha, visuals, frame);
+    extract_bullets(world, alpha, &mut frame.bullets)
 }
 
 #[cfg(test)]
@@ -823,7 +742,7 @@ mod tests {
     }
 
     #[test]
-    fn bullets_reach_the_bullet_channel_and_the_temporary_meshes() {
+    fn bullets_reach_the_bullet_pass_through_the_engine_adapter_only() {
         let mut sim = built();
         // Walk away from the aimed fan so the round is still running.
         let mut input = TickInput::default();
@@ -833,22 +752,37 @@ mod tests {
         }
         let visuals = ArenaVisuals::placeholder();
         let mut frame = StageFrame::new();
-        extract(sim.world(), 0.5, &visuals, &mut frame);
-        let live = hud(sim.world()).bullets as usize;
+        let extraction = extract(sim.world(), 0.5, &visuals, &mut frame);
+        let live = hud(sim.world()).bullets;
         assert!(live > 0, "the imp has fired");
-        assert_eq!(frame.bullets.len(), live);
+        assert_eq!(extraction.extracted, live);
+        assert_eq!(extraction.unmapped_visual, 0);
+        assert_eq!(frame.bullets.len(), live as usize);
+
         let stats = render(&frame);
-        assert_eq!(stats.bullets_drawn as usize, live);
+        assert_eq!(stats.bullets_drawn, live);
         assert_eq!(stats.bullets_rejected_invalid, 0);
         assert_eq!(stats.bullets_rejected_palette_space, 0);
         assert_eq!(stats.meshes_rejected_invalid, 0);
-        assert_eq!(
-            stats.bullet_point_lights_drawn as usize,
-            live.min(MAX_BULLET_LIGHTS)
+        // The game submits no bullet lights of its own; the renderer derives them.
+        assert!(
+            frame
+                .point_lights
+                .iter()
+                .all(|light| !light.is_bullet_light)
         );
-        for bullet in &frame.bullets {
-            assert!(bullet.position.iter().all(|c| c.is_finite()));
-        }
+        assert!(stats.bullet_point_lights_drawn > 0);
+        // Every mesh is arena, figure or marker: no bullet meshes.
+        assert_eq!(frame.meshes.len(), 1 + 9 + 2 + 4 + 1 + 1 + 1 + 1);
+        // Both imp bullet types are on screen, each on its own table row.
+        let mut rows: Vec<(u16, u16)> = frame
+            .bullets
+            .iter()
+            .map(|bullet| (bullet.silhouette, bullet.palette))
+            .collect();
+        rows.sort_unstable();
+        rows.dedup();
+        assert_eq!(rows, vec![(0, 0), (1, 1)], "orb in magenta, rice in lime");
     }
 
     #[test]
@@ -911,13 +845,7 @@ mod tests {
     #[test]
     fn the_marker_ring_is_a_valid_mesh() {
         let data = stage_mesh_data();
-        for mesh in [
-            &data.floor,
-            &data.pillar,
-            &data.block,
-            &data.bullet,
-            &data.marker_ring,
-        ] {
+        for mesh in [&data.floor, &data.pillar, &data.block, &data.marker_ring] {
             mesh.validate().expect("valid procedural mesh");
         }
     }
