@@ -371,9 +371,10 @@ pub const CAMERA_FOV_Y_DEGREES: f32 = 42.0;
 
 /// The camera presets in cycling order; the first is the default.
 ///
-/// A (60 degrees, 14.5 m) shows the most arena; a 1.8 m figure is about 144 px tall at 1080p.
-/// C (45 degrees, 11 m) shows it about 230 to 245 px tall, with less arena in view. B lies in
-/// between. The PO compares the character designs at game size with them (decision 2026-09-17).
+/// A (60 degrees, 14.5 m) shows the most arena and the smallest figures, C (45 degrees, 11 m) the
+/// largest with less arena in view, B lies in between. Measured on the offscreen capture at 1080p,
+/// the soul with its hit ring is 128 px tall under A, 184 px under B and 248 px under C. The PO
+/// compares the character designs at game size with them (decision 2026-09-17).
 pub const CAMERA_PRESETS: [CameraPreset; 3] = [
     CameraPreset {
         name: "A",
