@@ -167,8 +167,8 @@ pub struct HarnessReport {
 
 - Das Spiel nutzt ausschließlich Ströme mit gelöschtem Bit 63, empfohlen über `app_stream(owner, local)`.
 - Eigentümer-Nummern des Spiels: `0x0001` Bots, `0x0002` `fnp_game`, weitere per Änderung dieses Dokuments.
-- Bestehende P0-Konstanten des Spiels (etwa der Schwarm-Spawn-Strom) bleiben unverändert, damit der P0-Golden-Hash
-  gilt. Neue Ströme folgen der Aufteilung.
+- Neue Ströme folgen der Aufteilung. (Die P0-Demo mit ihrem Schwarm-Spawn-Strom ist entfernt, PO-Entscheid
+  2026-09-17; die Arena zieht keine eigenen Zufallszahlen.)
 
 ## 6. Golden Master im Spiel
 
@@ -187,7 +187,8 @@ pub struct HarnessReport {
   Harness trägt keine Algorithmusversionen von Hand ein. Abweichende Läufe für Tests entstehen per Feldzuweisung.
 - **Erneuerung** nur per `fnp_sim_harness golden renew <scene> --reason "…"` in eigenem Commit nach CONTRIBUTING
   „Golden-Master und Referenzwerte“. Agenten erneuern nicht eigenmächtig.
-- Die bestehende Konstante `GOLDEN_FINAL_HASH` in `tests/determinism.rs` bleibt als P0-Gate erhalten.
+- Bis dahin ist die Konstante `GOLDEN_ARENA_FINAL_HASH` in `tests/determinism.rs` das Gate (Arena, Seed 42,
+  3.600 Ticks); sie ersetzt den P0-Golden-Hash der entfernten Demo (PO-Entscheid 2026-09-17).
 
 ## 7. Konformanz
 
