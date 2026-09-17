@@ -100,14 +100,23 @@ kaputtes Fixture und ist **nur dann grün, wenn der Compiler ablehnt** (Exit-Cod
 `SIG0014`, kein Pack). Beim Pin blieben alle Goldens unverändert; die Bootstrap-Ausnahme für das Gate ist damit
 verbraucht und gelöscht.
 
-### Spiel — Content v0 (im Review)
+### Spiel — Content v0 (WP7.3)
 
-Spiel-PR #20 liegt beim Schreiben dieses Eintrags **im Review**, nicht gemergt: fünf neue Patterns, je eines für
-eine Rolle aus dem Gegner-Rollenraster, jedes aus einem Referenz-Pattern der Engine abgeleitet; mit den beiden
-vorhandenen Imp-Mustern sind es **sieben Units**, und damit sind alle sieben Bausteine der Sprache im Content
-vertreten, ein `aimed`-Pattern und eine Kaskade darunter. Das Asset-Gate hat den Stand schon gefahren: **7 Units,
-Pack 3400 Byte, Content-Hash `f2f073c8…`**, Exit-Code 0. Die Arena spielt weiterhin nur die zwei Imp-Muster;
-welche Szene welches Pattern fährt, entscheidet WP7.4.
+Spiel-PR #20 (`f12f8bf`), gemergt noch in derselben Sitzung: fünf neue Patterns, je eines für eine Rolle aus dem
+Gegner-Rollenraster, jedes aus einem Referenz-Pattern der Engine abgeleitet und jedes mit Bausteinen, die die
+anderen nicht benutzen. Mit den beiden vorhandenen Imp-Mustern sind es **sieben Units**; damit sind alle sieben
+Bausteine der Sprache im Content vertreten, ein `aimed`-Pattern und eine Kaskade darunter. Das Gate hat den Stand
+gefahren: **7 Units, Pack 3400 Byte, Content-Hash `f2f073c8…`**, Exit-Code 0.
+
+**Die Despawn-Falle aus WP6.6 ist hier gemessen worden, nicht vermutet:** Sigil v1 kennt kein Lebensdauer-Feld,
+ein Geschoss verschwindet nur beim Verlassen der Box um die Arena — eine Drehrate, deren Kreis in der Box zugeht,
+despawnt also nie und füllt auf einem endlosen Emitter den Pool. Deshalb hat nur ein Pattern überhaupt eine
+Kurve (Wendekreis rund 52 Einheiten gegen eine Box von 13,5 × 10), und sein Emitter ist endlich; das einzige
+endlose Pattern hat keinen drehenden Modifikator. Nachgewiesen über 900 Ticks je Pattern mit
+`sigilc simulate --json`: vier Patterns enden bei **0** lebenden Geschossen, die endlosen schwingen sich ein,
+**kein einziger verworfener Spawn**. Die Tabelle steht in `content/README.md`, der Aufruf daneben.
+
+Die Arena spielt weiterhin nur die zwei Imp-Muster; welche Szene welches Pattern fährt, entscheidet WP7.4.
 
 ### Assets — Asset-Import-Pilot in vier Stufen
 
@@ -178,7 +187,6 @@ Die Entscheide stehen mit ihren Folgen in den Abschnitten „Meilensteine“ und
   30 gehäuteten Figuren und Multisampling gegen das 8-ms-Budget, mit und ohne Schattenwürfe, und ob das Hochladen
   der Gelenkmatrizen auffällt.
 - Offen für M3 bleiben WP6.7 (Budget-Abgleich), WP7.4 und WP7.5 (Sim-Harness v1, Golden Master samt
-  Nightly-Plattformvergleich); WP7.3 liegt als Spiel-PR #20 im Review, das kaputte Negativ-Fixture dazu ist
-  schon gemergt.
+  Nightly-Plattformvergleich). WP7.3 ist mit Spiel-PR #20 gemergt.
 - Die Empfehlungen aus WP8.5, WP9.2 und WP9.3 sind noch nicht entschieden, darunter die beiden Gate-Checks als
   Pflicht-Checks des geschützten `main`.
