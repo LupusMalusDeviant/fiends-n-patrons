@@ -9,6 +9,8 @@ Nachweis in der Engine.
   Python-Standardbibliothek; den glTF-Container liest `../figure_pack/glb_reader.py`.
 - **Vorbereiten** macht aus der geriggten Arbeitskopie und ihrem hochaufgelösten Original eine
   Spielfigur im Budget (Abschnitt „Stufe 2: Vorbereiten“). Blender headless, numpy und Pillow.
+- **Packen** übernimmt der Konverter in [`../figure_pack`](../figure_pack/README.md), der dafür
+  JPEG-Texturen und exaktes Verkleinern gelernt hat (Abschnitt „Stufe 3: Packen“).
 
 ## Stufe 1: Prüfen
 
@@ -36,7 +38,7 @@ Rollen: `player`, `enemy`, `boss`, `prop`. `--budgets <datei>` ersetzt `budgets.
 | Ebene | Prüfungen | Herkunft der Grenze |
 |---|---|---|
 | `engine.*` | Vertices und Indizes je Teil, Pixel und Kantenlänge je Textur, Knochen je Skin, vier Einflüsse je Vertex, nur Dreiecke | Grimoire `v0.4.0`: `figure_format.rs`, `stage3d.rs`, `mesh.rs`, `max_texture_dimension_2d` des Software-Adapters |
-| `pipeline.*` | lesbar (keine Sparse-Accessoren, keine Pflicht-Erweiterungen wie Draco), Bildformat, Material je Teil, Normalen, Tangenten bei UVs, höchstens ein Skin | Konverter `figure_pack` |
+| `pipeline.*` | lesbar (keine Sparse-Accessoren, keine Pflicht-Erweiterungen wie Draco), Bildformat, Material je Teil, Normalen, Tangenten bei UVs, gültige Tangentenwerte, höchstens ein Skin | Konverter `figure_pack` |
 | `budget.*` | Dreiecke, Vertices, Teile, Rig, Knochen, Texturanzahl und -kante, geschätzter GPU-Speicher, Normalenkarte (Warnung), Clip-Namen (Warnung) | `budgets.json`, Rolle |
 | `convention.*` | Höhe, Fußpunkt im Ursprung, Mitte über dem Ursprung (Warnung), Blickrichtung, Ruhepose gleich Bindepose (Warnung) | `budgets.json`, Abschnitt `pipeline` |
 | `info.*` | Texturkanten als Zweierpotenz (Warnung), unbenutzte Bilder | – |
@@ -154,9 +156,13 @@ dem Protokoll. Schlägt die Prüfung der fertigen Figur fehl, endet das Skript m
 6. **Skalieren und aufstellen:** gleichmäßige Skalierung auf die Zielhöhe, tiefster Punkt auf den
    Boden, Mitte über den Ursprung, gemessen an der reduzierten Figur. Angewendet auf Netzdaten,
    Ruhepose, Ortskanäle aller Clips und das Original, nie als Objekttransformation.
-7. **Formnormalen** vom Original auf die reduzierte Figur mit `../figures/shapenormal.py`
+7. **Tangenten:** Flächen mit einer Ecke, deren MikkTSpace-Tangente null wird, werden flach
+   schattiert. Das Reduzieren faltet einzelne schmale Dreiecke um (je eine Ecke bei Hexe und Imp);
+   deren glatte Normale liegt fast in der Dreiecksebene, und der Konverter verwirft die
+   Null-Tangente zu Recht. Die Stufe-1-Prüfung meldet solche Tangenten (`pipeline.tangent_values`).
+8. **Formnormalen** vom Original auf die reduzierte Figur mit `../figures/shapenormal.py`
    (nächster Oberflächenpunkt je Texel, MikkTSpace-Tangentenraum, kein Cycles-Bake).
-8. **Export** als `.glb` mit Tangenten, allen Clips und den drei PNG-Texturen.
+9. **Export** als `.glb` mit Tangenten, allen Clips und den drei PNG-Texturen.
 
 ### Ergebnisse des Pilots
 
@@ -171,7 +177,7 @@ dem Protokoll. Schlägt die Prüfung der fertigen Figur fehl, endet das Skript m
 | Gewichtsübertragung (Abstand p99) | 2,3 mm, kein Vertex ohne Gewicht | 3,1 mm, kein Vertex ohne Gewicht |
 | Normalenfehler gegen Original, Median ohne / mit Karte | vorn 28,8° / 10,3°, hinten 31,1° / 8,2° | vorn 20,6° / 7,6°, hinten 20,3° / 7,5° |
 | Gegenprobe mit umgedrehtem Grünkanal | vorn 35,7°, hinten 37,7° | vorn 24,3°, hinten 23,8° |
-| Stufe-1-Prüfung | PASS, 29 von 29 | PASS, 1 Warnung (fehlende Clips) |
+| Stufe-1-Prüfung | PASS, 30 von 30 | PASS, 29 von 30 und 1 Warnung (fehlende Clips) |
 
 ### Entscheidungen, gemessen
 
@@ -237,6 +243,38 @@ mit Blender 5.2.2 LTS; zwischen Rechnern oder Blender-Fassungen ist es nicht gep
   Engine-Bild in Stufe 4. Diese Stufe ändert keine Farben.
 - Die Ergebnisse (`.glb`, Texturen, Berichte) liegen nicht im Repo.
 
+## Stufe 3: Packen
+
+Das Packen macht der vorhandene Konverter in [`../figure_pack`](../figure_pack/README.md); für den
+Pilot kann er seit dieser Stufe JPEG-Texturen lesen, Texturen exakt verkleinern und Figuren aus
+beliebigen Dateien packen:
+
+```sh
+cd ../figure_pack
+python -B build_figure_pack.py --figure witch=<ziel>/witch.glb --figure imp_hi3d=<ziel>/imp.glb
+    --out <nutzlasten>
+cd ../..
+cargo run --release -p fnp_content --bin figure_pack_builder --
+    --index <nutzlasten>/index.json --out <pfad>/pilot.pack
+```
+
+(Je Aufruf eine Zeile.) Ergebnis des Pilots: `pilot.pack` mit Hexe (`witch`) und Imp (`imp_hi3d`),
+14 Einträge, 16,3 MiB; `vergleich.pack` mit denselben beiden und den Figuren der Runde 4
+(`soul`, `imp`, `brute`) für den Vergleich in Stufe 4, 79 Einträge, 122,1 MiB. Beide liegen
+außerhalb des Repos.
+
+Nachweise dieser Stufe:
+
+- **Ein Weg für zwei Eingaben.** Dieselbe Hexe, einmal aus den vorbereiteten 1024er-PNG und einmal
+  aus den 8192er-JPEG des geriggten Downloads mit `--max-texture-size 1024`, ergibt **bytegleiche
+  Texturnutzlasten**. Die Vorbereitung (Stufe 2) benutzt denselben Kastenfilter wie der Konverter,
+  deshalb ist es gleich, an welcher Stelle der Kette verkleinert wird.
+- **Früher Fehler statt später Absturz.** Der geriggte Download mit zwei 8K-Texturen bricht in
+  0,2 Sekunden ab, nennt alle vier zu großen Texturen beider Figuren und das passende
+  `--max-texture-size`, bevor ein Pixel dekodiert wird.
+- **Alte Ergebnisse unverändert.** Die Figuren der Runde 4 packen zu bytegleichen 65 Nutzlasten und
+  einem bytegleichen `figures.pack` wie vor der Änderung.
+
 ## Tests
 
 ```sh
@@ -244,8 +282,7 @@ python -B -m unittest test_check_asset.py test_prepare_tools.py
 ```
 
 `test_check_asset.py` baut kleine `.glb`-Dateien im Speicher (Figur mit Skin, Zehen, Texturen und
-Clips) und prüft Messung, Grenzen, Exit-Codes und die Kopfleser für PNG und JPEG; die
-JPEG-Beispiele sind nur Dateiköpfe. `test_prepare_tools.py` prüft die Teile von Stufe 2 ohne
+Clips) und prüft Messung, Grenzen, Exit-Codes und Tangentenwerte. `test_prepare_tools.py` prüft die Teile von Stufe 2 ohne
 Blender: Kastenfilter und Linearlicht, Materialbilder, Seitennamen, Tangentenrahmen und
 Texturorientierung, Mip-Stufen und das Verwerfen von Rückseiten. `blender_prepare.py` selbst
 prüfen die Pilotläufe über ihre Berichte und die Stufe-1-Prüfung der fertigen Figur.

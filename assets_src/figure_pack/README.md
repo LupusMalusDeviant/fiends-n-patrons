@@ -1,15 +1,18 @@
 # figure_pack/
 
-Konverter für die drei gerigten Feindfiguren (`soul`, `imp`, `brute`) aus Blender/glTF in das
-Pack-Format der Engine "Grimoire". Gemeinsame Festlegung mit der Engine-Seite:
+Konverter für geriggte Figuren aus Blender/glTF in das Pack-Format der Engine "Grimoire":
+ursprünglich die drei Feindfiguren (`soul`, `imp`, `brute`), seit dem Hexen-Pilot auch Figuren aus
+[`../asset_import`](../asset_import/README.md). Gemeinsame Festlegung mit der Engine-Seite:
 `figuren-in-engine-spec.md` (siehe PR-Beschreibung für den vollständigen Text und die
 festgestellte Abweichung bei den `AssetKind`-Werten und der Drehrichtung).
 
 Zwei Stufen, damit das Pack-Containerformat weiterhin genau eine Umsetzung hat:
 
-1. **Python** (dieser Ordner, nur Standardbibliothek): liest `<name>_r3b_low.glb`, dekodiert
-   glTF-Accessoren und eingebettete PNGs von Hand, schreibt je Figur die Nutzlasten als
-   einzelne Dateien plus eine `index.json`.
+1. **Python** (dieser Ordner): liest die `.glb` der Figuren, dekodiert glTF-Accessoren und
+   eingebettete PNGs von Hand, schreibt je Figur die Nutzlasten als einzelne Dateien plus eine
+   `index.json`. Für PNG-Figuren ohne Verkleinerung genügt die Standardbibliothek; JPEG-Texturen
+   brauchen Pillow, `--max-texture-size` braucht numpy (beide gepinnt in
+   [`../textures/requirements.txt`](../textures/requirements.txt)).
 2. **Rust** (`crates/fnp_content/src/bin/figure_pack_builder.rs`): liest `index.json` und baut
    mit dem vorhandenen `grimoire_assets::PackWriter` `figures.pack`.
 
@@ -23,11 +26,45 @@ cargo run --release -p fnp_content --bin figure_pack_builder -- \
     --index <ausgabeordner>/index.json --out <pfad>/figures.pack
 ```
 
-`--source` muss `soul_r3b_low.glb`, `imp_r3b_low.glb` und `brute_r3b_low.glb` enthalten. Erzeugte
-Dateien (Zwischenformate wie `index.json`/`*.bin` und `figures.pack`) gehören nicht ins Repo;
-gemäß der Festlegung landen sie unter `_showcase/pack/` außerhalb beider Repos.
+`--source` muss für jeden Namen aus `--figures` (Vorgabe `soul,imp,brute`) die Datei
+`<name><suffix>` enthalten (Vorgabe `_r3b_low.glb`). Weitere Figuren aus beliebigen Dateien kommen
+mit `--figure NAME=PFAD` hinzu (wiederholbar, auch ohne `--source`), etwa die vorbereiteten
+Pilotfiguren:
 
-Tests: `python -B -m unittest test_figure_pack.py`.
+```sh
+python -B build_figure_pack.py --figure witch=<ziel>/witch.glb --figure imp_hi3d=<ziel>/imp.glb
+    --out <ausgabeordner>
+```
+
+Erzeugte Dateien (Zwischenformate wie `index.json`/`*.bin` und `figures.pack`) gehören nicht ins
+Repo; gemäß der Festlegung landen sie unter `_showcase/pack/` außerhalb beider Repos.
+
+Tests: `python -B -m unittest test_figure_pack.py test_textures.py`.
+
+## Texturen
+
+Umgesetzt in `textures.py`, in dieser Reihenfolge:
+
+1. **Grenzen zuerst, nur aus dem Dateikopf** (`image_headers.py`). Bevor ein Pixel dekodiert wird,
+   prüft der Lauf jede von einem Material benutzte Textur aller Figuren gegen die Engine:
+   höchstens 64 Mio. Pixel (`FNP_TEXTURE_RAW`) und höchstens 8192 Pixel je Seite
+   (`max_texture_dimension_2d` des Software-Adapters). Eine zu große Textur beendet den Lauf sofort
+   mit Figur, Bild, Größe und dem passenden `--max-texture-size`, alle Verstöße auf einmal. Beim
+   geriggten Hexen-Download mit zwei 8K-JPEGs dauert das 0,2 Sekunden, statt dass die Engine das
+   Pack später ablehnt.
+2. **Dekodieren:** PNG wie bisher mit dem eigenen Dekoder (`png_decode.py`), JPEG mit Pillow
+   (Graustufen und YCbCr; CMYK wird abgelehnt).
+3. **Verkleinern** (`--max-texture-size N`): Ist die längere Seite größer als `N`, wird um die
+   kleinste passende Zweierpotenz verkleinert, mit einem exakten Kastenfilter. Die Regel ist die der
+   Mip-Kette der Engine (`average_texels` in `grimoire_render`): Farbe einer sRGB-Textur in linearem
+   Licht gemittelt und in sRGB gerundet, Alpha und lineare Texturen direkt gemittelt. Gerechnet wird
+   nur mit ganzen Zahlen: Die sRGB-Kurve steht als feste Tabelle in Einheiten von 2^-24 im Code, und
+   ein Block bekommt den Code, dessen Rundungsschwelle sein exakter Mittelwert erreicht. So ergibt
+   jede Plattform dieselben Bytes. Seiten, die sich nicht glatt teilen lassen, brechen ab.
+
+PNG-Figuren ohne `--max-texture-size` ergeben dieselben Nutzlasten wie vorher: Die Figuren der
+Runde 4 (`_r4_low.glb`) packen vor und nach der Änderung zu bytegleichen 65 Nutzlasten und einem
+bytegleichen `figures.pack`.
 
 ## Achsen
 
@@ -66,7 +103,8 @@ fehlschlägt (siehe `pack_payloads.py`, `skeleton.py`, `build_figure_pack.py`):
 - Dreiecksanzahl (Indexanzahl) gegen die glTF-Quellaccessoren.
 - Jeder Vertex-Index `< vertex_count`, jeder Knochenindex `< joint_count`.
 - Gewichtssumme je Vertex auf 1 (Toleranz 1e-3).
-- Texturgröße gleich `width * height * 4`.
+- Texturgröße gleich `width * height * 4`; jede benutzte Textur vor dem Dekodieren gegen
+  64 Mio. Pixel und 8192 je Seite (siehe „Texturen“).
 - Eltern-Index jedes Knochens `< eigener Index` (durch den eigenen topologischen Sort erzwungen,
   nicht nur übernommen aus `skin.joints`).
 - Forward-Kinematik-Stichprobe: echte Vertices, durch die volle Skinning-Formel (Knochenkette x
