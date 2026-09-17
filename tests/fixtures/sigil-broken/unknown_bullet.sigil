@@ -1,0 +1,32 @@
+sigil 1
+// Deliberately broken (Plan 0002 WP9.3, negative proof of the asset gate): the emitter fires a
+// bullet type this file never defines — a mistake the parser cannot see and only the compiler's
+// schema pass catches. Expected diagnostic: SIG0014.
+// Never move this file into content/ — the gate compiles content/ and must stay green there.
+
+meta {
+  name = "Broken: unknown bullet"
+  difficulty = [easy]
+  density = 10
+}
+
+bullet orb {
+  silhouette = orb
+  palette = enemy.poison_lime
+  glow = 0.5
+  radius = 0.2u
+  damage = 1
+  flags = [grazeable]
+}
+
+emitter ring {
+  bullet = dart // never defined here
+  delay = 30t
+  repeat = forever
+  interval = 60t
+  speed = 0.05u/t
+  block ring {
+    count = 12
+    start = 0deg
+  }
+}
