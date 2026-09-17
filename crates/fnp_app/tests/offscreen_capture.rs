@@ -1,5 +1,7 @@
-//! Offscreen capture of a scripted run of the real main loop: moving, dodging, standing still in
-//! the imp's aimed fan until it hits, the restart, and moving again.
+//! Offscreen capture of a scripted run of the arena in the engine's main loop
+//! ([`AppBuilder::run_offscreen`](grimoire::AppBuilder::run_offscreen)): moving, dodging, standing
+//! still in the imp's aimed shots until one hits, the restart, and then the curtain mode with about
+//! ten thousand bullets.
 //!
 //! Needs a figure pack and a GPU adapter, so it is `#[ignore]`d and runs only on request:
 //!
@@ -9,78 +11,20 @@
 //! ```
 //!
 //! Optional: `FNP_CAPTURE_EVERY=<n>` keeps every n-th frame (default 2), `FNP_CAPTURE_SIZE=<w>x<h>`
-//! (default 960x540). Frames are written as binary PPM (`frame_00000.ppm`, ...), which any image
-//! tool turns into a GIF or video; this crate deliberately adds no image dependency for it.
+//! (default 960x540), `FNP_CAPTURE_FRAMES=<n>` (default 1080), `FNP_CAPTURE_CAMERA=<0|1|2>`
+//! (camera preset A, B or C, default A). Frames are written as binary PPM
+//! (`frame_00000.ppm`, ...), which any image tool turns into a GIF or video; this crate
+//! deliberately adds no image dependency for it.
 
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use fnp_app::figures::load_visuals;
-use fnp_app::game_loop::{GameLoop, LoopConfig, LoopError};
-use fnp_app::stage_renderer_config;
+use fnp_app::stage::{ArenaConfig, CURTAIN_KEY, Figures, arena_app};
 use fnp_game::TICK_RATE_HZ;
-use grimoire::platform::{
-    AppHandler, AppResult, KeyCode, PlatformContext, PlatformEvent, RawInputEvent, run_headless,
-};
-use grimoire::render::{
-    RenderError, RenderFrame, RenderStats, Renderer, StageFrame, StageStats, WgpuRenderer,
-};
-
-/// Frames of the scripted run (one tick per frame at the game's rate).
-const FRAMES: u64 = 480;
-
-/// Wraps the offscreen renderer and writes every `every`-th rendered frame to `dir`.
-struct CapturingRenderer {
-    inner: WgpuRenderer,
-    dir: PathBuf,
-    size: (u32, u32),
-    every: u64,
-    rendered: u64,
-    written: u64,
-}
-
-impl CapturingRenderer {
-    fn write_ppm(&self, rgba: &[u8]) -> std::io::Result<()> {
-        let path = self.dir.join(format!("frame_{:05}.ppm", self.written));
-        let mut file = std::io::BufWriter::new(std::fs::File::create(path)?);
-        write!(file, "P6\n{} {}\n255\n", self.size.0, self.size.1)?;
-        for pixel in rgba.as_chunks::<4>().0 {
-            file.write_all(&pixel[..3])?;
-        }
-        file.flush()
-    }
-}
-
-impl Renderer for CapturingRenderer {
-    fn resize(&mut self, width: u32, height: u32) {
-        self.inner.resize(width, height);
-    }
-
-    fn render(&mut self, frame: &RenderFrame) -> Result<RenderStats, RenderError> {
-        self.inner.render(frame)
-    }
-
-    fn backend_name(&self) -> &str {
-        self.inner.backend_name()
-    }
-
-    fn supports_stage(&self) -> bool {
-        true
-    }
-
-    fn render_stage(&mut self, frame: &StageFrame) -> Result<StageStats, RenderError> {
-        let stats = self.inner.render_stage(frame)?;
-        if self.rendered.is_multiple_of(self.every) {
-            let rgba = self.inner.read_offscreen_rgba()?;
-            self.write_ppm(&rgba)
-                .map_err(|error| RenderError::Backend(format!("writing a frame: {error}")))?;
-            self.written += 1;
-        }
-        self.rendered += 1;
-        Ok(stats)
-    }
-}
+use grimoire::OffscreenRun;
+use grimoire::platform::{KeyCode, PlatformEvent, RawInputEvent};
+use grimoire::render::RenderError;
 
 fn key(code: KeyCode, pressed: bool) -> PlatformEvent {
     PlatformEvent::Input(RawInputEvent::Key {
@@ -90,57 +34,39 @@ fn key(code: KeyCode, pressed: bool) -> PlatformEvent {
     })
 }
 
-/// The scripted player: strafe right, back left, stand in the aimed fan until hit, then (after
-/// the restart) walk up and around.
-fn script(frame: u64) -> Vec<PlatformEvent> {
-    match frame {
-        0 => vec![key(KeyCode::KeyD, true)],
-        40 => vec![key(KeyCode::KeyD, false), key(KeyCode::KeyA, true)],
-        95 => vec![key(KeyCode::KeyA, false)],
-        300 => vec![key(KeyCode::KeyW, true), key(KeyCode::KeyA, true)],
-        340 => vec![key(KeyCode::KeyW, false)],
-        380 => vec![key(KeyCode::KeyA, false), key(KeyCode::KeyD, true)],
-        450 => vec![key(KeyCode::KeyD, false), key(KeyCode::KeyS, true)],
-        470 => vec![key(KeyCode::KeyS, false)],
-        _ => Vec::new(),
-    }
+/// The scripted player: strafe right, back left, stand in the aimed shots until hit, walk up and
+/// around after the restart, then switch the imp to its curtain mode and stand in it.
+fn script(frame: u64, events: &mut Vec<PlatformEvent>) {
+    let keys: &[(KeyCode, bool)] = match frame {
+        0 => &[(KeyCode::KeyD, true)],
+        40 => &[(KeyCode::KeyD, false), (KeyCode::KeyA, true)],
+        95 => &[(KeyCode::KeyA, false)],
+        300 => &[(KeyCode::KeyW, true), (KeyCode::KeyA, true)],
+        340 => &[(KeyCode::KeyW, false)],
+        380 => &[(KeyCode::KeyA, false), (KeyCode::KeyD, true)],
+        450 => &[(KeyCode::KeyD, false), (KeyCode::KeyS, true)],
+        470 => &[(KeyCode::KeyS, false)],
+        500 => &[(CURTAIN_KEY, true)],
+        501 => &[(CURTAIN_KEY, false)],
+        _ => &[],
+    };
+    events.extend(keys.iter().map(|&(code, pressed)| key(code, pressed)));
 }
 
-struct Scripted<'a> {
-    inner: &'a mut GameLoop<CapturingRenderer>,
-    frame: u64,
+fn write_ppm(path: &PathBuf, size: (u32, u32), rgba: &[u8]) -> std::io::Result<()> {
+    let mut file = std::io::BufWriter::new(std::fs::File::create(path)?);
+    write!(file, "P6\n{} {}\n255\n", size.0, size.1)?;
+    for pixel in rgba.as_chunks::<4>().0 {
+        file.write_all(&pixel[..3])?;
+    }
+    file.flush()
 }
 
-impl AppHandler for Scripted<'_> {
-    fn init(&mut self, ctx: &mut dyn PlatformContext) -> AppResult {
-        self.inner.init(ctx)
-    }
-
-    fn event(&mut self, ctx: &mut dyn PlatformContext, event: &PlatformEvent) {
-        self.inner.event(ctx, event);
-    }
-
-    fn frame(&mut self, ctx: &mut dyn PlatformContext) {
-        for event in script(self.frame) {
-            self.inner.event(ctx, &event);
-        }
-        self.frame += 1;
-        self.inner.frame(ctx);
-    }
-
-    fn shutdown(&mut self) {
-        self.inner.shutdown();
-    }
-}
-
-fn capture_size() -> (u32, u32) {
-    std::env::var("FNP_CAPTURE_SIZE")
+fn env_or<T: std::str::FromStr>(name: &str, default: T) -> T {
+    std::env::var(name)
         .ok()
-        .and_then(|value| {
-            let (w, h) = value.split_once('x')?;
-            Some((w.parse().ok()?, h.parse().ok()?))
-        })
-        .unwrap_or((960, 540))
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(default)
 }
 
 #[test]
@@ -153,87 +79,64 @@ fn capture_a_scripted_run() {
         eprintln!("FNP_FIGURE_PACK or FNP_CAPTURE_DIR not set; skipping the capture");
         return;
     };
-    let pack = PathBuf::from(pack);
     let dir = PathBuf::from(dir);
     std::fs::create_dir_all(&dir).expect("the capture directory can be created");
-    let every = std::env::var("FNP_CAPTURE_EVERY")
+    let every: u64 = env_or("FNP_CAPTURE_EVERY", 2).max(1);
+    let frames: u64 = env_or("FNP_CAPTURE_FRAMES", 1_080);
+    let size = std::env::var("FNP_CAPTURE_SIZE")
         .ok()
-        .and_then(|value| value.parse().ok())
-        .filter(|&every: &u64| every > 0)
-        .unwrap_or(2);
-    let size = capture_size();
+        .and_then(|value| {
+            let (w, h) = value.split_once('x')?;
+            Some((w.parse().ok()?, h.parse().ok()?))
+        })
+        .unwrap_or((960, 540));
 
-    let started = Instant::now();
-    let capture_dir = dir.clone();
-    let factory = Box::new(move |_: &mut dyn PlatformContext| {
-        let mut renderer =
-            WgpuRenderer::new_offscreen_staged(size.0, size.1, stage_renderer_config())?;
-        println!("fnp-capture: renderer {}", renderer.adapter_report_line());
-        let (visuals, summary) = load_visuals(&mut renderer, Path::new(&pack))?;
-        println!("fnp-capture: figures {summary:?}");
-        Ok::<_, LoopError>((
-            CapturingRenderer {
-                inner: renderer,
-                dir: capture_dir,
-                size,
-                every,
-                rendered: 0,
-                written: 0,
-            },
-            visuals,
-        ))
+    let (app, stats) = arena_app(ArenaConfig {
+        seed: 42,
+        figures: Figures::Pack(PathBuf::from(pack)),
+        max_frames: None,
+        camera_preset: env_or("FNP_CAPTURE_CAMERA", 0),
     });
-    let mut game = GameLoop::new(
-        LoopConfig {
-            seed: 42,
-            max_frames: Some(FRAMES),
-        },
-        factory,
-    );
-    let frame = Duration::from_nanos(1_000_000_000 / u64::from(TICK_RATE_HZ));
-    let result = {
-        let mut scripted = Scripted {
-            inner: &mut game,
-            frame: 0,
-        };
-        run_headless(&mut scripted, FRAMES, frame)
+    let frame_delta = Duration::from_nanos(1_000_000_000 / u64::from(TICK_RATE_HZ));
+    let mut run = OffscreenRun::new(size.0, size.1, frames, frame_delta);
+    run.capture_every = every;
+    let started = Instant::now();
+    let mut written = 0_u64;
+    let mut write_error = None;
+    let result = app.run_offscreen(run, &mut script, &mut |_, rgba| {
+        let path = dir.join(format!("frame_{written:05}.ppm"));
+        if let Err(error) = write_ppm(&path, size, rgba) {
+            write_error.get_or_insert(error);
+        }
+        written += 1;
+    });
+    let report = match result {
+        Ok(report) => report,
+        Err(grimoire::GrimoireError::Render(RenderError::NoAdapter)) => {
+            eprintln!("no GPU adapter available; skipping the capture");
+            return;
+        }
+        Err(error) => panic!("the capture run failed: {error}"),
     };
-    if let Some(LoopError::Render(RenderError::NoAdapter)) = game.error().borrow().as_ref() {
-        eprintln!("no GPU adapter available; skipping the capture");
-        return;
-    }
-    if let Some(error) = game.error().borrow().as_ref() {
-        panic!("the capture run failed: {error}");
-    }
-    result.expect("the scripted run completes");
+    assert!(write_error.is_none(), "writing a frame: {write_error:?}");
 
-    let stats = *game.stats().borrow();
+    let stats = *stats.borrow();
     println!("fnp-capture: {}", stats.summary());
     println!(
-        "fnp-capture: last frame drew {} meshes, {} bullets, {} point lights ({} over budget), \
-         {} blob shadows",
-        stats.last_stage.meshes_drawn,
-        stats.last_stage.bullets_drawn,
-        stats.last_stage.point_lights_drawn,
-        stats.last_stage.point_lights_over_budget,
-        stats.last_stage.blob_shadows_drawn
-    );
-    println!(
-        "fnp-capture: {} frames rendered in {:.1} s wall time into {}",
-        stats.frames,
+        "fnp-capture: {} frames rendered, {written} images, in {:.1} s wall time into {}",
+        report.frames,
         started.elapsed().as_secs_f64(),
         dir.display()
     );
-    assert_eq!(stats.frames, FRAMES);
+    assert_eq!(report.frames, frames);
     assert!(
         stats.hits >= 1,
         "the scripted run includes a hit: {stats:?}"
     );
     assert!(stats.round >= 2, "and a restart: {stats:?}");
-    assert!(stats.peak_bullets > 0);
+    assert!(stats.curtain, "and ends in curtain mode: {stats:?}");
     // Every bullet went through the engine path, and nothing was discarded on the way.
     assert!(stats.bullets_drawn > 0);
-    assert!(stats.peak_bullet_lights > 0);
     assert_eq!(stats.bullets_unmapped, 0, "{stats:?}");
     assert_eq!(stats.bullets_rejected_invalid, 0, "{stats:?}");
     assert_eq!(stats.bullets_rejected_palette_space, 0, "{stats:?}");

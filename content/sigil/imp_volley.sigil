@@ -1,60 +1,92 @@
 sigil 1
-// imp_volley: the attack of the imp in the first playable prototype (PRD-0007 role "Schuetze":
-// stationary, aimed patterns). An aimed fan the player sidesteps, and a slowly winding ring of
-// thorns in between that forces the player to find a gap.
-// Distances in world units (1u = 1 m), times in ticks at 60 Hz.
-// Silhouette and palette names follow the engine's bullet pass tables: the compiler numbers them
-// per unit in alphabetical order and the render adapter maps by identity (docs/formats/sigil.md,
-// section 11, open point 5), so orb 0 and rice 1, hex_magenta 0 and poison_lime 1 land on the
-// table rows of the same name. fnp_content's tests check the alignment.
+// imp_volley: the imp's attack (PRD-0007 role "Schuetze": stationary, aimed patterns), built from
+// the engine's reference patterns 03-aimed-fan and 01-opening-ring
+// (crates/grimoire_sigilc/tests/reference/ at engine v0.4.0), slowed to the arena's scale.
+// An aimed five-way shot of darts punishes standing still, a weaving fan of orbs sweeps the
+// arena below the imp between two shots, and every three seconds an accelerating ring of grains
+// closes the gaps the player dodged into.
+// Distances in world units (1u = 1 m), times in ticks at 60 Hz. Directions are absolute (the
+// emitters fire with rotation 0): 270deg points down, towards the player's start.
+// Only silhouettes and palettes the bullet pass draws are used (docs/formats/sigil.md §10.10).
 
 meta {
   name = "Imp Volley"
-  difficulty = [easy, opener]
-  density = 140 // estimated bullets on screen at peak
+  difficulty = [easy, pressure]
+  density = 160 // estimated bullets on screen at peak
 }
 
-// Ember: round orb in hex magenta (style bible palette H0), aimed at the player.
-bullet ember {
-  silhouette = orb
+// Diamond pointing along its flight: the aimed threat (from 03-aimed-fan).
+bullet dart {
+  silhouette = diamond
   palette = enemy.hex_magenta
   glow = 0.8
-  radius = 0.22u
+  radius = 0.18u
+  damage = 2
+  flags = [grazeable]
+}
+
+// Orb of the weaving fan (from 03-aimed-fan).
+bullet orb {
+  silhouette = orb
+  palette = enemy.poison_lime
+  glow = 0.5
+  radius = 0.2u
   damage = 1
   flags = [grazeable]
 }
 
-// Thorn: elongated rice shape in poison lime (style bible palette H1), fired as a ring.
-bullet thorn {
+// Grain of the opening ring (01-opening-ring fires orbs; a grain keeps one silhouette per type).
+bullet grain {
   silhouette = rice
-  palette = enemy.poison_lime
+  palette = enemy.hex_magenta
   glow = 0.6
   radius = 0.16u
   damage = 1
   flags = [grazeable, smashable]
 }
 
-emitter volley {
-  bullet = ember
+emitter aimed {
+  bullet = dart
   delay = 60t // one second of calm after a round starts
   repeat = forever
-  interval = 50t
-  speed = 0.09u/t
+  interval = 48t
+  speed = 0.11u/t
   block aimed {
     count = 5
-    spread = 36deg // total spread of the fan around the aim line
+    spread = 30deg // total spread around the aim line
+  }
+}
+
+emitter fan {
+  bullet = orb
+  delay = 84t // between two aimed volleys
+  repeat = forever
+  interval = 48t
+  speed = 0.055u/t
+  block fan {
+    count = 9
+    spread = 120deg
+    center = 270deg // down, towards the player's half of the arena
+  }
+  modifier sine_offset {
+    amplitude = 0.5u // lateral weave
+    period = 45t
+    phase = 90deg
   }
 }
 
 emitter ring {
-  bullet = thorn
-  delay = 85t
+  bullet = grain
+  delay = 150t
   repeat = forever
-  interval = 100t
-  speed = 0.06u/t
-  block spiral {
-    arms = 14
-    step = 9deg // the ring winds a little further every volley
-    start = 0deg
+  interval = 180t
+  speed = 0.035u/t
+  block ring {
+    count = 24
+    start = 7.5deg // offset from the cardinal axes
+  }
+  modifier accelerate {
+    rate = 0.0012u/t2
+    max_speed = 0.11u/t // cap keeps late grains readable
   }
 }
