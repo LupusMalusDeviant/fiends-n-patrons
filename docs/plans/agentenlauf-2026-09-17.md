@@ -44,6 +44,21 @@ Vorläufig und im Code markiert: Geschosse als leuchtende Kugeln bis zum Bullet-
 zum Adapter Sigil → Kollision, eigene Hauptschleife, weil `App::run` Plugins keinen Zugriff auf den Renderer gibt.
 Der Zweig bindet die Engine an einen Commit auf `main` statt an einen Tag und bleibt deshalb ungemergt.
 
+Nach dem Merge der Geschoss-Ebene wurde der Prototyp umgestellt: Die Geschosse kommen jetzt über den Adapter
+Sigil → Render aus der Engine, und die Engine leitet ihre Lichter selbst ab. Dabei fiel eine echte Falle auf: Der
+Sigil-Compiler nummeriert Paletten je Unit alphabetisch, der Bullet-Pass nach seiner Tabelle, und der Adapter
+bildet per Identität ab – Magenta und Limette wären vertauscht gezeichnet worden, ohne dass ein Zähler anschlägt.
+Die Paletten heißen jetzt wie in der Tabelle, ein Test prüft die Namen; der Arena-Hash änderte sich dadurch
+einmal, belegt allein durch die Inhaltsidentität der Unit. Verworfene Geschosse im Offscreen-Lauf und im
+Fenster-Rauchtest: 0. **Auf der Grafikkarte gemessen** (Vulkan, 900 Bilder, Fenster ohne Fokus): 6,9 ms je Bild
+im Mittel, langsamstes Bild 17 ms; auf dem Software-Renderer rund 97 ms.
+
+## Offene PO-Entscheidungen
+
+Gesammelt mit Empfehlungen, außerhalb des Repos vorgelegt. Die wichtigsten: ein Engine-Release-Tag, damit der
+Prototyp nach `main` kann; ein Fassaden-Haken, über den Plugins Assets beim Renderer anmelden; ein gemeinsamer
+Katalog für Silhouetten und Paletten statt Nummerierung je Unit; die Bestätigung des neuen Arena-Hashes.
+
 ### Engine — WP3.5 und WP5.3
 
 Gemergt als Engine-PR #29 (`a01495c`), CI auf `main` samt GIF-Job und Benchmark-Gate grün. Der Renderer hat jetzt
@@ -51,4 +66,4 @@ den fest verdrahteten Pass-Graph mit eigener Geschoss-Ebene: Billboards mit Dist
 Kern, Rand und Leuchthof, gezeichnet nur im gegnerischen Palettenraum, dazu höchstens acht abgeleitete
 Geschoss-Lichter über den einzigen erlaubten Weg. Der Fassaden-Adapter Sigil → Render extrahiert 10.000 Geschosse
 in rund 0,04 ms auf dem CI-Runner. Einzelheiten und offene Punkte in den Einträgen WP3.5 und WP5.3 von
-[Plan 0002](0002-phase-p1-sichtbarer-kern.md). Der Prototyp-Zweig wird anschließend auf diese Geschoss-Ebene umgestellt.
+[Plan 0002](0002-phase-p1-sichtbarer-kern.md). 
