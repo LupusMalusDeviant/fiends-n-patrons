@@ -153,10 +153,37 @@ pub fn scale(s: [f32; 3]) -> Mat4 {
     ]
 }
 
-/// Yaw that turns a figure's authored front (towards -Y, the viewer) to face `direction`.
+/// Yaw that turns a figure whose front follows the game's convention to face `direction`.
+///
+/// Convention: a figure's front looks along glTF +Z, like the glTF standard and the Hi3D assets.
+/// The skeleton root's axis rotation (glTF Y-up to engine Z-up) turns glTF +Z into engine -Y,
+/// towards the viewer, so an unrotated figure faces the camera. A figure authored the other way
+/// round says so with [`AuthoredFront::MinusZ`] and is turned by half a turn first
+/// ([`AuthoredFront::correction`]).
 #[must_use]
 pub fn facing_yaw(direction: Vec2) -> f32 {
     dmath::atan2(direction.x, -direction.y)
+}
+
+/// Which way a figure's model looks in glTF space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthoredFront {
+    /// glTF +Z, the game's convention (glTF standard, Hi3D assets).
+    PlusZ,
+    /// glTF -Z: turned by half a turn so it follows the convention.
+    MinusZ,
+}
+
+impl AuthoredFront {
+    /// Model-space rotation that turns the figure's authored front into the convention's front;
+    /// applied before every other transform of the figure.
+    #[must_use]
+    pub fn correction(self) -> Mat4 {
+        match self {
+            AuthoredFront::PlusZ => IDENTITY,
+            AuthoredFront::MinusZ => rotation_z(dmath::PI),
+        }
+    }
 }
 
 /// Hamilton product of two `[x, y, z, w]` quaternions.
@@ -202,12 +229,15 @@ pub struct FigureVisual {
     pub ground_lift: f32,
     /// Height of the figure's bounds.
     pub height: f32,
+    /// Which way the model looks; see [`facing_yaw`] for the convention.
+    pub authored_front: AuthoredFront,
 }
 
 impl FigureVisual {
-    /// Prepares a figure loaded through `grimoire::adapters::figure_assets::load_figure`.
+    /// Prepares a figure loaded through `grimoire::adapters::figure_assets::load_figure_into`,
+    /// authored to look along `authored_front`.
     #[must_use]
-    pub fn from_loaded(figure: &LoadedFigure) -> Self {
+    pub fn from_loaded(figure: &LoadedFigure, authored_front: AuthoredFront) -> Self {
         let rest_pose = rest_pose_skin_matrices(&figure.skeleton);
         let hit_pose = crumpled_pose(&figure.skeleton, 0.35).unwrap_or_else(|| rest_pose.clone());
         Self {
@@ -216,6 +246,7 @@ impl FigureVisual {
             hit_pose,
             ground_lift: -figure.bounds_min[2],
             height: figure.bounds_max[2] - figure.bounds_min[2],
+            authored_front,
         }
     }
 
@@ -231,6 +262,7 @@ impl FigureVisual {
             hit_pose: vec![IDENTITY],
             ground_lift: 0.0,
             height: 1.8,
+            authored_front: AuthoredFront::PlusZ,
         }
     }
 }
@@ -544,6 +576,9 @@ fn push_figure(
     } else {
         &figure.rest_pose
     };
+    // Innermost: bring the model's front onto the convention, so facing and knock-back apply to
+    // every figure alike.
+    let transform = mul(transform, figure.authored_front.correction());
     let Ok(joint_offset) = u32::try_from(frame.joint_matrices.len()) else {
         return;
     };
@@ -850,6 +885,17 @@ mod tests {
             front[0][1] * authored_front[0] + front[1][1] * authored_front[1],
         ];
         assert!((turned[0] - 1.0).abs() < 1.0e-5 && turned[1].abs() < 1.0e-5);
+
+        // A figure authored along glTF -Z (engine +Y before any rotation) is corrected first and
+        // then faces +X as well.
+        let corrected = mul(rotation_z(yaw), AuthoredFront::MinusZ.correction());
+        let minus_z_front = [0.0, 1.0];
+        let turned = [
+            corrected[0][0] * minus_z_front[0] + corrected[1][0] * minus_z_front[1],
+            corrected[0][1] * minus_z_front[0] + corrected[1][1] * minus_z_front[1],
+        ];
+        assert!((turned[0] - 1.0).abs() < 1.0e-5 && turned[1].abs() < 1.0e-5);
+        assert_eq!(AuthoredFront::PlusZ.correction(), IDENTITY);
     }
 
     #[test]

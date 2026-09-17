@@ -4,7 +4,9 @@
 use std::fmt;
 use std::path::Path;
 
-use fnp_game::arena::present::{ArenaVisuals, FigureVisual, StageMeshData, stage_mesh_data};
+use fnp_game::arena::present::{
+    ArenaVisuals, AuthoredFront, FigureVisual, StageMeshData, stage_mesh_data,
+};
 use grimoire::RenderAssets;
 use grimoire::adapters::figure_assets::{FigureLoadError, load_figure_into};
 use grimoire::platform::StdFileSystem;
@@ -16,6 +18,13 @@ pub const SOUL_FIGURE: &str = "soul";
 
 /// Name of the enemy figure inside the pack (`figures/imp/...`).
 pub const IMP_FIGURE: &str = "imp";
+
+/// Which way the soul and the imp of the current figure packs (rounds 3 and 4) look: glTF -Z,
+/// against the game's convention of glTF +Z (like the glTF standard and the Hi3D assets). Measured
+/// on the rigs: the hands and toes sit at negative glTF Z, the imp's tail at positive Z, and the
+/// `.L` joints at negative X, which is the figure's left only when it looks along -Z. Assets that
+/// follow the convention use [`AuthoredFront::PlusZ`].
+pub const PACK_FIGURES_FRONT: AuthoredFront = AuthoredFront::MinusZ;
 
 /// Failure preparing the arena's visuals.
 #[derive(Debug)]
@@ -109,8 +118,8 @@ pub fn load_visuals(
         })?;
     let stage = register_stage(assets, stage_mesh_data())?;
 
-    let soul_visual = FigureVisual::from_loaded(&soul);
-    let imp_visual = FigureVisual::from_loaded(&imp);
+    let soul_visual = FigureVisual::from_loaded(&soul, PACK_FIGURES_FRONT);
+    let imp_visual = FigureVisual::from_loaded(&imp, PACK_FIGURES_FRONT);
     let summary = LoadSummary {
         soul_parts: soul.parts.len(),
         soul_joints: soul.skeleton.joints.len(),
