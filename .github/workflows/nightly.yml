@@ -111,7 +111,7 @@ jobs:
       - name: Fetch dependencies (engine anonymously over HTTPS)
         run: cargo fetch --locked
       # The shipped binary uses the release profile; CI tests only the dev profile. Optimisation
-      # level must not change the golden hash on any platform.
+      # level must not change the arena's golden hash on any platform (tests/determinism.rs).
       - name: Determinism gate (release profile)
         run: cargo test --release --locked -p fnp_sim_harness --test determinism
       - name: Build fiends-n-patrons (release)

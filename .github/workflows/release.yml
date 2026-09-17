@@ -93,7 +93,8 @@ jobs:
       # Own step so that a failed engine fetch is told apart from a build failure.
       - name: Fetch dependencies (engine anonymously over HTTPS)
         run: cargo fetch --locked
-      # The golden hash must hold under the release profile the binaries are built with.
+      # The arena's golden hash (tests/determinism.rs) must hold under the release profile the
+      # binaries are built with.
       - name: Determinism gate (release profile)
         run: cargo test --release --locked -p fnp_sim_harness --test determinism
       - name: Build fiends-n-patrons (release)
