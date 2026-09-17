@@ -180,7 +180,7 @@ fn the_curtain_scenario_holds_about_ten_thousand_bullets_over_many_pool_blocks()
         0,
         "the soul cannot be hit in curtain mode"
     );
-    assert!(CURTAIN_PRESS_TICK < GOLDEN_CURTAIN_TICKS);
+    const { assert!(CURTAIN_PRESS_TICK < GOLDEN_CURTAIN_TICKS) };
     println!("curtain bot scenario: {live} live bullets after {GOLDEN_CURTAIN_TICKS} ticks");
 }
 
