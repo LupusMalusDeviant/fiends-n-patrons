@@ -1,0 +1,85 @@
+sigil 1
+// summoner_bloom: the summoner's pattern (PRD-0007 role "Beschwoerer": spawns, priority target).
+// This is the game's cascade: seeds drift out, each seed becomes an emitter of its own, and every
+// shard it fires changes type halfway through its flight. Derived from the engine's reference
+// patterns 11-seed-bloom and 09-shatter-orbs (crates/grimoire_sigilc/tests/reference/ at engine
+// v0.5.0); the seeds are smashable, so the summoner can be answered instead of only dodged.
+// Distances in world units (1u = 1 m), times in ticks at 60 Hz, directions relative to the parent
+// bullet's heading inside a sub-emitter. Only drawn catalogue names (sigil.md §10.10).
+//
+// Cascade depth 2 of the 3 the format allows (sigil.md §11.3): seeds -> bloom (become_emitter) is
+// one level, shard -> spark (change_type) stays on the same level. Nothing here is reachable from
+// itself, and the seed emitter repeats three times, so the cascade has a last generation.
+//
+// Despawn: no turning modifier anywhere; seeds, shards and sparks all keep their heading and leave
+// the despawn box (13.5u x 10u around the arena centre).
+
+meta {
+  name = "Summoner Bloom"
+  difficulty = [hard, cascade]
+  density = 110 // 3 volleys of 5 seeds, each blooming into 6 shards
+}
+
+// Seed: slow, smashable, and the thing worth shooting before it opens.
+bullet seed {
+  silhouette = orb
+  palette = enemy.hex_magenta
+  glow = 0.85
+  radius = 0.3u
+  damage = 2
+  flags = [grazeable, smashable]
+  transform become_emitter {
+    when = time 48t // about four fifths of a second after it left the summoner
+    emitter = bloom
+  }
+}
+
+// Shard: what a bloom fires, still slow enough to read.
+bullet shard {
+  silhouette = rice
+  palette = enemy.poison_lime
+  glow = 0.5
+  radius = 0.13u
+  damage = 1
+  flags = [grazeable]
+  transform change_type {
+    when = distance 3u // the shard sharpens once it has left the bloom
+    to = spark
+  }
+}
+
+// Spark: the second half of a shard's life, brighter and easier to see against the floor.
+bullet spark {
+  silhouette = diamond
+  palette = enemy.poison_lime
+  glow = 0.95
+  radius = 0.12u
+  damage = 1
+  flags = [grazeable]
+}
+
+// Three volleys of seeds, spread wide enough that two blooms never overlap completely.
+emitter seeds {
+  bullet = seed
+  repeat = 3
+  interval = 80t
+  speed = 0.045u/t
+  block ring {
+    count = 5
+    start = 36deg
+  }
+}
+
+// The bloom itself: fired by a seed, not by the summoner (role = sub).
+emitter bloom {
+  role = sub
+  bullet = shard
+  repeat = 1
+  interval = 1t
+  speed = 0.1u/t
+  block fan {
+    count = 6
+    spread = 100deg
+    center = 0deg // relative to the seed's heading
+  }
+}

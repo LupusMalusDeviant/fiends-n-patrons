@@ -1,0 +1,72 @@
+sigil 1
+// breaker_toll: the breaker's pattern (PRD-0007 role "Tank/Brecher": advances, forces position
+// changes, smash-resistant bullets). Derived from the engine's reference patterns
+// 08-returning-needles and 07-mirror-bloom (crates/grimoire_sigilc/tests/reference/ at engine
+// v0.5.0): a heavy ring that comes back once, so the safe spot behind the first wall is only safe
+// for a second, plus a mirrored pair of needles that keeps the flanks honest.
+// Distances in world units (1u = 1 m), times in ticks at 60 Hz, directions absolute (270deg is
+// down). Only drawn catalogue names (sigil.md §10.10).
+//
+// Despawn: `reverse` turns a toll around exactly once, so it crosses the arena a second time and
+// leaves through the opposite side of the despawn box (13.5u x 10u around the arena centre) — it
+// does not orbit. The mirror modifier only folds the needles' directions; it changes no heading
+// over time.
+
+meta {
+  name = "Breaker Toll"
+  difficulty = [hard, area]
+  density = 130 // 5 tolls of 14, each crossing twice, plus the needles
+}
+
+// Toll: heavy, slow, smash-resistant in feel because it returns instead of dying.
+bullet toll {
+  silhouette = orb
+  palette = enemy.hex_magenta
+  glow = 0.8
+  radius = 0.26u
+  damage = 2
+  flags = [grazeable]
+  transform reverse {
+    when = time 70t // a little over a second out, then back through the arena
+  }
+}
+
+// Needle: the flanking pair, thin and fast.
+bullet needle {
+  silhouette = diamond
+  palette = enemy.poison_lime
+  glow = 0.6
+  radius = 0.12u
+  damage = 1
+  flags = [grazeable]
+}
+
+// The toll: a wide ring that returns through its own gaps.
+emitter tolls {
+  bullet = toll
+  repeat = 5
+  interval = 95t
+  speed = 0.06u/t
+  block ring {
+    count = 14
+    start = 12.857deg // half a step, so the ring never lines up with the cardinal axes
+  }
+}
+
+// Needles from both flanks at once: the mirror folds one fan into two.
+emitter needles {
+  bullet = needle
+  delay = 35t
+  repeat = 5
+  interval = 95t
+  speed = 0.11u/t
+  block fan {
+    count = 4
+    spread = 25deg
+    center = 250deg
+  }
+  modifier mirror {
+    axis = 270deg // mirrored about "down", so the second fan takes the other flank
+    folds = 2
+  }
+}

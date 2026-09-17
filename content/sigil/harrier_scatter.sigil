@@ -1,0 +1,75 @@
+sigil 1
+// harrier_scatter: the harrier's pattern (PRD-0007 role "Stoerer": hunts the player, breaks up
+// graze camping). Derived from the engine's reference pattern 06-seeded-scatter
+// (crates/grimoire_sigilc/tests/reference/ at engine v0.5.0): a seeded spray whose per-bullet
+// jitter never repeats a shape, so standing still stops paying — but the spray is deterministic,
+// because the seed is a named stream and not a clock (contract §3).
+// Distances in world units (1u = 1 m), times in ticks at 60 Hz, directions absolute (270deg is
+// down). Only drawn catalogue names (sigil.md §10.10).
+//
+// Despawn: this is the one emitter here that runs forever, so it carries no turning modifier at
+// all — every grain keeps the heading it was scattered with and leaves the despawn box
+// (13.5u x 10u around the arena centre). A `curve` on a forever emitter whose circle closes inside
+// that box would never despawn and would fill the pool (engine WP6.6).
+
+meta {
+  name = "Harrier Scatter"
+  difficulty = [normal, anti_camp]
+  density = 90 // 6 grains every 9 ticks while the harrier lives, plus the reminder ring
+}
+
+// Grain: the spray, small and quick.
+bullet grain {
+  silhouette = rice
+  palette = enemy.poison_lime
+  glow = 0.55
+  radius = 0.13u
+  damage = 1
+  flags = [grazeable]
+}
+
+// Warning orb: the slow ring that says where the harrier is when the spray hides it.
+bullet warning {
+  silhouette = orb
+  palette = enemy.hex_magenta
+  glow = 0.9
+  radius = 0.22u
+  damage = 1
+  flags = [grazeable, smashable]
+}
+
+// The spray: wide, fast, never the same twice, and it does not stop.
+emitter spray {
+  bullet = grain
+  repeat = forever
+  interval = 9t
+  speed = 0.1u/t
+  block scatter {
+    count = 6
+    cone = 80deg
+    direction = 270deg
+    speed_jitter = 0.3 // +-30 % per bullet, from the named stream below
+    seed = harrier_spray
+  }
+  modifier accelerate {
+    rate = 0.0007u/t2
+    max_speed = 0.16u/t
+  }
+}
+
+// Every two seconds a slow ring: it re-reads the harrier's position through the spray.
+emitter reminder {
+  bullet = warning
+  delay = 45t
+  repeat = forever
+  interval = 120t
+  speed = 0.03u/t
+  block ring {
+    count = 10
+    start = 18deg
+  }
+  modifier accelerate {
+    rate = 0.0005u/t2
+    max_speed = 0.07u/t
+  }
+}
