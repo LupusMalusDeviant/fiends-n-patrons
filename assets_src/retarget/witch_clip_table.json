@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "Which library clip feeds which of the witch's 18 game clips, and how many frames the",
+    "result has. The frame counts are the ones the figure already had: the authoring report's",
+    "markers point at frames of these lengths, and the simulation's timings were built against",
+    "them, so a retarget resamples onto them rather than inheriting the library's own length.",
+    "Which source clip fits which game action is a content decision, not a technical one --",
+    "this file is data, so changing a line and re-running is the whole cost of changing it."
+  ],
+  "frame_rate_hz": 24.0,
+  "clips": [
+    { "name": "idle", "source": "Idle_Loop", "frames": 49, "loop": true, "ground": true },
+    { "name": "walk", "source": "Walk_Loop", "frames": 17, "loop": true, "ground": true },
+    { "name": "run", "source": "Jog_Fwd_Loop", "frames": 13, "loop": true, "ground": true },
+    { "name": "dash", "source": "Roll", "frames": 15, "note": "invulnerable_start 3, end 10" },
+    { "name": "melee_1", "source": "Punch_Jab", "frames": 14, "note": "hit on frame 6" },
+    { "name": "melee_2", "source": "Punch_Cross", "frames": 15, "note": "hit on frame 7" },
+    { "name": "melee_3", "source": "Sword_Attack", "frames": 20, "note": "hit on frame 9" },
+    { "name": "parry", "source": "Punch_Enter", "frames": 14, "note": "parry 3 to 9" },
+    { "name": "skill_cast", "source": "Spell_Simple_Shoot", "frames": 19, "note": "cast on 8" },
+    { "name": "ultimate", "source": "Spell_Simple_Enter", "frames": 30, "note": "release on 18" },
+    { "name": "bomb", "source": "Pistol_Reload", "frames": 19, "note": "detonate on 8; Pistol_Shoot moves only 8 of the library's bones, Pistol_Reload 34" },
+    { "name": "item_use", "source": "PickUp_Table", "frames": 15, "note": "use on 9" },
+    { "name": "rewind", "source": "Spell_Simple_Exit", "frames": 16, "note": "rewind on 9" },
+    { "name": "hit_react", "source": "Hit_Chest", "frames": 12, "note": "hit on 3" },
+    { "name": "death", "source": "Death01", "frames": 41, "note": "dead on the last frame" },
+    { "name": "spawn", "source": "Jump_Land", "frames": 18 },
+    { "name": "interact", "source": "Interact", "frames": 15, "note": "activate on 9" },
+    { "name": "victory", "source": "Dance_Loop", "frames": 31, "loop": true }
+  ]
+}

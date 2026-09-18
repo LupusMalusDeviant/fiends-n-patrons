@@ -1,0 +1,63 @@
+{
+  "_comment": [
+    "Which joint of the bone-mask witch follows which bone of the Quaternius Universal",
+    "Animation Library (CC0). Keys are the figure's joints, values the library's bones.",
+    "Measured, not guessed: the library animates 17 to 21 body bones per clip (feet, hands,",
+    "shoulders, neck and both spine joints included), so every deforming joint of the witch",
+    "that has a counterpart is listed here. The library's spine.001 never moves in any clip;",
+    "spine.002 and spine.003 carry the whole torso, and because a child's armature-space",
+    "matrix already contains its parents' turn, mapping the deepest pair loses nothing.",
+    "No counterpart exists for the library's fingers and toes (the witch has none) or for the",
+    "witch's skirt and cape (the library has none) -- those are driven under 'cloth'.",
+    "'root' and the two weapon sockets carry no deformation and stay at rest: the simulation",
+    "moves the figure, and the sockets follow the hands they hang from."
+  ],
+  "bones": {
+    "pelvis": "DEF-hips",
+    "spine": "DEF-spine.002",
+    "chest": "DEF-spine.003",
+    "neck": "DEF-neck",
+    "head": "DEF-head",
+    "clavicle.L": "DEF-shoulder.L",
+    "upper_arm.L": "DEF-upper_arm.L",
+    "forearm.L": "DEF-forearm.L",
+    "hand.L": "DEF-hand.L",
+    "clavicle.R": "DEF-shoulder.R",
+    "upper_arm.R": "DEF-upper_arm.R",
+    "forearm.R": "DEF-forearm.R",
+    "hand.R": "DEF-hand.R",
+    "thigh.L": "DEF-thigh.L",
+    "shin.L": "DEF-shin.L",
+    "foot.L": "DEF-foot.L",
+    "thigh.R": "DEF-thigh.R",
+    "shin.R": "DEF-shin.R",
+    "foot.R": "DEF-foot.R"
+  },
+  "translation": ["pelvis"],
+  "cloth": [
+    {
+      "chain": ["cape_upper.C", "cape_lower.C"],
+      "driver": "chest",
+      "follow": 0.45,
+      "lag": 2.0,
+      "falloff": 0.65
+    },
+    {
+      "chain": ["cape_upper.L", "cape_lower.L"],
+      "driver": "chest",
+      "follow": 0.4,
+      "lag": 2.0,
+      "falloff": 0.65
+    },
+    {
+      "chain": ["cape_upper.R", "cape_lower.R"],
+      "driver": "chest",
+      "follow": 0.4,
+      "lag": 2.0,
+      "falloff": 0.65
+    },
+    { "chain": ["skirt.C"], "driver": "pelvis", "follow": 0.3, "lag": 2.0, "falloff": 1.0 },
+    { "chain": ["skirt.L"], "driver": "thigh.L", "follow": 0.25, "lag": 1.0, "falloff": 1.0 },
+    { "chain": ["skirt.R"], "driver": "thigh.R", "follow": 0.25, "lag": 1.0, "falloff": 1.0 }
+  ]
+}
