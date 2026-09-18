@@ -20,7 +20,8 @@ use grimoire::render::figure_format::{
 use grimoire::render::procedural::{altar_block, floor_tile_grid, octagonal_pillar};
 use grimoire::render::{
     AmbientLight, BlobShadowInstance, DirectionalLight, MaterialHandle, MeshData, MeshHandle,
-    MeshInstance, MeshVertex, PbrMaterial, PointLight, ShadowConfig, ShadowMode, SkinBinding,
+    MeshInstance, MeshRole, MeshVertex, PbrMaterial, PointLight, ShadowConfig, ShadowMode,
+    SkinBinding,
 };
 use grimoire::sigil::BulletPool;
 
@@ -645,6 +646,10 @@ fn push_figure(
         frame.materials.push(material);
         let mut instance = mesh(part.mesh, index, transform);
         instance.skin = Some(skin);
+        // Figures are the actor layer (PRD-0003 layer 3): only they receive the frame's rim
+        // light, which keeps a dark silhouette readable against the dark floor. The stage's own
+        // geometry stays `MeshRole::Environment` and renders exactly as before.
+        instance.role = MeshRole::Actor;
         frame.meshes.push(instance);
     }
 }
@@ -825,6 +830,32 @@ mod tests {
         assert_eq!(stats.bullets_drawn, 0);
         // Floor, 9 pillars, 2 braziers, 4 curbs, plinth, imp, soul and the marker ring.
         assert_eq!(frame.meshes.len(), 1 + 9 + 2 + 4 + 1 + 1 + 1 + 1);
+    }
+
+    #[test]
+    fn only_the_figures_are_actors() {
+        // The rim light of the engine reaches `MeshRole::Actor` alone (PRD-0003 layer 3): the two
+        // figures, never the floor, the pillars, the braziers, the plinth or the marker ring.
+        let sim = built();
+        let visuals = ArenaVisuals::placeholder();
+        let mut frame = StageFrame::new();
+        extract(sim.world(), 0.0, &visuals, &mut frame);
+        let actors = frame
+            .meshes
+            .iter()
+            .filter(|instance| instance.role == MeshRole::Actor)
+            .count();
+        assert_eq!(actors, 2, "the soul and the imp");
+        for instance in &frame.meshes {
+            if instance.role == MeshRole::Actor {
+                assert!(instance.skin.is_some(), "an actor is a skinned figure");
+            } else {
+                assert_eq!(instance.role, MeshRole::Environment);
+                assert!(instance.skin.is_none());
+            }
+        }
+        // The frame keeps the engine's default rim light; the arena has no reason to override it.
+        assert_eq!(frame.rim_light, grimoire::render::RimLight::default());
     }
 
     #[test]
