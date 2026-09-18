@@ -31,7 +31,7 @@ Options:
   --figure-front <auto|plusz|minusz>
                  Which way the pack's figures were authored to look (default auto: measured
                  on each figure's own rig). The packs of round 4 and earlier are minusz.
-  --seed <u64>   Simulation seed (default 0)
+  --seed <u64>   Simulation and procedural-world seed (default 0)
   -h, --help     Print this help
 
 Controls:

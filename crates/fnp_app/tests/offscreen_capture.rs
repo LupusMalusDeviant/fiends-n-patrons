@@ -220,8 +220,9 @@ fn capture_a_district_preview() {
     let pack = PathBuf::from(pack);
     let figures = resolve_figures(&pack, fnp_app::figures::FrontChoice::Measure, None, None)
         .expect("the pack has a player and an enemy figure");
+    let seed = env_or("FNP_WORLD_SEED", 42);
     let (app, _) = arena_app(ArenaConfig {
-        seed: 42,
+        seed,
         figures: Figures::Pack {
             path: pack,
             figures,

@@ -1,4 +1,4 @@
-"""Bake three seeded 48 m arena districts from the 20 catalogued floor modules.
+"""Prepare raw runtime tiles and bake three review-only arena district examples.
 
 Run from anywhere with ``python tools/build_arena_floors.py``. Source thumbnails and
 the logical-socket catalog are checked in; this does not require the 1254 px
@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import hashlib
 import random
+import re
 from pathlib import Path
 
 from PIL import Image
@@ -97,26 +98,34 @@ def generate(district: str, bands: list[str | tuple[str, int]]) -> dict:
                 )
 
     canvas.save(ART / f"arena_{district}.png")
-    (ART / f"arena_{district}.rgba").write_bytes(canvas.convert("RGBA").tobytes())
     return {"id": district, "seed": SEED + list(DISTRICTS).index(district), "grid": cells}
 
 
 def main() -> None:
     assert CATALOG["tileSizeM"] == 4.0
     assert len(TILES) == 20
+    names = [tile["id"] for tile in CATALOG["tiles"]]
+    app_source = (ROOT / "crates/fnp_app/src/arena_floor.rs").read_text(encoding="utf-8")
+    game_source = (ROOT / "crates/fnp_game/src/worldgen.rs").read_text(encoding="utf-8")
+    raw_order = re.findall(r'tiles/([a-z_]+)\.rgba', app_source)
+    name_table = re.search(r'const NAMES: \[&str; 20\] = \[(.*?)\];', game_source, re.S)
+    assert name_table is not None
+    game_order = re.findall(r'"([a-z_]+)"', name_table.group(1))
+    assert raw_order == names == game_order, "runtime tile order differs from catalog"
     for tile in TILES.values():
         path = ART / "tiles" / tile["image"]
         assert hashlib.sha256(path.read_bytes()).hexdigest() == tile["sha256"], path
         with Image.open(path) as image:
             assert image.size == (128, 128), path
+            raw = image.convert("RGBA").resize((96, 96), Image.Resampling.LANCZOS).tobytes()
+            (ART / "tiles" / f"{tile['id']}.rgba").write_bytes(raw)
     layouts = [generate(name, bands) for name, bands in DISTRICTS.items()]
     used = {cell["id"] for layout in layouts for line in layout["grid"] for cell in line}
     assert used == set(TILES), f"unused tiles: {set(TILES) - used}"
-    (ART / "arena_layouts.json").write_text(
-        json.dumps({"schemaVersion": 1, "tileSizeM": 4.0, "gridSide": SIDE,
-                    "seed": SEED, "districts": layouts}, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    with (ART / "arena_layouts.json").open("w", encoding="utf-8", newline="\n") as output:
+        output.write(json.dumps({"schemaVersion": 1, "tileSizeM": 4.0,
+                                 "gridSide": SIDE, "seed": SEED,
+                                 "districts": layouts}, indent=2) + "\n")
     print(f"Baked {len(layouts)} 48 m districts, {len(used)} tiles used, all 792 neighbor joins valid")
 
 

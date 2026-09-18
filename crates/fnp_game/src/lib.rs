@@ -16,6 +16,7 @@
 //! `GamePlugin::build` is presentation and never feeds back into the simulation.
 
 pub mod arena;
+pub mod worldgen;
 
 use grimoire::prelude::*;
 

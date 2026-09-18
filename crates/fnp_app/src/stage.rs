@@ -140,6 +140,7 @@ pub enum Figures {
 /// The arena's presentation plugin; see the module documentation.
 pub struct ArenaStage {
     figures: Figures,
+    world_seed: u64,
     visuals: Option<ArenaVisuals>,
     stats: Shared<RunStats>,
     hud: Hud,
@@ -171,6 +172,7 @@ impl ArenaStage {
     pub fn new(figures: Figures, camera_preset: usize, roster: Arc<Roster>) -> Self {
         Self {
             figures,
+            world_seed: 0,
             visuals: None,
             stats: Rc::default(),
             hud: Hud {
@@ -191,6 +193,13 @@ impl ArenaStage {
             animator: present::Animator::new(),
             roster,
         }
+    }
+
+    /// Use the run seed for the authored room chain and rendered first room.
+    #[must_use]
+    pub fn with_world_seed(mut self, seed: u64) -> Self {
+        self.world_seed = seed;
+        self
     }
 
     /// Measurements of the run, updated every frame.
@@ -228,11 +237,21 @@ impl GamePlugin for ArenaStage {
         let visuals = match &self.figures {
             Figures::Pack { path, figures } => {
                 let started = Instant::now();
-                let (visuals, summary) = load_visuals(assets, path, figures)?;
+                let (visuals, summary) = load_visuals(assets, path, figures, self.world_seed)?;
                 eprintln!(
                     "fiends-n-patrons: figure pack loaded in {:.1} s ({summary})",
                     started.elapsed().as_secs_f64()
                 );
+                if let Some(room) = &visuals.room_floor {
+                    eprintln!(
+                        "fiends-n-patrons: world seed {}, first room {} (floor seed {}, boundaries {} and {})",
+                        self.world_seed,
+                        room.district.name(),
+                        room.seed,
+                        room.first_boundary,
+                        room.second_boundary
+                    );
+                }
                 visuals
             }
             Figures::Placeholder => {
@@ -437,7 +456,8 @@ pub struct ArenaConfig {
 #[must_use]
 pub fn arena_app(config: ArenaConfig) -> (AppBuilder, Shared<RunStats>) {
     let roster = Arc::new(playable_roster());
-    let stage = ArenaStage::new(config.figures, config.camera_preset, Arc::clone(&roster));
+    let stage = ArenaStage::new(config.figures, config.camera_preset, Arc::clone(&roster))
+        .with_world_seed(config.seed);
     let stats = stage.stats();
     let app = App::new(WindowConfig {
         title: String::from(GAME_TITLE),

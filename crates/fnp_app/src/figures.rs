@@ -15,6 +15,7 @@ use fnp_game::arena::present::{
     ArenaDistrict, ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, PuddleVisual,
     StageMeshData, stage_mesh_data,
 };
+use fnp_game::worldgen::{generate_floor, generate_run, validate_floor};
 use grimoire::RenderAssets;
 use grimoire::adapters::figure_assets::{
     FigureLoadError, LoadedFigure, load_clip, load_figure_into,
@@ -560,6 +561,7 @@ pub fn load_visuals(
     assets: &mut dyn RenderAssets,
     pack: &Path,
     figures: &PackFigures,
+    world_seed: u64,
 ) -> Result<(ArenaVisuals, LoadSummary), VisualsError> {
     let reader = PackReader::open(&StdFileSystem, pack).map_err(VisualsError::OpenPack)?;
     let mut store = AssetStore::new(Box::new(reader));
@@ -572,13 +574,17 @@ pub fn load_visuals(
     let player = load(&figures.player)?;
     let enemy = load(&figures.enemy)?;
     let stage = register_stage(assets, stage_mesh_data())?;
+    let run_plan = generate_run(world_seed);
+    let first_stage = &run_plan.stages[0];
     let district = std::env::var("FNP_ARENA_DISTRICT")
         .ok()
         .map(|name| ArenaDistrict::parse(&name).ok_or(VisualsError::InvalidDistrict(name)))
         .transpose()?
-        .unwrap_or(ArenaDistrict::Crypt);
+        .unwrap_or(first_stage.district);
+    let room_floor = generate_floor(first_stage.rooms[0].floor_seed, district);
+    debug_assert_eq!(validate_floor(&room_floor), Ok(()));
     let floor_textures =
-        crate::arena_floor::register(assets, district).map_err(VisualsError::StageTexture)?;
+        crate::arena_floor::register(assets, &room_floor).map_err(VisualsError::StageTexture)?;
     let puddles = crate::arena_puddles::register(assets)
         .map_err(VisualsError::Puddle)?
         .map(|puddle| PuddleVisual {
@@ -628,6 +634,7 @@ pub fn load_visuals(
             floor: stage.floor,
             floor_textures: Some(floor_textures),
             district,
+            room_floor: Some(room_floor),
             puddles: Some(puddles),
             pillar: stage.pillar,
             block: stage.block,
@@ -676,6 +683,7 @@ pub fn placeholder_visuals(assets: &mut dyn RenderAssets) -> Result<ArenaVisuals
         floor: stage.floor,
         floor_textures: None,
         district: ArenaDistrict::Crypt,
+        room_floor: None,
         puddles: None,
         pillar: stage.pillar,
         block: stage.block,

@@ -388,7 +388,8 @@ impl GamePlugin for ShowcaseStage {
             self.posed = Some((index, matrices));
         }
         self.floor = Some(assets.register_mesh(stage_mesh_data().floor)?);
-        self.floor_textures = Some(arena_floor::register(assets, ArenaDistrict::Crypt)?);
+        let floor = fnp_game::worldgen::generate_floor(0, ArenaDistrict::Crypt);
+        self.floor_textures = Some(arena_floor::register(assets, &floor)?);
         Ok(())
     }
 
