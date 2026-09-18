@@ -22,7 +22,7 @@ use grimoire::render::procedural::{altar_block, floor_tile_grid, octagonal_pilla
 use grimoire::render::{
     AmbientLight, BlobShadowInstance, DirectionalLight, MaterialHandle, MeshData, MeshHandle,
     MeshInstance, MeshRole, MeshVertex, PbrMaterial, PointLight, ShadowConfig, ShadowMode,
-    SkinBinding,
+    SkinBinding, TextureHandle,
 };
 use grimoire::sigil::BulletPool;
 
@@ -377,8 +377,16 @@ pub struct StageMeshData {
 /// Builds [`StageMeshData`].
 #[must_use]
 pub fn stage_mesh_data() -> StageMeshData {
+    let mut floor = floor_tile_grid(FLOOR_TILES, FLOOR_TILE_SIZE);
+    // Twelve repeats across the 48 m arena: one authored 4 m stone patch per repeat.
+    // The renderer uses repeat addressing. Keep the mesh's 2 m subdivisions for smooth
+    // interpolation while sampling the texture at a consistent world scale.
+    for vertex in &mut floor.vertices {
+        vertex.uv[0] *= FLOOR_TILES as f32 * 0.5;
+        vertex.uv[1] *= FLOOR_TILES as f32 * 0.5;
+    }
     StageMeshData {
-        floor: floor_tile_grid(FLOOR_TILES, FLOOR_TILE_SIZE),
+        floor,
         pillar: octagonal_pillar(PILLAR_RADIUS, PILLAR_HEIGHT),
         block: altar_block(1.0, 1.0, 1.0),
         marker_ring: flat_ring(0.82, 1.0, 40),
@@ -425,6 +433,8 @@ pub struct ArenaVisuals {
     pub imp: FigureVisual,
     /// Registered [`StageMeshData::floor`].
     pub floor: MeshHandle,
+    /// Base colour, tangent normal and ORM for the stone floor, when available.
+    pub floor_textures: Option<[TextureHandle; 3]>,
     /// Registered [`StageMeshData::pillar`].
     pub pillar: MeshHandle,
     /// Registered [`StageMeshData::block`].
@@ -442,6 +452,7 @@ impl ArenaVisuals {
             soul: FigureVisual::placeholder(MeshHandle(0)),
             imp: FigureVisual::placeholder(MeshHandle(0)),
             floor: MeshHandle(0),
+            floor_textures: None,
             pillar: MeshHandle(0),
             block: MeshHandle(0),
             marker_ring: MeshHandle(0),
@@ -564,10 +575,8 @@ mod slot {
 }
 
 /// Pushes the fixed materials in the order of [`slot`].
-fn push_stage_materials(frame: &mut StageFrame) {
-    frame
-        .materials
-        .push(material(linear(0x33_36_3D), 0.85, [0.0; 3]));
+fn push_stage_materials(frame: &mut StageFrame, floor_textures: Option<[TextureHandle; 3]>) {
+    frame.materials.push(floor_material(floor_textures));
     frame
         .materials
         .push(material(linear(0x3E_40_47), 0.75, [0.0; 3]));
@@ -580,6 +589,21 @@ fn push_stage_materials(frame: &mut StageFrame) {
         .materials
         .push(material(marker, 0.5, scale3(marker, 0.55)));
     debug_assert_eq!(frame.materials.len(), slot::COUNT as usize);
+}
+
+/// The arena floor's material, shared with the offscreen comparison scene.
+#[must_use]
+pub fn floor_material(textures: Option<[TextureHandle; 3]>) -> PbrMaterial {
+    let mut floor = material(linear(0x33_36_3D), 0.85, [0.0; 3]);
+    if let Some([base, normal, orm]) = textures {
+        // The base colour image is already dark stone; avoid multiplying it by the old
+        // factor-only colour a second time.
+        floor.base_color_factor = [0.82, 0.82, 0.82, 1.0];
+        floor.base_color_texture = Some(base);
+        floor.normal_texture = Some(normal);
+        floor.occlusion_roughness_metallic_texture = Some(orm);
+    }
+    floor
 }
 
 fn mesh(mesh: MeshHandle, material: u32, transform: Mat4) -> MeshInstance {
@@ -608,24 +632,40 @@ fn torch(position: [f32; 3]) -> PointLight {
     light
 }
 
-/// The static part of the stage: lighting, floor, pillars, curbs, the imp's plinth.
-fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
+/// Cool local fill that separates a dark player silhouette from the stone floor.
+#[must_use]
+pub fn player_lantern(at: Vec2) -> PointLight {
+    let mut lantern = PointLight::default();
+    lantern.position = [at.x, at.y - 0.8, 2.6];
+    lantern.color = linear(0x9A_B0_D8);
+    lantern.intensity = 4.0;
+    lantern.range = 5.5;
+    lantern
+}
+
+/// Shared arena lighting for the game and CPU-rendered comparison captures.
+pub fn apply_arena_lighting(frame: &mut StageFrame) {
     frame.base.clear_color = [0.012, 0.012, 0.018, 1.0];
     let mut key = DirectionalLight::default();
-    key.direction = [0.35, 0.5, -0.8];
+    key.direction = [0.5, 0.35, -0.8];
     key.color = linear(0x9A_B0_D8);
-    key.intensity = 2.6;
+    key.intensity = 3.0;
     frame.key_light = Some(key);
     frame.ambient = AmbientLight::Hemisphere {
         sky_color: [0.16, 0.18, 0.24],
         ground_color: [0.06, 0.055, 0.06],
-        intensity: 0.7,
+        intensity: 0.43,
     };
     let mut shadows = ShadowConfig::default();
     // Skinned figures cast no key-light shadow yet (engine gap, contract §6 skinning addendum),
     // so the prototype uses the "Low" preset: blob shadows under figures and pillars.
     shadows.mode = ShadowMode::Blob;
     frame.shadow_config = shadows;
+}
+
+/// The static part of the stage: lighting, floor, pillars, curbs, the imp's plinth.
+fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
+    apply_arena_lighting(frame);
 
     frame
         .meshes
@@ -823,12 +863,7 @@ fn push_player(
     frame.blob_shadows.push(blob(at, 0.55, 0.6));
     // A cool lantern above the soul lifts the dark cloak off the dark floor (style bible,
     // "Figuren": figures separate through light and value, never through outlines).
-    let mut lantern = PointLight::default();
-    lantern.position = [at.x, at.y - 0.8, 2.6];
-    lantern.color = linear(0x9A_B0_D8);
-    lantern.intensity = 4.0;
-    lantern.range = 5.5;
-    frame.point_lights.push(lantern);
+    frame.point_lights.push(player_lantern(at));
 
     let Some(age) = hit_age else {
         let transform = mul(
@@ -942,7 +977,7 @@ pub fn extract(
     animator: &mut Animator,
     frame: &mut StageFrame,
 ) -> BulletExtractionStats {
-    push_stage_materials(frame);
+    push_stage_materials(frame, visuals.floor_textures);
     push_arena(visuals, frame);
     push_imp(world, alpha, visuals, animator, frame);
     push_player(world, alpha, visuals, animator, frame);

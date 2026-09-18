@@ -20,7 +20,7 @@ use grimoire::adapters::figure_assets::{
 };
 use grimoire::platform::StdFileSystem;
 use grimoire::render::figure_format::SkeletonData;
-use grimoire::render::{MeshError, MeshHandle};
+use grimoire::render::{MeshError, MeshHandle, TextureError};
 use grimoire_assets::{AssetError, AssetSource, AssetStore, PackReader};
 
 /// Environment variable that names the player figure inside the pack.
@@ -393,6 +393,8 @@ pub enum VisualsError {
     },
     /// A procedural stage mesh was rejected by the renderer.
     StageMesh(MeshError),
+    /// The bundled arena floor maps could not be registered.
+    StageTexture(TextureError),
 }
 
 impl fmt::Display for VisualsError {
@@ -404,6 +406,7 @@ impl fmt::Display for VisualsError {
                 write!(f, "cannot load figure `{name}` from the pack: {error}")
             }
             Self::StageMesh(error) => write!(f, "cannot register a stage mesh: {error}"),
+            Self::StageTexture(error) => write!(f, "cannot register an arena texture: {error}"),
         }
     }
 }
@@ -559,6 +562,8 @@ pub fn load_visuals(
     let player = load(&figures.player)?;
     let enemy = load(&figures.enemy)?;
     let stage = register_stage(assets, stage_mesh_data())?;
+    let floor_textures =
+        crate::arena_floor::register(assets).map_err(VisualsError::StageTexture)?;
 
     // Which way a figure looks is a property of the figure, not of its name: the packs reuse
     // `soul` and `imp` across generations that were authored differently.
@@ -600,6 +605,7 @@ pub fn load_visuals(
             soul: player_visual,
             imp: enemy_visual,
             floor: stage.floor,
+            floor_textures: Some(floor_textures),
             pillar: stage.pillar,
             block: stage.block,
             marker_ring: stage.marker_ring,
@@ -645,6 +651,7 @@ pub fn placeholder_visuals(assets: &mut dyn RenderAssets) -> Result<ArenaVisuals
         soul: FigureVisual::placeholder(stage.block),
         imp: FigureVisual::placeholder(stage.block),
         floor: stage.floor,
+        floor_textures: None,
         pillar: stage.pillar,
         block: stage.block,
         marker_ring: stage.marker_ring,
