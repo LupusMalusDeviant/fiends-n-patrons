@@ -12,15 +12,17 @@ use std::fmt;
 use std::path::Path;
 
 use fnp_game::arena::present::{
-    ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, StageMeshData, stage_mesh_data,
+    ArenaDistrict, ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, PropVisuals,
+    PuddleVisual, StageMeshData, stage_mesh_data,
 };
+use fnp_game::worldgen::{WorldPlan, generate_floor, generate_run, validate_floor};
 use grimoire::RenderAssets;
 use grimoire::adapters::figure_assets::{
     FigureLoadError, LoadedFigure, load_clip, load_figure_into,
 };
 use grimoire::platform::StdFileSystem;
 use grimoire::render::figure_format::SkeletonData;
-use grimoire::render::{MeshError, MeshHandle};
+use grimoire::render::{MeshError, MeshHandle, TextureError};
 use grimoire_assets::{AssetError, AssetSource, AssetStore, PackReader};
 
 /// Environment variable that names the player figure inside the pack.
@@ -393,6 +395,12 @@ pub enum VisualsError {
     },
     /// A procedural stage mesh was rejected by the renderer.
     StageMesh(MeshError),
+    /// The bundled arena floor maps could not be registered.
+    StageTexture(TextureError),
+    /// The named floor district is not one of the three bundled layouts.
+    InvalidDistrict(String),
+    /// A puddle decal mesh or colour could not be registered.
+    Puddle(crate::arena_puddles::PuddleError),
 }
 
 impl fmt::Display for VisualsError {
@@ -404,6 +412,12 @@ impl fmt::Display for VisualsError {
                 write!(f, "cannot load figure `{name}` from the pack: {error}")
             }
             Self::StageMesh(error) => write!(f, "cannot register a stage mesh: {error}"),
+            Self::StageTexture(error) => write!(f, "cannot register an arena texture: {error}"),
+            Self::InvalidDistrict(name) => write!(
+                f,
+                "unknown arena district `{name}`; choose crypt, foundry, or ossuary"
+            ),
+            Self::Puddle(error) => write!(f, "cannot register a puddle: {error}"),
         }
     }
 }
@@ -523,6 +537,8 @@ struct StageHandles {
     pillar: MeshHandle,
     block: MeshHandle,
     marker_ring: MeshHandle,
+    gravestone: MeshHandle,
+    urn: MeshHandle,
 }
 
 fn register_stage(
@@ -535,6 +551,8 @@ fn register_stage(
         pillar: register(meshes.pillar)?,
         block: register(meshes.block)?,
         marker_ring: register(meshes.marker_ring)?,
+        gravestone: register(meshes.gravestone)?,
+        urn: register(meshes.urn)?,
     })
 }
 
@@ -547,6 +565,7 @@ pub fn load_visuals(
     assets: &mut dyn RenderAssets,
     pack: &Path,
     figures: &PackFigures,
+    world_seed: u64,
 ) -> Result<(ArenaVisuals, LoadSummary), VisualsError> {
     let reader = PackReader::open(&StdFileSystem, pack).map_err(VisualsError::OpenPack)?;
     let mut store = AssetStore::new(Box::new(reader));
@@ -559,6 +578,46 @@ pub fn load_visuals(
     let player = load(&figures.player)?;
     let enemy = load(&figures.enemy)?;
     let stage = register_stage(assets, stage_mesh_data())?;
+    let prop_colors =
+        crate::arena_floor::register_prop_textures(assets).map_err(VisualsError::StageTexture)?;
+    let run_plan = generate_run(world_seed);
+    let first_stage = &run_plan.stages[0];
+    let district = std::env::var("FNP_ARENA_DISTRICT")
+        .ok()
+        .map(|name| ArenaDistrict::parse(&name).ok_or(VisualsError::InvalidDistrict(name)))
+        .transpose()?
+        .unwrap_or(first_stage.district);
+    let room_floor = generate_floor(first_stage.rooms[0].floor_seed, district);
+    debug_assert_eq!(validate_floor(&room_floor), Ok(()));
+    let world_patch = std::env::var("FNP_WORLD_PATCH_PREVIEW").as_deref() != Ok("0");
+    let floor_textures = if world_patch {
+        // The playable arena is still a smaller room. This preview lets the
+        // renderer show any 48 m patch of the 256 m world at true scale.
+        let coordinate = |name: &str| {
+            std::env::var(name)
+                .ok()
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(128)
+        };
+        let center = (
+            coordinate("FNP_WORLD_PATCH_CENTER_X"),
+            coordinate("FNP_WORLD_PATCH_CENTER_Y"),
+        );
+        crate::arena_floor::register_world_patch(
+            assets,
+            &WorldPlan::new(world_seed, district),
+            center,
+        )
+    } else {
+        crate::arena_floor::register(assets, &room_floor)
+    }
+    .map_err(VisualsError::StageTexture)?;
+    let puddles = crate::arena_puddles::register(assets)
+        .map_err(VisualsError::Puddle)?
+        .map(|puddle| PuddleVisual {
+            mesh: puddle.mesh,
+            base_color: puddle.base_color,
+        });
 
     // Which way a figure looks is a property of the figure, not of its name: the packs reuse
     // `soul` and `imp` across generations that were authored differently.
@@ -600,9 +659,19 @@ pub fn load_visuals(
             soul: player_visual,
             imp: enemy_visual,
             floor: stage.floor,
+            floor_textures: Some(floor_textures),
+            district,
+            room_floor: (!world_patch).then_some(room_floor),
+            puddles: (!world_patch).then_some(puddles),
             pillar: stage.pillar,
             block: stage.block,
             marker_ring: stage.marker_ring,
+            props: Some(PropVisuals {
+                gravestone: stage.gravestone,
+                urn: stage.urn,
+                colors: prop_colors,
+                seed: world_seed,
+            }),
         },
         summary,
     ))
@@ -645,9 +714,14 @@ pub fn placeholder_visuals(assets: &mut dyn RenderAssets) -> Result<ArenaVisuals
         soul: FigureVisual::placeholder(stage.block),
         imp: FigureVisual::placeholder(stage.block),
         floor: stage.floor,
+        floor_textures: None,
+        district: ArenaDistrict::Crypt,
+        room_floor: None,
+        puddles: None,
         pillar: stage.pillar,
         block: stage.block,
         marker_ring: stage.marker_ring,
+        props: None,
     })
 }
 #[cfg(test)]

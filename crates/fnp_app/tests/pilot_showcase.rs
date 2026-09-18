@@ -35,12 +35,13 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+use fnp_app::arena_floor;
 use fnp_app::figures::PACK_FIGURES_FRONT;
 use fnp_app::stage::stage_renderer_config;
 use fnp_game::TICK_RATE_HZ;
 use fnp_game::arena::present::{
-    AuthoredFront, CAMERA_PRESETS, FigureVisual, Mat4, camera_preset, mul, rotation_z,
-    stage_mesh_data, translation,
+    ArenaDistrict, AuthoredFront, CAMERA_PRESETS, FigureVisual, Mat4, apply_arena_lighting,
+    camera_preset, floor_material, mul, player_lantern, rotation_z, stage_mesh_data, translation,
 };
 use grimoire::adapters::figure_assets::load_figure_into;
 use grimoire::debug::FrameProfile;
@@ -48,8 +49,8 @@ use grimoire::platform::StdFileSystem;
 use grimoire::prelude::*;
 use grimoire::render::figure_format::{JointPose, SkeletonData, compute_skin_matrices};
 use grimoire::render::{
-    AmbientLight, BlobShadowInstance, DirectionalLight, MaterialHandle, MeshHandle, MeshInstance,
-    Msaa, PbrMaterial, ShadowConfig, ShadowMode, SkinBinding,
+    BlobShadowInstance, MaterialHandle, MeshHandle, MeshInstance, MeshRole, Msaa, SkinBinding,
+    TextureHandle,
 };
 use grimoire::{OffscreenRun, PluginError, RenderAssets};
 use grimoire_assets::{AssetStore, PackReader};
@@ -281,6 +282,7 @@ struct ShowcaseStage {
     /// Skinning matrices of the sampled pose and the figure they belong to (by name).
     posed: Option<(usize, Vec<Mat4>)>,
     floor: Option<MeshHandle>,
+    floor_textures: Option<[TextureHandle; 3]>,
     stats: Shared<ShowcaseStats>,
     last_frame_at: Option<Instant>,
 }
@@ -324,8 +326,15 @@ impl ShowcaseStage {
             instance.material = MaterialHandle(material);
             instance.transform = transform;
             instance.skin = Some(skin);
+            instance.role = MeshRole::Actor;
             frame.meshes.push(instance);
         }
+        // Match the player's local fill light in the playable arena. Otherwise a
+        // near-black figure against this dark floor looks much worse in the pilot
+        // than it does in the actual game.
+        frame
+            .point_lights
+            .push(player_lantern(Vec2::new(at[0], at[1])));
         frame.blob_shadows.push(BlobShadowInstance {
             position: at,
             radius: 0.55,
@@ -333,16 +342,6 @@ impl ShowcaseStage {
             strength: 0.6,
         });
     }
-}
-
-/// The arena's own floor material (`present::push_stage_materials`, slot 0), so the brightness
-/// comparison of a figure happens against the floor the game actually shows.
-fn floor_material() -> PbrMaterial {
-    let mut material = PbrMaterial::default();
-    material.base_color_factor = [0.033_105, 0.036_889, 0.049_707, 1.0];
-    material.metallic_factor = 0.0;
-    material.roughness_factor = 0.85;
-    material
 }
 
 impl GamePlugin for ShowcaseStage {
@@ -389,6 +388,8 @@ impl GamePlugin for ShowcaseStage {
             self.posed = Some((index, matrices));
         }
         self.floor = Some(assets.register_mesh(stage_mesh_data().floor)?);
+        let floor = fnp_game::worldgen::generate_floor(0, ArenaDistrict::Crypt);
+        self.floor_textures = Some(arena_floor::register(assets, &floor)?);
         Ok(())
     }
 
@@ -397,23 +398,10 @@ impl GamePlugin for ShowcaseStage {
         let mut camera = camera_preset(self.camera_preset);
         camera.target = [0.0, 0.0];
         frame.camera_25d = Some(camera);
-        frame.base.clear_color = [0.012, 0.012, 0.018, 1.0];
-        let mut key = DirectionalLight::default();
-        key.direction = [0.35, 0.5, -0.8];
-        key.color = [0.316_268, 0.427_083, 0.708_376];
-        key.intensity = 2.6;
-        frame.key_light = Some(key);
-        frame.ambient = AmbientLight::Hemisphere {
-            sky_color: [0.16, 0.18, 0.24],
-            ground_color: [0.06, 0.055, 0.06],
-            intensity: 0.7,
-        };
-        let mut shadows = ShadowConfig::default();
-        shadows.mode = ShadowMode::Blob;
-        frame.shadow_config = shadows;
+        apply_arena_lighting(frame);
 
         let floor_material_index = u32::try_from(frame.materials.len()).unwrap_or(0);
-        frame.materials.push(floor_material());
+        frame.materials.push(floor_material(self.floor_textures));
         if let Some(floor) = self.floor {
             let mut instance = MeshInstance::default();
             instance.mesh = floor;
@@ -573,6 +561,7 @@ fn capture_the_pilot_showcase() {
         figures: Vec::new(),
         posed: None,
         floor: None,
+        floor_textures: None,
         stats: Rc::default(),
         last_frame_at: None,
     };

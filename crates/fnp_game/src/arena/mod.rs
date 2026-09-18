@@ -202,6 +202,23 @@ pub fn playable_roster() -> Roster {
     }
 }
 
+/// A restrained ranged threat for a combat loop led by pursuing enemies.
+/// The five-dart aimed volley is the only emitter; rings, curtains and fans
+/// remain available in the pattern showcase but do not flood this arena.
+#[must_use]
+pub fn horde_roster() -> Roster {
+    Roster {
+        fight: vec![RosterEntry::new(
+            "imp_aimed",
+            ScenePattern::new(
+                patterns::GamePattern::ImpVolley.unit(),
+                vec![fnp_content::sigil::imp_volley::AIMED],
+            ),
+        )],
+        curtain: None,
+    }
+}
+
 /// Resource: which fight pattern of the roster plays and the edge detector of [`PATTERN_BUTTON`].
 ///
 /// Only a game built with [`ArenaGame::with_roster`] has it; the imp's own arena (the golden
@@ -237,6 +254,81 @@ impl_stable_hash!(Facing { direction });
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Imp;
 impl_stable_hash!(Imp {});
+
+/// An imp which pursues the player instead of occupying the central plinth.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HordeEnemy {
+    /// Slot in the deterministic spawn sequence.
+    pub slot: u8,
+    /// Position restored at the beginning of each round.
+    pub spawn: Vec2,
+}
+impl_stable_hash!(HordeEnemy { slot, spawn });
+
+/// Next reinforcement and the number of pursuers already in the arena.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HordeState {
+    /// Simulation tick at which another pursuer may enter.
+    pub next_spawn_tick: u64,
+    /// Number of pursuer slots already created.
+    pub spawned: u8,
+}
+impl_stable_hash!(HordeState {
+    next_spawn_tick,
+    spawned
+});
+
+const HORDE_STARTS: [Vec2; 7] = [
+    Vec2::new(-7.5, 3.0),
+    Vec2::new(7.5, 3.0),
+    Vec2::new(-8.0, -1.0),
+    Vec2::new(8.0, -1.0),
+    Vec2::new(-5.5, 5.5),
+    Vec2::new(5.5, 5.5),
+    Vec2::new(0.0, 6.0),
+];
+const HORDE_SPEED: f32 = 1.65;
+const HORDE_CONTACT_RADIUS: f32 = 0.72;
+
+fn spawn_horde_enemy(world: &mut World, slot: u8) {
+    let at = HORDE_STARTS[usize::from(slot)];
+    world.spawn((
+        Position { at },
+        PreviousPosition { at },
+        Imp,
+        HordeEnemy { slot, spawn: at },
+    ));
+}
+
+fn chase_horde(world: &mut World) {
+    if !is_fighting(world) || world.resource::<HordeState>().is_none() {
+        return;
+    }
+    let Some(player) = player_position(world) else {
+        return;
+    };
+    for (position, enemy) in world.query_mut::<(&mut Position, &HordeEnemy)>() {
+        let to_player = player - position.at;
+        let distance = dmath::sqrt(to_player.length_squared());
+        if distance > HORDE_CONTACT_RADIUS * 0.75 {
+            let step = dmath::min(HORDE_SPEED * DT, distance - HORDE_CONTACT_RADIUS * 0.75);
+            position.at += to_player / distance * step;
+            // The central caster's body and plinth stay clear of pursuers.
+            position.at = keep_out_of_imp(position.at);
+        }
+        debug_assert!(usize::from(enemy.slot) < HORDE_STARTS.len());
+    }
+    let tick = world.resource::<Tick>().map_or(0, |tick| tick.0);
+    if let Some(mut state) = world.resource::<HordeState>().copied()
+        && tick >= state.next_spawn_tick
+        && usize::from(state.spawned) < HORDE_STARTS.len()
+    {
+        spawn_horde_enemy(world, state.spawned);
+        state.spawned += 1;
+        state.next_spawn_tick = tick + 210;
+        world.insert_resource(state);
+    }
+}
 
 /// Whether the current round is still being fought.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -456,13 +548,20 @@ fn player_hit(world: &mut World) {
     {
         return;
     }
-    let (Some(player), Some(grid)) = (player_position(world), world.resource::<SpatialGrid>())
-    else {
+    let Some(player) = player_position(world) else {
         return;
     };
     let mut hits = Vec::new();
-    grid.overlapping(&player_hit_shape(player), HOSTILE_BULLET_LAYER, &mut hits);
-    if hits.is_empty() {
+    if let Some(grid) = world.resource::<SpatialGrid>() {
+        grid.overlapping(&player_hit_shape(player), HOSTILE_BULLET_LAYER, &mut hits);
+    }
+    let contact = world
+        .query::<(&Position, &HordeEnemy)>()
+        .any(|(position, _)| {
+            let radius = HORDE_CONTACT_RADIUS + PLAYER_HIT_RADIUS;
+            (position.at - player).length_squared() <= radius * radius
+        });
+    if hits.is_empty() && !contact {
         return;
     }
     let tick = world.resource::<Tick>().map_or(0, |tick| tick.0);
@@ -513,6 +612,12 @@ fn restart_round(world: &mut World) {
         previous.at = PLAYER_START;
         velocity.value = Vec2::ZERO;
         facing.direction = START_FACING;
+    }
+    for (position, previous, enemy) in
+        world.query_mut::<(&mut Position, &mut PreviousPosition, &HordeEnemy)>()
+    {
+        position.at = enemy.spawn;
+        previous.at = enemy.spawn;
     }
     for emitter in world.query_mut::<&mut Emitter>() {
         emitter.started_at = tick;
@@ -708,6 +813,8 @@ pub struct ArenaGame {
     scene: Option<Vec<ScenePattern>>,
     /// `Some` is the playable roster on [`PATTERN_BUTTON`] and [`CURTAIN_BUTTON`].
     roster: Option<Arc<Roster>>,
+    /// Enable moving pursuers and timed reinforcements in the executable.
+    horde: bool,
 }
 
 impl ArenaGame {
@@ -717,6 +824,7 @@ impl ArenaGame {
         Self {
             scene: None,
             roster: None,
+            horde: false,
         }
     }
 
@@ -726,6 +834,7 @@ impl ArenaGame {
         Self {
             scene: Some(patterns),
             roster: None,
+            horde: false,
         }
     }
 
@@ -736,6 +845,17 @@ impl ArenaGame {
         Self {
             scene: None,
             roster: Some(roster),
+            horde: false,
+        }
+    }
+
+    /// Creates the next playable prototype with several moving enemies.
+    #[must_use]
+    pub fn with_horde_roster(roster: Arc<Roster>) -> Self {
+        Self {
+            scene: None,
+            roster: Some(roster),
+            horde: true,
         }
     }
 }
@@ -780,7 +900,12 @@ impl GamePlugin for ArenaGame {
         }
         sim.schedule_mut()
             .add_system(system_fn("arena.remember_previous", remember_previous))
-            .add_system(system_fn("arena.steer_player", steer_player))
+            .add_system(system_fn("arena.steer_player", steer_player));
+        if self.horde {
+            sim.schedule_mut()
+                .add_system(system_fn("arena.chase_horde", chase_horde));
+        }
+        sim.schedule_mut()
             .add_system(system_fn("arena.aim", aim_at_player));
 
         let scene = self.scene.take();
@@ -852,6 +977,15 @@ impl GamePlugin for ArenaGame {
             PreviousPosition { at: IMP_POSITION },
             Imp,
         ));
+        if self.horde {
+            for slot in 0..3 {
+                spawn_horde_enemy(world, slot);
+            }
+            world.insert_resource(HordeState {
+                next_spawn_tick: 210,
+                spawned: 3,
+            });
+        }
         match (units, &scene, &roster) {
             (Some(units), _, _) => {
                 world.insert_resource(units);

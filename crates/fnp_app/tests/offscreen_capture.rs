@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use fnp_app::figures::{FNP_ENEMY_FIGURE_VAR, FNP_PLAYER_FIGURE_VAR, resolve_figures};
-use fnp_app::stage::{ArenaConfig, CURTAIN_KEY, Figures, PATTERN_KEY, arena_app};
+use fnp_app::stage::{ArenaConfig, CURTAIN_KEY, Figures, PATTERN_KEY, arena_app, horde_app};
 use fnp_game::TICK_RATE_HZ;
 use grimoire::OffscreenRun;
 use grimoire::platform::{KeyCode, PlatformEvent, RawInputEvent};
@@ -200,4 +200,55 @@ fn capture_a_scripted_run() {
     assert_eq!(stats.bullets_unmapped, 0, "{stats:?}");
     assert_eq!(stats.bullets_rejected_invalid, 0, "{stats:?}");
     assert_eq!(stats.bullets_rejected_palette_space, 0, "{stats:?}");
+}
+
+/// Short software-rendered visual smoke test for a selected floor district.
+/// Unlike the long scripted capture, this only checks that the scene loads and
+/// renders the first and final frame; it does not expect a combat hit or round restart.
+#[test]
+#[ignore = "needs FNP_FIGURE_PACK, FNP_WORLD_PREVIEW_DIR, and GRIMOIRE_GPU_ADAPTER=software"]
+fn capture_a_district_preview() {
+    let (Some(pack), Some(dir)) = (
+        std::env::var_os("FNP_FIGURE_PACK"),
+        std::env::var_os("FNP_WORLD_PREVIEW_DIR"),
+    ) else {
+        eprintln!("FNP_FIGURE_PACK or FNP_WORLD_PREVIEW_DIR not set; skipping the preview");
+        return;
+    };
+    let dir = PathBuf::from(dir);
+    std::fs::create_dir_all(&dir).expect("the preview directory can be created");
+    let pack = PathBuf::from(pack);
+    let figures = resolve_figures(&pack, fnp_app::figures::FrontChoice::Measure, None, None)
+        .expect("the pack has a player and an enemy figure");
+    let seed = env_or("FNP_WORLD_SEED", 42);
+    let (app, _) = horde_app(ArenaConfig {
+        seed,
+        figures: Figures::Pack {
+            path: pack,
+            figures,
+        },
+        max_frames: None,
+        camera_preset: 0,
+    });
+    let size = (
+        env_or("FNP_WORLD_PREVIEW_WIDTH", 960_u32),
+        env_or("FNP_WORLD_PREVIEW_HEIGHT", 540_u32),
+    );
+    let frames = env_or("FNP_WORLD_PREVIEW_FRAMES", 2_u64).max(2);
+    let mut run = OffscreenRun::new(
+        size.0,
+        size.1,
+        frames,
+        Duration::from_nanos(1_000_000_000 / u64::from(TICK_RATE_HZ)),
+    );
+    run.capture_every = frames - 1;
+    let mut written = 0_u32;
+    let result = app.run_offscreen(run, &mut script, &mut |_, rgba| {
+        let path = dir.join(format!("frame_{written:05}.ppm"));
+        write_ppm(&path, size, rgba).expect("the preview image can be written");
+        written += 1;
+    });
+    let report = result.expect("the district renders through the software adapter");
+    assert_eq!(report.frames, frames);
+    assert_eq!(written, 2);
 }

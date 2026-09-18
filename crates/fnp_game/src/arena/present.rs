@@ -22,14 +22,16 @@ use grimoire::render::procedural::{altar_block, floor_tile_grid, octagonal_pilla
 use grimoire::render::{
     AmbientLight, BlobShadowInstance, DirectionalLight, MaterialHandle, MeshData, MeshHandle,
     MeshInstance, MeshRole, MeshVertex, PbrMaterial, PointLight, ShadowConfig, ShadowMode,
-    SkinBinding,
+    SkinBinding, TextureHandle,
 };
 use grimoire::sigil::BulletPool;
 
 use super::{
-    ARENA_HALF, ArenaMode, Facing, HIT_RECOVERY_TICKS, IMP_POSITION, Imp, Mode,
-    PLAYER_HIT_HALF_WIDTH, PLAYER_HIT_RADIUS, Phase, RoundState,
+    ARENA_HALF, ArenaMode, Facing, HIT_RECOVERY_TICKS, HORDE_SPEED, HordeEnemy, IMP_POSITION, Imp,
+    Mode, PLAYER_HIT_HALF_WIDTH, PLAYER_HIT_RADIUS, Phase, RoundState,
 };
+pub use crate::worldgen::ArenaDistrict;
+use crate::worldgen::RoomFloor;
 use crate::{Player, Position, PreviousPosition, Velocity};
 
 /// Column-major 4x4 matrix, the convention of [`MeshInstance::transform`].
@@ -372,17 +374,113 @@ pub struct StageMeshData {
     pub block: MeshData,
     /// Flat ring on the ground marking the player's hit capsule.
     pub marker_ring: MeshData,
+    /// Fractured gravestone, modelled at gameplay scale.
+    pub gravestone: MeshData,
+    /// Twelve-sided ceramic funerary urn.
+    pub urn: MeshData,
 }
 
 /// Builds [`StageMeshData`].
 #[must_use]
 pub fn stage_mesh_data() -> StageMeshData {
+    // The 12 x 12 authored modules are baked into one colour image. Keep the
+    // mesh's normalized UVs, so its 48 m extent samples the entire district.
+    let floor = floor_tile_grid(FLOOR_TILES, FLOOR_TILE_SIZE);
     StageMeshData {
-        floor: floor_tile_grid(FLOOR_TILES, FLOOR_TILE_SIZE),
+        floor,
         pillar: octagonal_pillar(PILLAR_RADIUS, PILLAR_HEIGHT),
         block: altar_block(1.0, 1.0, 1.0),
         marker_ring: flat_ring(0.82, 1.0, 40),
+        gravestone: extruded_stone(),
+        urn: funerary_urn(),
     }
+}
+
+/// A slab with a broken, asymmetric crown; the side faces retain real thickness.
+fn extruded_stone() -> MeshData {
+    let outline = [
+        [-0.42, 0.0],
+        [0.42, 0.0],
+        [0.42, 1.05],
+        [0.24, 1.35],
+        [0.07, 1.29],
+        [-0.07, 1.46],
+        [-0.22, 1.25],
+        [-0.42, 1.17],
+    ];
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    for (y, normal) in [(-0.105, [0.0, -1.0, 0.0]), (0.105, [0.0, 1.0, 0.0])] {
+        let start = vertices.len() as u32;
+        for [x, z] in outline {
+            vertices.push(MeshVertex::new([x, y, z], normal, [x + 0.5, z / 1.5]));
+        }
+        for i in 1..outline.len() as u32 - 1 {
+            if y < 0.0 {
+                indices.extend_from_slice(&[start, start + i + 1, start + i]);
+            } else {
+                indices.extend_from_slice(&[start, start + i, start + i + 1]);
+            }
+        }
+    }
+    for i in 0..outline.len() {
+        let a = outline[i];
+        let b = outline[(i + 1) % outline.len()];
+        let dx = b[0] - a[0];
+        let dz = b[1] - a[1];
+        let length = f32::sqrt(dx * dx + dz * dz);
+        let normal = [dz / length, 0.0, -dx / length];
+        let base = vertices.len() as u32;
+        for (x, y, z) in [
+            (a[0], -0.105, a[1]),
+            (b[0], -0.105, b[1]),
+            (b[0], 0.105, b[1]),
+            (a[0], 0.105, a[1]),
+        ] {
+            vertices.push(MeshVertex::new([x, y, z], normal, [x + 0.5, z / 1.5]));
+        }
+        indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+    }
+    MeshData { vertices, indices }
+}
+
+/// Revolved silhouette with neck, shoulder, belly, foot and an open mouth.
+fn funerary_urn() -> MeshData {
+    let profile = [
+        (0.17_f32, 0.0_f32),
+        (0.22, 0.08),
+        (0.29, 0.18),
+        (0.36, 0.45),
+        (0.32, 0.7),
+        (0.22, 0.82),
+        (0.19, 0.96),
+        (0.23, 1.0),
+    ];
+    const SEGMENTS: u32 = 12;
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    for (ring, &(radius, z)) in profile.iter().enumerate() {
+        for segment in 0..=SEGMENTS {
+            let theta = segment as f32 / SEGMENTS as f32 * dmath::TAU;
+            let (s, c) = (dmath::sin(theta), dmath::cos(theta));
+            vertices.push(MeshVertex::new(
+                [radius * c, radius * s, z],
+                [c, s, 0.2],
+                [
+                    segment as f32 / SEGMENTS as f32,
+                    ring as f32 / (profile.len() - 1) as f32,
+                ],
+            ));
+        }
+    }
+    for ring in 0..profile.len() as u32 - 1 {
+        for segment in 0..SEGMENTS {
+            let a = ring * (SEGMENTS + 1) + segment;
+            let b = a + SEGMENTS + 1;
+            indices.extend_from_slice(&[a, a + 1, b, a + 1, b + 1, b]);
+        }
+    }
+    MeshData { vertices, indices }
 }
 
 /// A flat ring on `Z = 0` between `inner` and `outer` radius, normal `+Z`.
@@ -425,12 +523,35 @@ pub struct ArenaVisuals {
     pub imp: FigureVisual,
     /// Registered [`StageMeshData::floor`].
     pub floor: MeshHandle,
+    /// Base colour, tangent normal and ORM for the stone floor, when available.
+    pub floor_textures: Option<[TextureHandle; 3]>,
+    /// Which baked procedural district supplies the floor and its puddle dressing.
+    pub district: ArenaDistrict,
+    /// Generated floor and decoration placement for this room.
+    pub room_floor: Option<RoomFloor>,
+    /// Blood, plague and void decals; absent in placeholder-only tests.
+    pub puddles: Option<[PuddleVisual; 3]>,
     /// Registered [`StageMeshData::pillar`].
     pub pillar: MeshHandle,
     /// Registered [`StageMeshData::block`].
     pub block: MeshHandle,
     /// Registered [`StageMeshData::marker_ring`].
     pub marker_ring: MeshHandle,
+    /// Seeded visual dressing; absent from headless placeholder scenes.
+    pub props: Option<PropVisuals>,
+}
+
+/// Static level props registered once and reused as instances.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PropVisuals {
+    /// Fractured gravestone mesh.
+    pub gravestone: MeshHandle,
+    /// Ceramic urn mesh.
+    pub urn: MeshHandle,
+    /// Cracked stone and dark clay base colour maps.
+    pub colors: [TextureHandle; 2],
+    /// Seed controlling the arrangement without changing gameplay state.
+    pub seed: u64,
 }
 
 impl ArenaVisuals {
@@ -442,11 +563,25 @@ impl ArenaVisuals {
             soul: FigureVisual::placeholder(MeshHandle(0)),
             imp: FigureVisual::placeholder(MeshHandle(0)),
             floor: MeshHandle(0),
+            floor_textures: None,
+            district: ArenaDistrict::Crypt,
+            room_floor: None,
+            puddles: None,
             pillar: MeshHandle(0),
             block: MeshHandle(0),
             marker_ring: MeshHandle(0),
+            props: None,
         }
     }
+}
+
+/// A flat silhouette mesh with its colour map. The game keeps its placement separate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PuddleVisual {
+    /// Mesh cut to the puddle's alpha silhouette.
+    pub mesh: MeshHandle,
+    /// Colour image sampled on the silhouette mesh.
+    pub base_color: TextureHandle,
 }
 
 /// One of the camera settings the player can cycle through.
@@ -564,10 +699,8 @@ mod slot {
 }
 
 /// Pushes the fixed materials in the order of [`slot`].
-fn push_stage_materials(frame: &mut StageFrame) {
-    frame
-        .materials
-        .push(material(linear(0x33_36_3D), 0.85, [0.0; 3]));
+fn push_stage_materials(frame: &mut StageFrame, visuals: &ArenaVisuals) {
+    frame.materials.push(floor_material(visuals.floor_textures));
     frame
         .materials
         .push(material(linear(0x3E_40_47), 0.75, [0.0; 3]));
@@ -580,6 +713,35 @@ fn push_stage_materials(frame: &mut StageFrame) {
         .materials
         .push(material(marker, 0.5, scale3(marker, 0.55)));
     debug_assert_eq!(frame.materials.len(), slot::COUNT as usize);
+    if let Some(puddles) = visuals.puddles {
+        for puddle in puddles {
+            let mut mat = material([0.72, 0.72, 0.72], 0.28, [0.0; 3]);
+            mat.base_color_texture = Some(puddle.base_color);
+            frame.materials.push(mat);
+        }
+    }
+    if let Some(props) = visuals.props {
+        let mut stone = material([0.76, 0.76, 0.76], 0.92, [0.0; 3]);
+        stone.base_color_texture = Some(props.colors[0]);
+        let mut clay = material([0.72, 0.66, 0.64], 0.82, [0.0; 3]);
+        clay.base_color_texture = Some(props.colors[1]);
+        frame.materials.extend([stone, clay]);
+    }
+}
+
+/// The arena floor's material, shared with the offscreen comparison scene.
+#[must_use]
+pub fn floor_material(textures: Option<[TextureHandle; 3]>) -> PbrMaterial {
+    let mut floor = material(linear(0x33_36_3D), 0.85, [0.0; 3]);
+    if let Some([base, normal, orm]) = textures {
+        // The base colour image is already dark stone; avoid multiplying it by the old
+        // factor-only colour a second time.
+        floor.base_color_factor = [0.82, 0.82, 0.82, 1.0];
+        floor.base_color_texture = Some(base);
+        floor.normal_texture = Some(normal);
+        floor.occlusion_roughness_metallic_texture = Some(orm);
+    }
+    floor
 }
 
 fn mesh(mesh: MeshHandle, material: u32, transform: Mat4) -> MeshInstance {
@@ -608,28 +770,62 @@ fn torch(position: [f32; 3]) -> PointLight {
     light
 }
 
-/// The static part of the stage: lighting, floor, pillars, curbs, the imp's plinth.
-fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
+/// Cool local fill that separates a dark player silhouette from the stone floor.
+#[must_use]
+pub fn player_lantern(at: Vec2) -> PointLight {
+    let mut lantern = PointLight::default();
+    lantern.position = [at.x, at.y - 0.8, 2.6];
+    lantern.color = linear(0x9A_B0_D8);
+    lantern.intensity = 4.0;
+    lantern.range = 5.5;
+    lantern
+}
+
+/// Shared arena lighting for the game and CPU-rendered comparison captures.
+pub fn apply_arena_lighting(frame: &mut StageFrame) {
     frame.base.clear_color = [0.012, 0.012, 0.018, 1.0];
     let mut key = DirectionalLight::default();
-    key.direction = [0.35, 0.5, -0.8];
+    key.direction = [0.5, 0.35, -0.8];
     key.color = linear(0x9A_B0_D8);
-    key.intensity = 2.6;
+    key.intensity = 3.0;
     frame.key_light = Some(key);
     frame.ambient = AmbientLight::Hemisphere {
         sky_color: [0.16, 0.18, 0.24],
         ground_color: [0.06, 0.055, 0.06],
-        intensity: 0.7,
+        intensity: 0.43,
     };
     let mut shadows = ShadowConfig::default();
     // Skinned figures cast no key-light shadow yet (engine gap, contract §6 skinning addendum),
     // so the prototype uses the "Low" preset: blob shadows under figures and pillars.
     shadows.mode = ShadowMode::Blob;
     frame.shadow_config = shadows;
+}
+
+/// The static part of the stage: lighting, floor, pillars, curbs, the imp's plinth.
+fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
+    apply_arena_lighting(frame);
 
     frame
         .meshes
         .push(mesh(visuals.floor, slot::FLOOR, IDENTITY));
+
+    if let (Some(puddles), Some(room)) = (visuals.puddles, visuals.room_floor.as_ref()) {
+        for placement in room.puddles {
+            let kind = usize::from(placement.kind);
+            let size = f32::from(placement.size_cm) / 100.0;
+            let at = [
+                f32::from(placement.x_cm) / 100.0,
+                f32::from(placement.y_cm) / 100.0,
+            ];
+            let transform = mul(translation([at[0], at[1], 0.025]), scale([size, size, 1.0]));
+            frame.meshes.push(mesh(
+                puddles[kind].mesh,
+                slot::COUNT + kind as u32,
+                transform,
+            ));
+        }
+    }
+    push_level_props(visuals, frame);
 
     let edge = ARENA_HALF + Vec2::splat(CURB_GAP + CURB_DEPTH * 0.5);
     let pillar_x = edge.x + CURB_DEPTH;
@@ -683,6 +879,39 @@ fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
     );
     frame.meshes.push(mesh(visuals.block, slot::PLINTH, plinth));
     frame.blob_shadows.push(blob(IMP_POSITION, 1.6, 0.5));
+}
+
+/// Dress the perimeter without covering the centre where enemies and bullets move.
+/// The visuals are intentionally non-colliding until prop collision is part of worldgen.
+fn push_level_props(visuals: &ArenaVisuals, frame: &mut StageFrame) {
+    let Some(props) = visuals.props else {
+        return;
+    };
+    let stone_slot = slot::COUNT + if visuals.puddles.is_some() { 3 } else { 0 };
+    let positions = [
+        ([-8.4, 2.8], false),
+        ([-7.2, 4.3], true),
+        ([-8.5, -0.5], false),
+        ([8.4, 2.7], false),
+        ([7.2, 4.2], true),
+        ([8.5, -0.6], false),
+        ([-8.2, -3.6], true),
+        ([8.2, -3.5], true),
+    ];
+    for (index, (at, urn)) in positions.into_iter().enumerate() {
+        let mixed = props.seed.wrapping_add(index as u64 * 0x9E37_79B9);
+        let turn = ((mixed ^ (mixed >> 23)) % 23) as f32 * 0.045 - 0.5;
+        let at = Vec2::new(at[0], at[1]);
+        let transform = mul(translation([at.x, at.y, 0.015]), rotation_z(turn));
+        frame.meshes.push(mesh(
+            if urn { props.urn } else { props.gravestone },
+            stone_slot + u32::from(urn),
+            transform,
+        ));
+        frame
+            .blob_shadows
+            .push(blob(at, if urn { 0.45 } else { 0.6 }, 0.38));
+    }
 }
 
 fn push_pillar(visuals: &ArenaVisuals, frame: &mut StageFrame, at: Vec2, torch_index: &mut u32) {
@@ -823,12 +1052,7 @@ fn push_player(
     frame.blob_shadows.push(blob(at, 0.55, 0.6));
     // A cool lantern above the soul lifts the dark cloak off the dark floor (style bible,
     // "Figuren": figures separate through light and value, never through outlines).
-    let mut lantern = PointLight::default();
-    lantern.position = [at.x, at.y - 0.8, 2.6];
-    lantern.color = linear(0x9A_B0_D8);
-    lantern.intensity = 4.0;
-    lantern.range = 5.5;
-    frame.point_lights.push(lantern);
+    frame.point_lights.push(player_lantern(at));
 
     let Some(age) = hit_age else {
         let transform = mul(
@@ -896,7 +1120,10 @@ fn push_imp(
     animator: &mut Animator,
     frame: &mut StageFrame,
 ) {
-    let Some((position, _)) = world.query::<(&Position, &Imp)>().next() else {
+    let Some((position, _)) = world
+        .query::<(&Position, &Imp)>()
+        .find(|(position, _)| position.at == IMP_POSITION)
+    else {
         return;
     };
     let target = player_focus(world, alpha).unwrap_or(crate::arena::PLAYER_START);
@@ -927,6 +1154,28 @@ fn push_imp(
     glow.intensity = 3.0;
     glow.range = 5.0;
     frame.point_lights.push(glow);
+
+    for (previous, position, enemy) in world.query::<(&PreviousPosition, &Position, &HordeEnemy)>()
+    {
+        let at = previous.at.lerp(position.at, alpha);
+        let yaw = facing_yaw((target - at).normalize_or_zero());
+        let transform = mul(
+            translation([at.x, at.y, visuals.imp.ground_lift]),
+            rotation_z(yaw),
+        );
+        push_figure(
+            &visuals.imp,
+            transform,
+            Pose::Animated {
+                time: clip_time(last_tick(world), alpha) + f32::from(enemy.slot) * 0.17,
+                blend: walk_blend(HORDE_SPEED),
+            },
+            None,
+            animator,
+            frame,
+        );
+        frame.blob_shadows.push(blob(at, 0.65, 0.55));
+    }
 }
 
 /// Fills `frame` with the arena, the figures and the bullets of `world`, interpolated by `alpha`,
@@ -942,7 +1191,7 @@ pub fn extract(
     animator: &mut Animator,
     frame: &mut StageFrame,
 ) -> BulletExtractionStats {
-    push_stage_materials(frame);
+    push_stage_materials(frame, visuals);
     push_arena(visuals, frame);
     push_imp(world, alpha, visuals, animator, frame);
     push_player(world, alpha, visuals, animator, frame);

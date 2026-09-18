@@ -56,6 +56,36 @@ fn roster_sim(seed: u64) -> (Simulation, Arc<Roster>) {
     (sim, roster)
 }
 
+#[test]
+fn horde_spawns_pursuers_and_keeps_the_ranged_threat_sparse() {
+    let roster = Arc::new(horde_roster());
+    let mut sim = Simulation::new(41);
+    ArenaGame::with_horde_roster(roster).build(&mut sim);
+    assert_eq!(sim.world().query::<&HordeEnemy>().count(), 3);
+    assert_eq!(sim.world().query::<&Emitter>().count(), 1);
+    let initial = sim
+        .world()
+        .query::<(&Position, &HordeEnemy)>()
+        .next()
+        .expect("a pursuer")
+        .0
+        .at;
+    let peak = max_bullets(&mut sim, 211);
+    assert!(peak <= 20, "sparse ranged threat peaked at {peak}");
+    for _ in 0..600 {
+        if sim.world().query::<&HordeEnemy>().count() >= 4 {
+            break;
+        }
+        sim.step(TickInput::default());
+    }
+    assert_eq!(sim.world().query::<&HordeEnemy>().count(), 4);
+    let moved = sim
+        .world()
+        .query::<(&Position, &HordeEnemy)>()
+        .any(|(position, enemy)| enemy.slot == 0 && position.at != initial);
+    assert!(moved, "the starting pursuer must chase the player");
+}
+
 fn cycle() -> TickInput {
     let mut input = TickInput::default();
     input.slots[0].buttons = 1 << PATTERN_BUTTON;

@@ -1,0 +1,1826 @@
+{
+  "schemaVersion": 1,
+  "tileSizeM": 4.0,
+  "gridSide": 12,
+  "seed": 260918,
+  "districts": [
+    {
+      "id": "crypt",
+      "seed": 260918,
+      "grid": [
+        [
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_mossy",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_charred",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_mossy",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_charred",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_shattered",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_oak",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_shattered",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_mossy",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_mossy",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_oak",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_shattered",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_rotted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_charred",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_oak",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_shattered",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_rotted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_rotted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_oak",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_shattered",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_oak",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_mossy",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_wood",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "wood_rotted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_wood_earth",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          }
+        ]
+      ]
+    },
+    {
+      "id": "foundry",
+      "seed": 260919,
+      "grid": [
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_rusted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_shattered",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_clockwork",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_mossy",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_rusted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_rusted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_rusted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_shattered",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_rusted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_rusted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_shattered",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_clockwork",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_clockwork",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_clockwork",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_shattered",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_rusted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "stone_mossy",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_iron",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "iron_rusted",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_iron_ash",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "ash_burned",
+            "turnsClockwise": 0
+          }
+        ]
+      ]
+    },
+    {
+      "id": "ossuary",
+      "seed": 260920,
+      "grid": [
+        [
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_mossy",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_ornate_cracked",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_ornate_intact",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_mossy",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_ornate_shattered",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ],
+        [
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_dry",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "earth_wet",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_earth",
+            "turnsClockwise": 2
+          },
+          {
+            "id": "stone_plain",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "edge_stone_bone",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          },
+          {
+            "id": "bone_gravel",
+            "turnsClockwise": 0
+          }
+        ]
+      ]
+    }
+  ]
+}

@@ -1,9 +1,9 @@
 //! Fiends n Patrons — executable entry point.
 //!
 //! Opens the game window, loads the figure pack and runs the first playable prototype
-//! ([`fnp_game::arena::ArenaGame`]) in the engine's main loop. `Escape` exits, `P` cycles the
-//! fiend's pattern, `V` toggles the curtain mode, `C` cycles the camera presets, `F3` toggles the
-//! engine's stats overlay; see [`cli::USAGE`] for arguments and environment variables.
+//! ([`fnp_game::arena::ArenaGame`]) in the engine's main loop. The default has
+//! pursuing enemies and sparse shots; `FNP_ARENA_MODE=classic` opens the
+//! original pattern showcase. See [`cli::USAGE`] for controls.
 //!
 //! The figure pack is resolved before the window opens: which figure plays the player and which
 //! the enemy ([`fnp_app::figures::resolve_figures`]), so a pack without usable figures ends the
@@ -13,7 +13,7 @@ use std::process::ExitCode;
 
 use fnp_app::cli::{self, Command, FRONT_VAR, MAX_FRAMES_VAR, PACK_VAR, USAGE};
 use fnp_app::figures::{FNP_ENEMY_FIGURE_VAR, FNP_PLAYER_FIGURE_VAR, FrontChoice, resolve_figures};
-use fnp_app::stage::{ArenaConfig, Figures, arena_app};
+use fnp_app::stage::{ArenaConfig, Figures, arena_app, horde_app};
 use fnp_game::arena::present::AuthoredFront;
 
 /// Exit code for invalid arguments or environment (as in the BSD `sysexits` `EX_USAGE` spirit).
@@ -75,7 +75,7 @@ fn main() -> ExitCode {
         }
     );
 
-    let (app, _stats) = arena_app(ArenaConfig {
+    let config = ArenaConfig {
         seed,
         figures: Figures::Pack {
             path: pack,
@@ -83,7 +83,12 @@ fn main() -> ExitCode {
         },
         max_frames,
         camera_preset: 0,
-    });
+    };
+    let (app, _stats) = if std::env::var("FNP_ARENA_MODE").as_deref() == Ok("classic") {
+        arena_app(config)
+    } else {
+        horde_app(config)
+    };
     match app.run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {

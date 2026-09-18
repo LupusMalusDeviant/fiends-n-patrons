@@ -31,14 +31,13 @@ Options:
   --figure-front <auto|plusz|minusz>
                  Which way the pack's figures were authored to look (default auto: measured
                  on each figure's own rig). The packs of round 4 and earlier are minusz.
-  --seed <u64>   Simulation seed (default 0)
+  --seed <u64>   Simulation and procedural-world seed (default 0)
   -h, --help     Print this help
 
 Controls:
   WASD or arrow keys  Move the player
-  P                   Cycle the fiend's pattern: imp_volley, swarm_weave, shooter_rails,
-                      harrier_scatter, summoner_bloom, breaker_toll
-  V                   Toggle the curtain mode (about 10,000 bullets, the player invulnerable)
+  P                   Classic mode: cycle the fiend's patterns
+  V                   Classic mode: toggle the 10,000-bullet curtain stress test
   C                   Cycle the camera presets A (60 deg, 14.5 m), B (52, 12.5), C (45, 11);
                       presentation only, never part of a recording
   F3                  Toggle the engine's stats overlay
@@ -50,6 +49,8 @@ Environment:
                                      to say which way its model looks)
   FNP_ENEMY_FIGURE=<name>            Enemy figure in the pack, same form
   FNP_FIGURE_FRONT=<auto|plusz|minusz>  Like --figure-front, used when it is not given
+  FNP_ARENA_MODE=classic              Original one-imp pattern showcase (default: horde)
+  FNP_WORLD_PATCH_PREVIEW=0           Original room floor (default: 1 m world tiles)
   GRIMOIRE_EXAMPLE_MAX_FRAMES=<u64>  End the run after this many frames";
 
 /// What the command line asks for.
