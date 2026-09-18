@@ -19,8 +19,6 @@ pub const WORLD_TILE_SIZE_M: u32 = 1;
 pub const WORLD_CHUNK_SIDE: usize = 16;
 /// Number of chunks along either axis of the world.
 pub const WORLD_CHUNKS_PER_SIDE: usize = WORLD_SIDE / WORLD_CHUNK_SIDE;
-/// Visual puddles in a 16 by 16 metre chunk. Keep the full map readable.
-pub const PUDDLES_PER_CHUNK: usize = 3;
 /// Puddles in one playable room.
 pub const PUDDLES_PER_ROOM: usize = 10;
 
@@ -233,8 +231,8 @@ pub struct WorldChunk {
     pub y: u8,
     /// Row-major one-metre tiles, including boundary-blending information.
     pub tiles: [WorldTile; WORLD_CHUNK_SIDE * WORLD_CHUNK_SIDE],
-    /// World-space puddle placements, in centimetres.
-    pub puddles: [PuddlePlacement; PUDDLES_PER_CHUNK],
+    /// Sparse, terrain-dependent floor marks. Each fits inside one tile.
+    pub puddles: Vec<PuddlePlacement>,
 }
 
 /// One logical tile. Adjacent terrain labels let the renderer soften curved
@@ -736,27 +734,36 @@ fn generate_chunk_from_plan(
             .tile(col, row)
             .expect("chunk coordinates are in world")
     });
-    let puddles = std::array::from_fn(|index| {
-        let mut rng = Rng::new(
-            layout.seed
-                ^ ((chunk_x as u64) << 40)
-                ^ ((chunk_y as u64) << 24)
-                ^ index as u64
-                ^ 0xD00D_1E55_2560_0001,
-        );
-        let local_x_cm = 80 + rng.below(1440) as i16;
-        let local_y_cm = 80 + rng.below(1440) as i16;
-        let world_x_cm = (chunk_x as i16 * WORLD_CHUNK_SIDE as i16 - 128) * 100 + local_x_cm;
-        let world_y_cm = (chunk_y as i16 * WORLD_CHUNK_SIDE as i16 - 128) * 100 + local_y_cm;
-        let col = (chunk_x * WORLD_CHUNK_SIDE + local_x_cm as usize / 100) as i32;
-        let row = (chunk_y * WORLD_CHUNK_SIDE + local_y_cm as usize / 100) as i32;
-        PuddlePlacement {
-            kind: puddle_kind(layout.terrain_at(col, row)),
-            x_cm: world_x_cm,
-            y_cm: world_y_cm,
-            size_cm: 70 + rng.below(71) as u16,
+    let mut puddles = Vec::new();
+    for local_y in 0..WORLD_CHUNK_SIDE {
+        for local_x in 0..WORLD_CHUNK_SIDE {
+            let col = chunk_x * WORLD_CHUNK_SIDE + local_x;
+            let row = chunk_y * WORLD_CHUNK_SIDE + local_y;
+            let terrain = layout.terrain_at(col as i32, row as i32);
+            // Per-tile rolls avoid a telltale fixed count or a repeated chunk grid.
+            let mut rng =
+                Rng::new(layout.seed ^ ((col as u64) << 32) ^ (row as u64) ^ 0xD00D_1E55_2560_0001);
+            let density = match terrain {
+                Terrain::Earth | Terrain::Ash => 6,
+                Terrain::Wood | Terrain::Bone => 4,
+                Terrain::Stone | Terrain::Iron => 3,
+            };
+            if rng.below(256) >= density {
+                continue;
+            }
+            let size_cm = 28 + rng.below(27) as u16;
+            // Source puddles are 3:2. Half-width <= 41 cm, half-height <= 27 cm.
+            // The 42..58 / 28..72 cm centre range leaves the silhouette on its tile.
+            let offset_x = 42 + rng.below(17) as i16;
+            let offset_y = 28 + rng.below(45) as i16;
+            puddles.push(PuddlePlacement {
+                kind: puddle_kind(terrain),
+                x_cm: (col as i16 - 128) * 100 + offset_x,
+                y_cm: (row as i16 - 128) * 100 + offset_y,
+                size_cm,
+            });
         }
-    });
+    }
     Some(WorldChunk {
         x: chunk_x as u8,
         y: chunk_y as u8,
@@ -939,9 +946,28 @@ mod tests {
                 }
             }
             assert_eq!(chunks.len() * WORLD_CHUNK_SIDE * WORLD_CHUNK_SIDE, 65_536);
-            assert!(chunks.iter().flat_map(|chunk| chunk.puddles).all(|puddle| {
-                i32::from(puddle.x_cm).abs() <= 12_800 && i32::from(puddle.y_cm).abs() <= 12_800
-            }));
+            let counts: std::collections::BTreeSet<_> =
+                chunks.iter().map(|chunk| chunk.puddles.len()).collect();
+            assert!(counts.len() > 1, "puddle counts must vary across chunks");
+            assert!(
+                chunks
+                    .iter()
+                    .flat_map(|chunk| &chunk.puddles)
+                    .all(|puddle| {
+                        let col = (i32::from(puddle.x_cm) + 12_800).div_euclid(100);
+                        let row = (i32::from(puddle.y_cm) + 12_800).div_euclid(100);
+                        let offset_x = (i32::from(puddle.x_cm) + 12_800).rem_euclid(100);
+                        let offset_y = (i32::from(puddle.y_cm) + 12_800).rem_euclid(100);
+                        let half_width = i32::from(puddle.size_cm) * 3 / 4;
+                        let half_height = i32::from(puddle.size_cm) / 2;
+                        (0..256).contains(&col)
+                            && (0..256).contains(&row)
+                            && offset_x >= half_width
+                            && offset_x + half_width <= 100
+                            && offset_y >= half_height
+                            && offset_y + half_height <= 100
+                    })
+            );
         }
         assert!(generate_world_chunk(41, ArenaDistrict::Crypt, 16, 0).is_none());
     }

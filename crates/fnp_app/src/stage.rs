@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use fnp_game::arena::present::{self, ArenaVisuals, CAMERA_PRESETS, Hud};
 use fnp_game::arena::{
-    ArenaGame, ArenaMode, CURTAIN_BUTTON, Mode, PATTERN_BUTTON, Roster, RosterState,
+    ArenaGame, ArenaMode, CURTAIN_BUTTON, Mode, PATTERN_BUTTON, Roster, RosterState, horde_roster,
     playable_roster,
 };
 use fnp_game::{GAME_TITLE, TICK_RATE_HZ};
@@ -455,7 +455,21 @@ pub struct ArenaConfig {
 /// the builder and the run's shared measurements.
 #[must_use]
 pub fn arena_app(config: ArenaConfig) -> (AppBuilder, Shared<RunStats>) {
-    let roster = Arc::new(playable_roster());
+    build_arena_app(config, false)
+}
+
+/// The desktop prototype with pursuing enemies and a sparse aimed volley.
+#[must_use]
+pub fn horde_app(config: ArenaConfig) -> (AppBuilder, Shared<RunStats>) {
+    build_arena_app(config, true)
+}
+
+fn build_arena_app(config: ArenaConfig, horde: bool) -> (AppBuilder, Shared<RunStats>) {
+    let roster = Arc::new(if horde {
+        horde_roster()
+    } else {
+        playable_roster()
+    });
     let stage = ArenaStage::new(config.figures, config.camera_preset, Arc::clone(&roster))
         .with_world_seed(config.seed);
     let stats = stage.stats();
@@ -470,7 +484,11 @@ pub fn arena_app(config: ArenaConfig) -> (AppBuilder, Shared<RunStats>) {
     .exit_key(KeyCode::Escape)
     // The stage comes first: the first plugin with a focus point anchors mouse aim.
     .plugin(stage)
-    .plugin(ArenaGame::with_roster(roster));
+    .plugin(if horde {
+        ArenaGame::with_horde_roster(roster)
+    } else {
+        ArenaGame::with_roster(roster)
+    });
     let app = match config.max_frames {
         Some(frames) => app.max_frames(frames),
         None => app,

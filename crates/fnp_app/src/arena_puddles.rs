@@ -21,6 +21,17 @@ const PLAGUE: &[u8; WIDTH * HEIGHT * 4] =
 const VOID: &[u8; WIDTH * HEIGHT * 4] =
     include_bytes!("../assets/arena_floor/void_ichor_puddle.rgba");
 
+pub(crate) const SOURCE_WIDTH: usize = WIDTH;
+pub(crate) const SOURCE_HEIGHT: usize = HEIGHT;
+
+pub(crate) fn pixels_for_kind(kind: u8) -> &'static [u8] {
+    match kind {
+        0 => BLOOD,
+        1 => PLAGUE,
+        _ => VOID,
+    }
+}
+
 /// Registered mesh and base colour for one puddle species.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PuddleHandles {

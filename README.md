@@ -71,14 +71,20 @@ Gamepads liest die Plattformschicht der Engine noch nicht; der linke Stick folgt
 | `FNP_PLAYER_FIGURE=<Name>`, `FNP_ENEMY_FIGURE=<Name>` | Figur im Pack wählen; mit `:plusz` oder `:minusz` auch, wohin ihr Modell schaut |
 | `--figure-front <auto\|plusz\|minusz>` oder `FNP_FIGURE_FRONT=<...>` | Blickrichtung der Pack-Figuren; Vorgabe `auto` (am Rig gemessen) |
 | `FNP_ARENA_DISTRICT=crypt\|foundry\|ossuary` | Ersten Bodenbezirk für Art-Tests überschreiben; sonst bestimmt ihn der Seed |
+| `FNP_ARENA_MODE=classic` | Ursprüngliche Muster-Demo mit einem Imp; Standard ist der Horden-Prototyp |
+| `FNP_WORLD_PATCH_PREVIEW=0` | Ursprünglichen Raumboden zeigen; Standard ist ein 48 m Ausschnitt der 256 m Welt |
 | `GRIMOIRE_EXAMPLE_MAX_FRAMES=<n>` | Lauf nach `n` Frames beenden |
 | `GRIMOIRE_GPU_ADAPTER=software` | Software-Adapter der Plattform statt der Grafikkarte |
 | `GRIMOIRE_WINDOW_MONITOR=secondary`, `GRIMOIRE_WINDOW_FOCUS=0` | Fenster auf dem Zweitmonitor und ohne Fokus öffnen (Konvention für Läufe auf dem Entwicklungsrechner) |
 
 Das Spiel läuft über `App::run` der Engine: Das Plugin `ArenaStage` lädt die Figuren über den
 Asset-Haken (`register_assets`, `load_figure_into`), `ArenaGame` ist die Simulation. Gespielt wird
-mit dem Muster-Aufgebot (`ArenaGame::with_roster`, `arena::playable_roster`): alle sechs
-Kampf-Muster aus `content/sigil/` auf `P`, dazu der Vorhang auf `V`. Dieselbe Tabelle
+standardmäßig mit dem Hordenmodus: drei verfolgende Imps zu Beginn, bis zu sieben mit zeitlichem
+Nachschub und Kontaktgefahr. Der zentrale Imp schießt nur die gezielte Fünfer-Salve, ohne Ring
+und Fächer. Pfützen liegen als Bildanteil auf jeweils einer 1-m-Bodenplatte, unter den Props.
+`FNP_ARENA_MODE=classic` öffnet das Muster-Aufgebot (`ArenaGame::with_roster`,
+`arena::playable_roster`): alle sechs Kampf-Muster aus `content/sigil/` auf `P`, dazu der Vorhang
+auf `V`. Dieselbe Tabelle
 (`fnp_game::arena::patterns::GamePattern`) nutzen die Szenen des Harness, damit gespielt und
 gemessen dasselbe ist. Die Patterns nutzen nur Katalognamen, die der Bullet-Pass zeichnet.
 `ArenaGame::new()` bleibt daneben die Arena des Imps allein — die Form, die die Goldmasters

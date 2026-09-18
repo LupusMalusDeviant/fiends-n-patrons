@@ -2,7 +2,7 @@
 //! Every source is a 96 × 96 RGBA thumbnail derived from the authored 2D art.
 //! Normal and ORM remain neutral until proper PBR maps are authored.
 
-use fnp_game::worldgen::{FLOOR_SIDE, RoomFloor, Terrain, WORLD_SIDE, WorldPlan};
+use fnp_game::worldgen::{FLOOR_SIDE, RoomFloor, Terrain, WORLD_SIDE, WorldPlan, WorldTile};
 use grimoire::RenderAssets;
 use grimoire::render::{TextureColorSpace, TextureData, TextureError, TextureHandle};
 
@@ -76,6 +76,103 @@ fn representative(terrain: Terrain) -> usize {
     }
 }
 
+/// A four-bit transition variant in N/E/S/W order. One tile may carry up to
+/// three different neighbouring materials; the bit pattern stays independent
+/// of the colour of those neighbours.
+fn edge_mask(cell: &WorldTile) -> u8 {
+    cell.adjacent
+        .iter()
+        .enumerate()
+        .fold(0, |mask, (side, terrain)| {
+            mask | (u8::from(*terrain != cell.terrain) << side)
+        })
+}
+
+fn world_tile_pixel(cell: &WorldTile, px: usize, py: usize) -> [u8; 3] {
+    let step = TILE_SIDE / WORLD_PATCH_TILE_PIXELS;
+    let sx = px * step + step / 2;
+    let sy = py * step + step / 2;
+    let src = (sy * TILE_SIDE + sx) * 4;
+    let base = TILES[cell.visual.id as usize];
+    let mask = edge_mask(cell);
+    let distance = [
+        WORLD_PATCH_TILE_PIXELS - 1 - py,
+        WORLD_PATCH_TILE_PIXELS - 1 - px,
+        py,
+        px,
+    ];
+    let mut weights = [0_u16; 4];
+    for side in 0..4 {
+        if mask & (1 << side) != 0 && distance[side] < 4 {
+            weights[side] = (4 - distance[side]) as u16 * 32;
+        }
+    }
+    let base_weight = 256 - weights.iter().sum::<u16>().min(256);
+    std::array::from_fn(|channel| {
+        let mut sum = u32::from(base[src + channel]) * u32::from(base_weight);
+        for (side, weight) in weights.into_iter().enumerate() {
+            if weight > 0 {
+                sum += u32::from(TILES[representative(cell.adjacent[side])][src + channel])
+                    * u32::from(weight);
+            }
+        }
+        (sum / 256).min(255) as u8
+    })
+}
+
+fn bake_world_puddles(plan: &WorldPlan, first: (usize, usize), pixels: &mut [u8]) {
+    use crate::arena_puddles::{SOURCE_HEIGHT, SOURCE_WIDTH, pixels_for_kind};
+    let side = SIDE as usize;
+    let last_x = first.0 + WORLD_PATCH_TILES;
+    let last_y = first.1 + WORLD_PATCH_TILES;
+    for chunk_y in first.1 / 16..last_y.div_ceil(16) {
+        for chunk_x in first.0 / 16..last_x.div_ceil(16) {
+            let chunk = plan
+                .chunk(chunk_x, chunk_y)
+                .expect("patch chunks are in bounds");
+            for puddle in chunk.puddles {
+                let world_x_cm = i32::from(puddle.x_cm) + 12_800;
+                let world_y_cm = i32::from(puddle.y_cm) + 12_800;
+                let tile_x = world_x_cm.div_euclid(100) as usize;
+                let tile_y = world_y_cm.div_euclid(100) as usize;
+                if !(first.0..last_x).contains(&tile_x) || !(first.1..last_y).contains(&tile_y) {
+                    continue;
+                }
+                let local_x = (tile_x - first.0) * WORLD_PATCH_TILE_PIXELS;
+                let local_y = (tile_y - first.1) * WORLD_PATCH_TILE_PIXELS;
+                let source = pixels_for_kind(puddle.kind);
+                let centre_x =
+                    (world_x_cm.rem_euclid(100) as usize * WORLD_PATCH_TILE_PIXELS) / 100;
+                let centre_y =
+                    (world_y_cm.rem_euclid(100) as usize * WORLD_PATCH_TILE_PIXELS) / 100;
+                let width =
+                    (usize::from(puddle.size_cm) * WORLD_PATCH_TILE_PIXELS * 3 / 200).max(1);
+                let height = (usize::from(puddle.size_cm) * WORLD_PATCH_TILE_PIXELS / 100).max(1);
+                for y in 0..WORLD_PATCH_TILE_PIXELS {
+                    for x in 0..WORLD_PATCH_TILE_PIXELS {
+                        let dx = x as isize - centre_x as isize + (width / 2) as isize;
+                        let dy = y as isize - centre_y as isize + (height / 2) as isize;
+                        if dx < 0 || dy < 0 || dx >= width as isize || dy >= height as isize {
+                            continue;
+                        }
+                        let sx = dx as usize * SOURCE_WIDTH / width;
+                        let sy = dy as usize * SOURCE_HEIGHT / height;
+                        let src = (sy * SOURCE_WIDTH + sx) * 4;
+                        let alpha = u16::from(source[src + 3]) * 3 / 4;
+                        let dst = ((local_y + y) * side + local_x + x) * 4;
+                        for channel in 0..3 {
+                            pixels[dst + channel] = ((u16::from(pixels[dst + channel])
+                                * (255 - alpha)
+                                + u16::from(source[src + channel]) * alpha)
+                                / 255) as u8;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// The engine's present floor is 48 m wide. For a software preview, show a
 /// selected 48 × 48 one-metre patch from the full generated 256 m map. The 16 m
 /// generation chunks never appear as visual boundaries in this texture.
@@ -85,7 +182,6 @@ fn compose_world_patch(plan: &WorldPlan, center: (usize, usize)) -> Vec<u8> {
     let half = WORLD_PATCH_TILES / 2;
     let first_x = center.0.clamp(half, WORLD_SIDE - half) - half;
     let first_y = center.1.clamp(half, WORLD_SIDE - half) - half;
-    let sample_step = TILE_SIDE / WORLD_PATCH_TILE_PIXELS;
     for tile_y in 0..WORLD_PATCH_TILES {
         for tile_x in 0..WORLD_PATCH_TILES {
             let cell = plan
@@ -93,32 +189,7 @@ fn compose_world_patch(plan: &WorldPlan, center: (usize, usize)) -> Vec<u8> {
                 .expect("the central patch is inside the world");
             for py in 0..WORLD_PATCH_TILE_PIXELS {
                 for px in 0..WORLD_PATCH_TILE_PIXELS {
-                    let source_x = px * sample_step + sample_step / 2;
-                    let source_y = py * sample_step + sample_step / 2;
-                    let src = (source_y * TILE_SIDE + source_x) * 4;
-                    let base = TILES[cell.visual.id as usize];
-                    let mut color = [base[src], base[src + 1], base[src + 2]];
-                    // Blend a few pixels across organic region boundaries.
-                    // A 50/50 border on both sides avoids a hard square edge;
-                    // production art can later replace this provisional blend.
-                    let sides = [
-                        (cell.adjacent[0], WORLD_PATCH_TILE_PIXELS - 1 - py),
-                        (cell.adjacent[1], WORLD_PATCH_TILE_PIXELS - 1 - px),
-                        (cell.adjacent[2], py),
-                        (cell.adjacent[3], px),
-                    ];
-                    for (terrain, distance) in sides {
-                        if terrain == cell.terrain || distance >= 4 {
-                            continue;
-                        }
-                        let other = TILES[representative(terrain)];
-                        let alpha = (4 - distance) as u16 * 32;
-                        for channel in 0..3 {
-                            color[channel] = ((u16::from(color[channel]) * (256 - alpha)
-                                + u16::from(other[src + channel]) * alpha)
-                                / 256) as u8;
-                        }
-                    }
+                    let color = world_tile_pixel(&cell, px, py);
                     let dst = ((tile_y * WORLD_PATCH_TILE_PIXELS + py) * side
                         + tile_x * WORLD_PATCH_TILE_PIXELS
                         + px)
@@ -128,6 +199,7 @@ fn compose_world_patch(plan: &WorldPlan, center: (usize, usize)) -> Vec<u8> {
             }
         }
     }
+    bake_world_puddles(plan, (first_x, first_y), &mut pixels);
     pixels
 }
 
@@ -183,7 +255,7 @@ fn register_pixels(
 
 #[cfg(test)]
 mod tests {
-    use fnp_game::worldgen::{ArenaDistrict, generate_floor};
+    use fnp_game::worldgen::{ArenaDistrict, TileId, TileInstance, generate_floor};
 
     use super::*;
 
@@ -203,5 +275,36 @@ mod tests {
         let second = compose_world_patch(&WorldPlan::new(42, ArenaDistrict::Crypt), (100, 128));
         assert_eq!(first.len(), SIDE as usize * SIDE as usize * 4);
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn three_foreign_edges_all_affect_the_same_tile() {
+        let plain = WorldTile {
+            visual: TileInstance {
+                id: TileId::StonePlain,
+                turns: 0,
+            },
+            terrain: Terrain::Stone,
+            adjacent: [Terrain::Stone; 4],
+        };
+        let mut mixed = plain;
+        mixed.adjacent = [Terrain::Wood, Terrain::Earth, Terrain::Iron, Terrain::Stone];
+        assert_eq!(edge_mask(&mixed), 0b0111);
+        assert_ne!(
+            world_tile_pixel(&plain, 12, 23),
+            world_tile_pixel(&mixed, 12, 23)
+        );
+        assert_ne!(
+            world_tile_pixel(&plain, 23, 12),
+            world_tile_pixel(&mixed, 23, 12)
+        );
+        assert_ne!(
+            world_tile_pixel(&plain, 12, 0),
+            world_tile_pixel(&mixed, 12, 0)
+        );
+        assert_eq!(
+            world_tile_pixel(&plain, 0, 12),
+            world_tile_pixel(&mixed, 0, 12)
+        );
     }
 }

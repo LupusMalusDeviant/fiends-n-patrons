@@ -27,8 +27,8 @@ use grimoire::render::{
 use grimoire::sigil::BulletPool;
 
 use super::{
-    ARENA_HALF, ArenaMode, Facing, HIT_RECOVERY_TICKS, IMP_POSITION, Imp, Mode,
-    PLAYER_HIT_HALF_WIDTH, PLAYER_HIT_RADIUS, Phase, RoundState,
+    ARENA_HALF, ArenaMode, Facing, HIT_RECOVERY_TICKS, HORDE_SPEED, HordeEnemy, IMP_POSITION, Imp,
+    Mode, PLAYER_HIT_HALF_WIDTH, PLAYER_HIT_RADIUS, Phase, RoundState,
 };
 pub use crate::worldgen::ArenaDistrict;
 use crate::worldgen::RoomFloor;
@@ -970,7 +970,10 @@ fn push_imp(
     animator: &mut Animator,
     frame: &mut StageFrame,
 ) {
-    let Some((position, _)) = world.query::<(&Position, &Imp)>().next() else {
+    let Some((position, _)) = world
+        .query::<(&Position, &Imp)>()
+        .find(|(position, _)| position.at == IMP_POSITION)
+    else {
         return;
     };
     let target = player_focus(world, alpha).unwrap_or(crate::arena::PLAYER_START);
@@ -1001,6 +1004,28 @@ fn push_imp(
     glow.intensity = 3.0;
     glow.range = 5.0;
     frame.point_lights.push(glow);
+
+    for (previous, position, enemy) in world.query::<(&PreviousPosition, &Position, &HordeEnemy)>()
+    {
+        let at = previous.at.lerp(position.at, alpha);
+        let yaw = facing_yaw((target - at).normalize_or_zero());
+        let transform = mul(
+            translation([at.x, at.y, visuals.imp.ground_lift]),
+            rotation_z(yaw),
+        );
+        push_figure(
+            &visuals.imp,
+            transform,
+            Pose::Animated {
+                time: clip_time(last_tick(world), alpha) + f32::from(enemy.slot) * 0.17,
+                blend: walk_blend(HORDE_SPEED),
+            },
+            None,
+            animator,
+            frame,
+        );
+        frame.blob_shadows.push(blob(at, 0.65, 0.55));
+    }
 }
 
 /// Fills `frame` with the arena, the figures and the bullets of `world`, interpolated by `alpha`,

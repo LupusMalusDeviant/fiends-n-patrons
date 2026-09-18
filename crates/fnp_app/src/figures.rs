@@ -583,7 +583,8 @@ pub fn load_visuals(
         .unwrap_or(first_stage.district);
     let room_floor = generate_floor(first_stage.rooms[0].floor_seed, district);
     debug_assert_eq!(validate_floor(&room_floor), Ok(()));
-    let floor_textures = if std::env::var("FNP_WORLD_PATCH_PREVIEW").as_deref() == Ok("1") {
+    let world_patch = std::env::var("FNP_WORLD_PATCH_PREVIEW").as_deref() != Ok("0");
+    let floor_textures = if world_patch {
         // The playable arena is still a smaller room. This preview lets the
         // renderer show any 48 m patch of the 256 m world at true scale.
         let coordinate = |name: &str| {
@@ -654,8 +655,8 @@ pub fn load_visuals(
             floor: stage.floor,
             floor_textures: Some(floor_textures),
             district,
-            room_floor: Some(room_floor),
-            puddles: Some(puddles),
+            room_floor: (!world_patch).then_some(room_floor),
+            puddles: (!world_patch).then_some(puddles),
             pillar: stage.pillar,
             block: stage.block,
             marker_ring: stage.marker_ring,
