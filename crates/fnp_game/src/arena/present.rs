@@ -14,6 +14,7 @@
 use grimoire::adapters::figure_assets::{LoadedFigure, LoadedFigurePart};
 use grimoire::adapters::sigil_render::{BulletExtractionStats, extract_bullets};
 use grimoire::prelude::*;
+use grimoire::render::figure_clip::{ClipData, ClipSampler};
 use grimoire::render::figure_format::{
     JointPose, SkeletonData, compute_skin_matrices, rest_pose_skin_matrices,
 };
@@ -29,7 +30,7 @@ use super::{
     ARENA_HALF, ArenaMode, Facing, HIT_RECOVERY_TICKS, IMP_POSITION, Imp, Mode,
     PLAYER_HIT_HALF_WIDTH, PLAYER_HIT_RADIUS, Phase, RoundState,
 };
-use crate::{Player, Position, PreviousPosition};
+use crate::{Player, Position, PreviousPosition, Velocity};
 
 /// Column-major 4x4 matrix, the convention of [`MeshInstance::transform`].
 pub type Mat4 = [[f32; 4]; 4];
@@ -217,7 +218,88 @@ fn crumpled_pose(skeleton: &SkeletonData, radians: f32) -> Option<Vec<Mat4>> {
     compute_skin_matrices(skeleton, &poses).ok()
 }
 
-/// A loaded figure plus the precomputed poses the prototype shows (no animation system yet).
+/// The clips a figure can play, next to the skeleton they were authored for.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FigureAnimation {
+    /// The figure's skeleton, needed to compose a sampled pose into skinning matrices.
+    pub skeleton: SkeletonData,
+    /// Clip played while the figure stands still.
+    pub idle: ClipData,
+    /// Clip played while the figure walks.
+    pub walk: ClipData,
+}
+
+/// Speed at which the walk clip starts to mix in, in world units per second.
+pub const WALK_BLEND_START: f32 = 0.25;
+
+/// Speed at which only the walk clip plays, in world units per second.
+pub const WALK_BLEND_FULL: f32 = 2.0;
+
+/// How much of the walk clip a figure moving at `speed` shows: `0.0` is pure idle, `1.0` pure
+/// walk, in between a crossfade.
+///
+/// A pure function of the speed, so the pose stays a function of world and `alpha` alone
+/// (engine ADR-0017): no playhead, no hysteresis, nothing the simulation would have to carry.
+#[must_use]
+pub fn walk_blend(speed: f32) -> f32 {
+    if !speed.is_finite() || speed <= WALK_BLEND_START {
+        return 0.0;
+    }
+    if speed >= WALK_BLEND_FULL {
+        return 1.0;
+    }
+    (speed - WALK_BLEND_START) / (WALK_BLEND_FULL - WALK_BLEND_START)
+}
+
+/// Clip time of a frame in seconds: the simulation's own clock, `tick` plus the interpolation
+/// `alpha`, divided by the tick rate.
+///
+/// The clips follow the ticks; nothing in the simulation counts animation time (ADR-0017).
+#[must_use]
+pub fn clip_time(tick: u64, alpha: f32) -> f32 {
+    // `as` on a tick count is exact up to 2^24 ticks (78 hours at 60 Hz) and saturates after.
+    (tick as f32 + alpha) / crate::TICK_RATE_HZ as f32
+}
+
+/// Buffers for sampling clips, held by the caller of [`extract`] across frames so a frame
+/// allocates nothing (the engine's [`ClipSampler`] holds no playback state at all).
+#[derive(Debug, Default)]
+pub struct Animator {
+    sampler: ClipSampler,
+}
+
+impl Animator {
+    /// A fresh animator.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Skinning matrices of `animation` at `time`, with `blend` of the walk clip mixed in.
+    ///
+    /// Returns `None` if the clips and the skeleton disagree (which `load_clip` rules out when
+    /// the clip is loaded), so the caller can fall back to the rest pose.
+    fn skin_matrices(
+        &mut self,
+        animation: &FigureAnimation,
+        time: f32,
+        blend: f32,
+    ) -> Option<&[Mat4]> {
+        if blend <= 0.0 {
+            self.sampler.sample(&animation.idle, time);
+        } else if blend >= 1.0 {
+            self.sampler.sample(&animation.walk, time);
+        } else {
+            self.sampler
+                .sample_crossfade(&animation.idle, time, &animation.walk, time, blend)
+                .ok()?;
+        }
+        self.sampler.skin_matrices(&animation.skeleton).ok()
+    }
+}
+
+/// A loaded figure plus the poses the prototype shows: its clips when the pack carries them,
+/// otherwise the rest pose, and the crumpled hit pose.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FigureVisual {
     /// Registered mesh and resolved material of every part.
@@ -232,6 +314,8 @@ pub struct FigureVisual {
     pub height: f32,
     /// Which way the model looks; see [`facing_yaw`] for the convention.
     pub authored_front: AuthoredFront,
+    /// Clips the figure plays, if its pack carries them; without them it stands in its rest pose.
+    pub animation: Option<FigureAnimation>,
 }
 
 impl FigureVisual {
@@ -248,7 +332,15 @@ impl FigureVisual {
             ground_lift: -figure.bounds_min[2],
             height: figure.bounds_max[2] - figure.bounds_min[2],
             authored_front,
+            animation: None,
         }
+    }
+
+    /// The same figure with `animation` attached.
+    #[must_use]
+    pub fn with_animation(mut self, animation: FigureAnimation) -> Self {
+        self.animation = Some(animation);
+        self
     }
 
     /// A stand-in figure without real geometry (tests, headless runs): one part, one joint.
@@ -264,6 +356,7 @@ impl FigureVisual {
             ground_lift: 0.0,
             height: 1.8,
             authored_front: AuthoredFront::PlusZ,
+            animation: None,
         }
     }
 }
@@ -610,17 +703,39 @@ fn push_pillar(visuals: &ArenaVisuals, frame: &mut StageFrame, at: Vec2, torch_i
 }
 
 /// Appends one skinned figure; returns nothing drawn when `visible` is false.
+/// How a figure is posed this frame.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Pose {
+    /// The crumpled hit pose; a hit figure never animates.
+    Hit,
+    /// The clips at `time` seconds with `blend` of the walk mixed in, or the rest pose if the
+    /// figure has no clips.
+    Animated {
+        /// Clip time in seconds ([`clip_time`]).
+        time: f32,
+        /// Walk share ([`walk_blend`]).
+        blend: f32,
+    },
+}
+
 fn push_figure(
     figure: &FigureVisual,
     transform: Mat4,
-    hit: bool,
+    pose: Pose,
     emissive: Option<[f32; 3]>,
+    animator: &mut Animator,
     frame: &mut StageFrame,
 ) {
-    let pose = if hit {
-        &figure.hit_pose
-    } else {
-        &figure.rest_pose
+    let sampled = match (pose, &figure.animation) {
+        (Pose::Animated { time, blend }, Some(animation)) => {
+            animator.skin_matrices(animation, time, blend)
+        }
+        _ => None,
+    };
+    let pose = match (sampled, pose) {
+        (Some(pose), _) => pose,
+        (None, Pose::Hit) => &figure.hit_pose,
+        (None, Pose::Animated { .. }) => &figure.rest_pose,
     };
     // Innermost: bring the model's front onto the convention, so facing and knock-back apply to
     // every figure alike.
@@ -662,7 +777,21 @@ fn last_tick(world: &World) -> u64 {
 }
 
 /// The player: figure, marker ring, blob shadow and the hit reaction.
-fn push_player(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut StageFrame) {
+/// Speed of the player in world units per second, `0.0` without a player.
+fn player_speed(world: &World) -> f32 {
+    world
+        .query::<(&Velocity, &Player)>()
+        .next()
+        .map_or(0.0, |(velocity, _)| velocity.value.length())
+}
+
+fn push_player(
+    world: &World,
+    alpha: f32,
+    visuals: &ArenaVisuals,
+    animator: &mut Animator,
+    frame: &mut StageFrame,
+) {
     let Some((previous, position, facing, _)) = world
         .query::<(&PreviousPosition, &Position, &Facing, &Player)>()
         .next()
@@ -706,7 +835,17 @@ fn push_player(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut St
             translation([at.x, at.y, soul.ground_lift + lift]),
             rotation_z(yaw),
         );
-        push_figure(soul, transform, false, None, frame);
+        push_figure(
+            soul,
+            transform,
+            Pose::Animated {
+                time: clip_time(tick, alpha),
+                blend: walk_blend(player_speed(world)),
+            },
+            None,
+            animator,
+            frame,
+        );
         let ring = mul(
             translation([at.x, at.y, 0.02]),
             scale([
@@ -737,7 +876,7 @@ fn push_player(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut St
     let red = [1.0 * pulse, 0.06 * pulse, 0.04 * pulse];
     let visible = age < 20 || (age / HIT_BLINK_TICKS) % 3 != 2;
     if visible {
-        push_figure(soul, transform, true, Some(red), frame);
+        push_figure(soul, transform, Pose::Hit, Some(red), animator, frame);
     }
     let mut flash = PointLight::default();
     flash.position = [at.x, at.y, 1.2];
@@ -750,7 +889,13 @@ fn push_player(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut St
 }
 
 /// The imp on its plinth, turned towards the player.
-fn push_imp(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut StageFrame) {
+fn push_imp(
+    world: &World,
+    alpha: f32,
+    visuals: &ArenaVisuals,
+    animator: &mut Animator,
+    frame: &mut StageFrame,
+) {
     let Some((position, _)) = world.query::<(&Position, &Imp)>().next() else {
         return;
     };
@@ -764,7 +909,17 @@ fn push_imp(world: &World, alpha: f32, visuals: &ArenaVisuals, frame: &mut Stage
         ]),
         rotation_z(yaw),
     );
-    push_figure(&visuals.imp, transform, false, None, frame);
+    push_figure(
+        &visuals.imp,
+        transform,
+        Pose::Animated {
+            time: clip_time(last_tick(world), alpha),
+            blend: 0.0,
+        },
+        None,
+        animator,
+        frame,
+    );
     // A dim glow from the imp's hands, in the warm light family (never a bullet colour).
     let mut glow = PointLight::default();
     glow.position = [position.at.x, position.at.y - 0.6, PLINTH_HEIGHT + 1.0];
@@ -784,12 +939,13 @@ pub fn extract(
     world: &World,
     alpha: f32,
     visuals: &ArenaVisuals,
+    animator: &mut Animator,
     frame: &mut StageFrame,
 ) -> BulletExtractionStats {
     push_stage_materials(frame);
     push_arena(visuals, frame);
-    push_imp(world, alpha, visuals, frame);
-    push_player(world, alpha, visuals, frame);
+    push_imp(world, alpha, visuals, animator, frame);
+    push_player(world, alpha, visuals, animator, frame);
     extract_bullets(world, alpha, &mut frame.bullets)
 }
 
@@ -818,7 +974,7 @@ mod tests {
         let sim = built();
         let visuals = ArenaVisuals::placeholder();
         let mut frame = StageFrame::new();
-        extract(sim.world(), 0.0, &visuals, &mut frame);
+        extract(sim.world(), 0.0, &visuals, &mut Animator::new(), &mut frame);
         frame.camera_25d = Some(camera_template());
         let stats = render(&frame);
         assert_eq!(stats.meshes_rejected_invalid, 0);
@@ -833,13 +989,68 @@ mod tests {
     }
 
     #[test]
+    fn the_walk_blend_follows_the_speed_and_nothing_else() {
+        // A pure function of the speed: no playhead, no hysteresis, nothing the simulation would
+        // have to carry (engine ADR-0017).
+        assert_eq!(walk_blend(0.0), 0.0);
+        assert_eq!(walk_blend(WALK_BLEND_START), 0.0);
+        assert_eq!(walk_blend(WALK_BLEND_FULL), 1.0);
+        assert_eq!(walk_blend(crate::arena::PLAYER_SPEED), 1.0);
+        let middle = walk_blend((WALK_BLEND_START + WALK_BLEND_FULL) / 2.0);
+        assert!((middle - 0.5).abs() < 1.0e-6, "{middle}");
+        assert!(walk_blend(f32::NAN) == 0.0 && walk_blend(-1.0) == 0.0);
+        // Monotone in between, so a figure never jitters between two poses.
+        let mut previous = 0.0;
+        for step in 0..=20 {
+            let speed =
+                WALK_BLEND_START + (WALK_BLEND_FULL - WALK_BLEND_START) * (step as f32 / 20.0);
+            let blend = walk_blend(speed);
+            assert!(blend >= previous, "speed {speed}: {blend} < {previous}");
+            previous = blend;
+        }
+    }
+
+    #[test]
+    fn the_clip_time_is_the_simulations_own_clock() {
+        // Tick plus alpha over the tick rate: the clips follow the ticks, nothing counts time on
+        // its own, so the same tick and alpha always give the same pose (ADR-0017).
+        assert_eq!(clip_time(0, 0.0), 0.0);
+        assert_eq!(clip_time(u64::from(crate::TICK_RATE_HZ), 0.0), 1.0);
+        let half = clip_time(0, 0.5);
+        assert!(
+            (half - 0.5 / crate::TICK_RATE_HZ as f32).abs() < 1.0e-9,
+            "{half}"
+        );
+        assert!(clip_time(120, 0.25) > clip_time(120, 0.0));
+    }
+
+    #[test]
+    fn a_figure_without_clips_keeps_its_rest_pose() {
+        // The placeholder figures carry no animation, so the extraction falls back to the poses
+        // the prototype had before — the same matrices as the figure's `rest_pose`.
+        let sim = built();
+        let visuals = ArenaVisuals::placeholder();
+        let mut frame = StageFrame::new();
+        extract(sim.world(), 0.0, &visuals, &mut Animator::new(), &mut frame);
+        assert!(visuals.soul.animation.is_none());
+        assert_eq!(
+            frame.joint_matrices,
+            [
+                visuals.imp.rest_pose.clone(),
+                visuals.soul.rest_pose.clone()
+            ]
+            .concat()
+        );
+    }
+
+    #[test]
     fn only_the_figures_are_actors() {
         // The rim light of the engine reaches `MeshRole::Actor` alone (PRD-0003 layer 3): the two
         // figures, never the floor, the pillars, the braziers, the plinth or the marker ring.
         let sim = built();
         let visuals = ArenaVisuals::placeholder();
         let mut frame = StageFrame::new();
-        extract(sim.world(), 0.0, &visuals, &mut frame);
+        extract(sim.world(), 0.0, &visuals, &mut Animator::new(), &mut frame);
         let actors = frame
             .meshes
             .iter()
@@ -869,7 +1080,7 @@ mod tests {
         }
         let visuals = ArenaVisuals::placeholder();
         let mut frame = StageFrame::new();
-        let extraction = extract(sim.world(), 0.5, &visuals, &mut frame);
+        let extraction = extract(sim.world(), 0.5, &visuals, &mut Animator::new(), &mut frame);
         let live = hud(sim.world()).bullets;
         assert!(live > 0, "the imp has fired");
         assert_eq!(extraction.extracted, live);
@@ -921,7 +1132,7 @@ mod tests {
         assert!(hit_tick.is_some(), "an idle player is hit");
         let visuals = ArenaVisuals::placeholder();
         let mut frame = StageFrame::new();
-        extract(sim.world(), 0.0, &visuals, &mut frame);
+        extract(sim.world(), 0.0, &visuals, &mut Animator::new(), &mut frame);
         let red_glow = frame
             .materials
             .iter()

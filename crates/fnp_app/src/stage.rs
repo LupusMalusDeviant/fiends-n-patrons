@@ -159,6 +159,8 @@ pub struct ArenaStage {
     pattern: &'static str,
     /// Mode and roster index seen in the previous tick, to count switches.
     switched_from: (Mode, u16),
+    /// Buffers for sampling the figures' clips; holds no playback state.
+    animator: present::Animator,
 }
 
 impl ArenaStage {
@@ -186,6 +188,7 @@ impl ArenaStage {
             frame_seconds: 0.0,
             pattern: roster.fight.first().map_or("", |entry| entry.name),
             switched_from: (Mode::Volley, 0),
+            animator: present::Animator::new(),
             roster,
         }
     }
@@ -285,7 +288,7 @@ impl GamePlugin for ArenaStage {
         let Some(visuals) = &self.visuals else {
             return;
         };
-        let extraction = present::extract(world, alpha, visuals, stage);
+        let extraction = present::extract(world, alpha, visuals, &mut self.animator, stage);
         self.hud = present::hud(world);
         let mut stats = self.stats.borrow_mut();
         stats.peak_bullets = stats.peak_bullets.max(self.hud.bullets);
