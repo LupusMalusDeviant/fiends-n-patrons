@@ -92,7 +92,7 @@ Die PRDs nennen keine Zahlen je Rolle. `assets_src/asset_import/budgets.json` f�
 | `boss` | 50.000 | 6 | 2048 | 160 MiB |
 | `prop` | 5.000 | 3 | 1024 | 20 MiB |
 
-**Entschieden (PO, 2026-09-18):** Die Budgets bleiben **vorläufig**; bestätigt werden sie nach der GPU-Messsitzung. Sie gelten für neue Importe; die Figuren der Runde 4 werden dafür nicht umgebaut. Dazu gehört seit demselben Entscheid eine **Zielhöhe von 1,3 m für Gegner** — die Tabelle oben begrenzt Dreiecke, Texturen und Speicher, nicht die Größe im Bild, und Stufe 4 hat gezeigt, dass ein 1,0-m-Gegner an der Vorgabekamera nur 92 px hoch ist.
+**Entschieden (PO, 2026-09-18):** Die Budgets bleiben **vorläufig**; bestätigt werden sie nach der GPU-Messsitzung. Sie gelten für neue Importe; die Figuren der Runde 4 werden dafür nicht umgebaut. Dazu gehört seit demselben Entscheid eine **Zielhöhe von 1,3 m für Gegner** — die Tabelle oben begrenzt Dreiecke, Texturen und Speicher, nicht die Größe im Bild, und Stufe 4 hat gezeigt, dass ein 1,0-m-Gegner an der Vorgabekamera nur 92 px hoch ist. **Umgesetzt (2026-09-18, Spiel-PR #24 `6bb2b81`):** Der Imp ist für 1,300 m neu vorbereitet worden, nicht beim Laden skaliert; die Stufe-1-Prüfung ist danach grün (Füße auf 0, Blickrichtung +Z nach beiden Messverfahren, Ruhepose-Abweichung 4,2e-07, GPU-Speicher 4,3 von 24 MiB).
 
 ## 5. Offene PO-Fragen (je mit Empfehlung)
 
@@ -102,7 +102,7 @@ Die PRDs nennen keine Zahlen je Rolle. `assets_src/asset_import/budgets.json` f�
 4. **Gespiegelte Seitennamen im Imp-Rig.** *Empfehlung:* in der Vorbereitungsstufe `.L`/`.R` tauschen, nicht in den Quelldateien.
 5. **Fehlende Clip-Namen** als Warnung oder Fehler. *Empfehlung:* Warnung, bis das Animations-ADR entschieden ist.
 6. **Texturgrößen Hexe 1024, Imp 512** (gemessen, §2 Stufe 2). *Empfehlung:* so übernehmen; 2048 nur, wenn Nahaufnahmen der Spielerfigur geplant sind.
-7. **Die Hexe ist sehr dunkel** (Grundfarbe im Median HSV-Value 6,7 %, Imp 20,4 %; die Stilbibel nennt für den Boden rund 24 %). *Entschieden (PO, 2026-09-18):* Die Lesbarkeit wird **über das Licht gelöst — ein Rim-Light —, nicht über die Figur**; keine Kanalverstärkung, keine neue Textur. Stufe 4 hat den Befund beziffert: 1,18–1,20 : 1 gegen den Boden, aber nur 1,02–1,05 : 1 im hellsten Zehntel.
+7. **Die Hexe ist sehr dunkel** (Grundfarbe im Median HSV-Value 6,7 %, Imp 20,4 %; die Stilbibel nennt für den Boden rund 24 %). *Entschieden (PO, 2026-09-18):* Die Lesbarkeit wird **über das Licht gelöst — ein Rim-Light —, nicht über die Figur**; keine Kanalverstärkung, keine neue Textur. Stufe 4 hat den Befund beziffert: 1,18–1,20 : 1 gegen den Boden, aber nur 1,02–1,05 : 1 im hellsten Zehntel. *Umgesetzt (2026-09-18):* Die Engine hat das Rim-Licht der Akteurs-Ebene (Engine-PR #68, Vertrag §6), das Spiel setzt `MeshRole::Actor` auf seine Figuren (Spiel-PR #26). **Im Prototyp gemessen** — andere Szene als Stufe 4, also eigene Grundwerte, Kamera A, derselbe Frame nur mit und ohne Akteursrolle: 9.645 geänderte Pixel, alle innerhalb der Figuren; das hellste Zehntel der Hexe steigt von 3,67:1 auf 4,26:1, das des Imps von 1,04:1 auf 1,28:1. Die Stärke steht noch auf der Vorgabe der Engine (offener Punkt für den PO).
 8. **Speicherort der Ergebnisse.** *Empfehlung:* vorerst außerhalb des Repos; Git LFS erst, wenn das Pack in der CI aus ihnen gebaut werden soll.
 9. **Rissige Arbeitskopien.** *Empfehlung:* vor dem Reduzieren nach Position verschweißen lassen; diese Stufe braucht es nicht mehr, Gewichtsmalerei und Animation auf einem geschlossenen Netz werden aber sauberer.
 10. **Blender-Fassung (OF-16.3).** *Empfehlung:* 5.2 LTS pinnen, Manifest-Abweichungen nach einem Blender-Wechsel bewusst erneuern.
@@ -115,4 +115,4 @@ Die PRDs nennen keine Zahlen je Rolle. `assets_src/asset_import/budgets.json` f�
 - [Plan 0002 Phase P1](0002-phase-p1-sichtbarer-kern.md) — PO-Entscheide vom Abend des 2026-09-17, Meilenstein M3
 - [PRD-0003 Rendering & Art](../prd/0003-rendering-und-art.md) · [PRD-0002 Engine](../prd/0002-grimoire-engine-architektur.md) · [PRD-0016 Tooling](../prd/0016-tooling-suite.md)
 - Werkzeuge im Repo: `assets_src/asset_import/` (Prüfung und Vorbereitung, `README.md` mit allen Messungen), `assets_src/figure_pack/` (Konverter), `assets_src/textures/requirements.txt` (gepinnte Python-Pakete)
-- Spiel-PRs: #11 (`05d2db8`), #13 (`7a559f2`), #14 (`80e005a`), #15 (`dcc3e3b`), #17 (`a4cd0de`, Stufe 4)
+- Spiel-PRs: #11 (`05d2db8`), #13 (`7a559f2`), #14 (`80e005a`), #15 (`dcc3e3b`), #17 (`a4cd0de`, Stufe 4), #24 (`6bb2b81`, Spielpack und Clip-Export), #26 (`a384d7b`, Rim-Licht im Prototyp)

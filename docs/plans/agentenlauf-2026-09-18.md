@@ -116,7 +116,7 @@ endlose Pattern hat keinen drehenden Modifikator. Nachgewiesen über 900 Ticks j
 `sigilc simulate --json`: vier Patterns enden bei **0** lebenden Geschossen, die endlosen schwingen sich ein,
 **kein einziger verworfener Spawn**. Die Tabelle steht in `content/README.md`, der Aufruf daneben.
 
-Die Arena spielt weiterhin nur die zwei Imp-Muster; welche Szene welches Pattern fährt, entscheidet WP7.4.
+Die Arena spielte zunächst weiter nur die zwei Imp-Muster; in der Nacht sind alle sechs auf die Taste `P` gekommen (unten). Welche Szene welches Pattern fährt, entscheidet weiterhin WP7.4.
 
 ### Assets — Asset-Import-Pilot in vier Stufen
 
@@ -166,6 +166,98 @@ Nach den Merges ist der Arbeitsstand aufgeräumt worden — reine Hygiene, kein 
 - **Zwei Ordner sind absichtlich geblieben,** weil eigene Skripte des PO auf sie zeigen; sie umzubenennen hätte die
   Skripte gebrochen.
 
+## Die Nacht — der Prototyp bekommt die Figuren der PO
+
+Nach den M3-Paketen lief die Nacht am Spiel: das Pack mit den Figuren der PO, alle Muster spielbar, und
+dann Engine `v0.6.0` mit Rim-Licht, Darstellungs-Haken und Animation. Drei Pakete, alle gemergt.
+
+### Spielpack und Clip-Export (Spiel-PR #24, `6bb2b81`)
+
+Das Pack `figures_r5.pack` (16 Einträge) trägt die **Hexe mit 1,800 m** (11.996 Dreiecke, 31 Gelenke, drei
+1024er Texturen) und den **Hi3D-Imp mit 1,300 m** (5.000 Dreiecke, 26 Gelenke, drei 512er Texturen), dazu die
+Clips `idle` und `walk` der Hexe. Der Imp ist für die neue Zielhöhe **neu vorbereitet** worden, headless und
+einfädig, nicht beim Laden skaliert: Die Stufe-1-Prüfung ist danach grün (Höhe 1,300 m, Füße auf 0,
+Blickrichtung +Z nach beiden Messverfahren, Ruhepose-Abweichung 4,2e-07, GPU-Speicher 4,3 von 24 MiB), einzige
+Warnung bleibt die bekannte Clip-Liste. Der Konverter kann jetzt außerdem Clips als **`FNP_CLIP`** schreiben,
+die Autorenseite des Engine-Formats aus ADR-0017; abgespielt wird weiterhin in der Engine. Ein Pack mit
+Clip-Einträgen lädt unverändert mit der damals gepinnten `v0.5.0`, weil die Art `0x8005` dort nie angefragt
+wird — erst das Abspielen braucht die neue Engine.
+
+**Die Namen im Pack sind die des Laders, nicht die der Figuren:** Die Hexe heißt dort weiterhin `soul`, weil
+der Lader genau `soul` und `imp` verlangte. Das ist im nächsten Paket aufgelöst.
+
+### Alle Muster spielbar, Figuren aus dem Pack (Spiel-PR #25, `94bd54c`)
+
+Die sechs Kampf-Muster aus `content/sigil/` laufen reihum auf der Taste `P`, der Vorhang bleibt auf `V`; jeder
+Wechsel ersetzt die Emitter des Gegners und löscht die Geschosse. Das Spiel liest jetzt, **welche Figuren das
+Pack hat**, statt feste Namen zu verlangen.
+
+**Die Blickrichtung kommt aus dem Rig, nicht mehr aus einem Schalter.** Das neue Pack ist mit glTF +Z nach vorn
+gebaut, die Packs der Runden 3 und 4 mit −Z — eine Namenstabelle kann das nicht unterscheiden, und die bis dahin
+pauschale Konstante hätte die neuen Figuren mit dem Rücken zur Kamera gestellt. Also fragt das Spiel die Figur
+selbst: Zehen, Füße oder Hände der Ruhepose stehen nach vorn, ihr Vorzeichen entlang der Blickachse sagt die
+Bauweise. Gemessen: neues Pack +Z (1,80 m und 1,30 m), Pack r4 −Z (1,96 m und 1,06 m) — beides ohne Schalter,
+und die Startzeile nennt Figur, Höhe, Blickrichtung und ob gemessen oder gesetzt.
+
+**Die Goldhashes blieben unangetastet:** Die Arena des Imps allein ist unverändert geblieben, ein Test lässt
+beide Arenen Tick für Tick nebeneinander laufen. Offscreen über 1.800 Bilder: 7 Treffer, 8 Runden, 6
+Muster-Wechsel, 911.874 gezeichnete Geschosse, **0 Verwürfe** — auch mit dem alten Pack r4.
+
+### Engine `v0.6.0`: Rim-Licht, Darstellungs-Haken, Animation (Spiel-PR #26, `a384d7b`)
+
+Die Engine hat in derselben Nacht **Engine-PR #68** (Rim-Licht der Akteurs-Ebene, Vertrag §6) und den Release
+**#69** bekommen; dazu kamen aus der Nacht davor **#63** (Haken für Darstellungstasten, §9.12) und **#64**
+(Clip-Abtastung, ADR-0017). Das Spiel nimmt alle drei auf einmal:
+
+- **Pin auf `v0.6.0`** (Tag auf `aa83222`): 263 gemeinsame Drittanbieter-Crates ohne Abweichung, beide
+  `clippy.toml`-Kopien gleich der Fassade am Tag. **Kein Zustands-Hash hat sich bewegt** — die eingefrorenen
+  Endhashes der Arena und des Vorhangs und jeder Hash und jede Zählung der acht Szenen-Goldmasters sind
+  unverändert. Nur der Stempel der Engine-Version in den Mastern ist neu, in **eigenem Commit mit Grund** in
+  `tests/golden/RENEWALS.md`, alle acht als „unchanged“ vermerkt.
+- **Rim-Licht auf den Akteuren:** Die Figuren setzen `MeshRole::Actor`, mehr war nicht nötig; die Bühne bleibt
+  Umgebung, die Vorgabewerte der Engine bleiben stehen. Vorher/nachher am selben Bild (Kamera A): **9.645
+  geänderte Pixel, alle innerhalb der beiden Figuren**. Nach der Messmethode des Asset-Import-Piloten steigt
+  das hellste Zehntel der Hexe von **3,67:1 auf 4,26:1** und das des Imps von **1,04:1 auf 1,28:1** gegen den
+  Median des Bodens. Damit ist der PO-Entscheid umgesetzt, die Lesbarkeit über das Licht zu lösen und nicht
+  über die Figur.
+- **Kamera-Taste auf dem Darstellungs-Haken (§9.12):** Die `InputMap`-Bindung ist weg. Der Replay-Test
+  vergleicht denselben Lauf mit und ohne Kamera-Drücke und findet jetzt **jeden Hash je Tick gleich**; vorher
+  wichen genau die Ticks ab, deren aufgezeichnete Eingabe den Knopf trug. Damit ist der letzte offene Punkt aus
+  dem Prototyp-Neubau erledigt.
+- **Die Hexe geht:** `idle` und `walk` aus dem Pack, abgetastet über den zustandslosen Sampler der Engine. Die
+  **Clip-Zeit ist `(Tick + alpha) / Tickrate`**, die Überblendung zwischen Stehen und Gehen eine **reine
+  Funktion der Geschwindigkeit** (monoton von 0,25 bis 2,0 m/s) — die Pose hängt nur von Welt und `alpha` ab,
+  die Simulation zählt keine Animationszeit und hält keinen Abspielstand (ADR-0017). Eine Figur ohne Clips
+  zeichnet ihre Ruhepose; genau das tut der Imp. Derselbe geskriptete Lauf liefert dieselben Kennzahlen wie
+  vorher: Rim-Licht und Animation ändern nur das Bild.
+
+CI grün auf Windows, Linux und macOS: Push-Läufe auf `main` 35293153372 (#24), 35296858369 (#25) und
+35302732891 (#26); engineseitig 35297078479 und 35297078487 (#68) sowie 35298396835, 35298396902, 35298396942
+und der Release-Lauf 35298979857 (`v0.6.0`).
+
+### Offene Punkte aus der Nacht
+
+Alle sechs ändern Spielgefühl oder Aussehen und gehören deshalb dem PO:
+
+- **Die Sperrzone um den Gegner passt nicht mehr zur Figur.** Der Radius von 0,9 m um den Platz des Imps stammt
+  vom alten, 1,06 m großen Imp; der neue steht auf 1,30 m. Die Zone gehört zur Simulation — eine Änderung
+  bewegt die Goldhashes und gehört in einen eigenen Schritt.
+- **Die Trefferkapsel der Hexe ist vorläufig:** 0,28 m Radius, eine schulterbreite Kapsel auf der Bodenebene,
+  **nicht an der Figur gemessen** (so steht es auch im Quelltext).
+- **Die Geschossgrößen der Muster** sind gegen die kleineren Figuren von vorher abgestimmt; mit 1,80 m und
+  1,30 m stimmt das Verhältnis von Geschoss zu Figur nicht mehr wie gedacht.
+- **16 Clips der Hexe fehlen noch im Pack.** Sie kosten praktisch nichts (derselbe Aufruf mit längerer Liste,
+  rund 45 KiB und etwa eine Sekunde), aber 13 davon tragen Markierungen wie `hit`, `cast` oder `parry_start`,
+  die erst etwas bedeuten, wenn die Simulation ihre Tick-Anker dagegen prüft.
+- **Der Imp hat noch gar keine Clips** und steht deshalb still. Sobald welche im Pack sind, spielt er sie ohne
+  Codeänderung.
+- **Die Stärke des Rim-Lichts steht auf der Vorgabe der Engine.** Schwächer oder wärmer ist ein Feld in
+  `StageFrame::rim_light`, keine Codeänderung.
+
+Dazu bleibt aus dem Prototyp: Gehen ohne Wenden und ohne Tempo-Anpassung — die Schrittlänge richtet sich nicht
+nach der Laufgeschwindigkeit, die Füße können rutschen. Für den Prototyp reicht es; ein Tempo-abhängiges
+Warping kann die Engine, lohnt sich aber erst mit mehr Clips.
+
 ## PO-Entscheide des Abends und der Nacht
 
 Am Abend: **M3 ist gestartet**, der Asset-Import-Pilot läuft parallel dazu, und der Prototyp-Neubau bekommt die
@@ -190,3 +282,5 @@ Die Entscheide stehen mit ihren Folgen in den Abschnitten „Meilensteine“ und
   Nightly-Plattformvergleich). WP7.3 ist mit Spiel-PR #20 gemergt.
 - Die Empfehlungen aus WP8.5, WP9.2 und WP9.3 sind noch nicht entschieden, darunter die beiden Gate-Checks als
   Pflicht-Checks des geschützten `main`.
+- Die sechs Punkte aus der Nacht (Sperrzone, Trefferkapsel, Geschossgrößen, die fehlenden Clips beider Figuren,
+  die Stärke des Rim-Lichts) warten auf den PO; sie stehen oben mit ihren Zahlen.
