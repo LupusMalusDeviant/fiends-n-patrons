@@ -5,7 +5,7 @@
   "seed": 10,
   "ticks": 900,
   "bot": "idle",
-  "engine_version": "0.5.0",
+  "engine_version": "0.6.0",
   "patterns": ["summoner_bloom"],
   "final_state_hash": "73e9c62325bd1954",
   "peak_bullets": 35,

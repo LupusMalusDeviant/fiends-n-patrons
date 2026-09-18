@@ -5,7 +5,7 @@
   "seed": 8,
   "ticks": 900,
   "bot": "dodger",
-  "engine_version": "0.5.0",
+  "engine_version": "0.6.0",
   "patterns": ["shooter_rails"],
   "final_state_hash": "7a8df31e4a5d1528",
   "peak_bullets": 48,

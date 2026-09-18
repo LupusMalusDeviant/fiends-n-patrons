@@ -5,7 +5,7 @@
   "seed": 42,
   "ticks": 1800,
   "bot": "dodger",
-  "engine_version": "0.5.0",
+  "engine_version": "0.6.0",
   "patterns": ["imp_volley"],
   "final_state_hash": "ad326b57e2d9f380",
   "peak_bullets": 28,

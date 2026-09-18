@@ -15,3 +15,16 @@ Every entry is its own commit (CONTRIBUTING, "Golden-Master und Referenzwerte").
 - `all_roles`: new, ef65533569b7bf5e
 - Engine version: 0.5.0
 
+## Renewal
+
+- Reason: engine pin raised from v0.5.0 to v0.6.0; every hash and count unchanged, only the recorded engine version
+- `imp_arena`: unchanged
+- `imp_curtain`: unchanged
+- `swarm_weave`: unchanged
+- `shooter_rails`: unchanged
+- `harrier_scatter`: unchanged
+- `summoner_bloom`: unchanged
+- `breaker_toll`: unchanged
+- `all_roles`: unchanged
+- Engine version: 0.6.0
+

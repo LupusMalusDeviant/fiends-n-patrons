@@ -5,7 +5,7 @@
   "seed": 12,
   "ticks": 1200,
   "bot": "dodger",
-  "engine_version": "0.5.0",
+  "engine_version": "0.6.0",
   "patterns": ["swarm_weave", "shooter_rails", "harrier_scatter", "summoner_bloom", "breaker_toll"],
   "final_state_hash": "ef65533569b7bf5e",
   "peak_bullets": 237,
