@@ -39,7 +39,77 @@ python -B build_figure_pack.py --figure witch=<ziel>/witch.glb --figure imp_hi3d
 Erzeugte Dateien (Zwischenformate wie `index.json`/`*.bin` und `figures.pack`) gehören nicht ins
 Repo; gemäß der Festlegung landen sie unter `_showcase/pack/` außerhalb beider Repos.
 
-Tests: `python -B -m unittest test_figure_pack.py test_textures.py`.
+### Das Pack des Prototyps
+
+Der Prototyp lädt genau zwei Figuren, `soul` (Spieler) und `imp` (Gegner); die Namen stehen in
+`crates/fnp_app/src/figures.rs`, der Pfad des Packs kommt beim Start aus `--pack` oder
+`FNP_FIGURE_PACK`. Das Pack mit den Figuren der PO entsteht so:
+
+```sh
+python -B build_figure_pack.py --figure soul=<ziel>/witch.glb --figure imp=<ziel>/imp.glb
+    --clips soul=idle,walk --clip-events soul=<autorenbericht>.json --out <ausgabeordner>
+cargo run --release -p fnp_content --bin figure_pack_builder --
+    --index <ausgabeordner>/index.json --out <pfad>/figures_r5.pack
+```
+
+(Je Aufruf eine Zeile.) `soul` ist dabei die Hexe (1,8 m) und `imp` der Hi3D-Imp (1,3 m) — die
+Namen sind die des Laders, nicht die der Figuren. Beide sind mit **+Z nach vorn** gebaut, anders
+als die Figuren der Runden 3 und 4; der Lader dreht heute jede Pack-Figur mit der Konstanten
+`PACK_FIGURES_FRONT = AuthoredFront::MinusZ` um 180°, was diese beiden von der Kamera wegdrehen
+würde.
+
+Tests: `python -B -m unittest test_figure_pack.py test_textures.py test_clips.py`.
+
+## Clips (`FNP_CLIP`)
+
+Seit der Engine-Fassung nach v0.5.0 gibt es ein Clip-Format: eine Pack-Nutzlast der Art `0x8005`
+unter `figures/<figur>/clip/<clip>`, abgetastet Bild für Bild, mit Markierungen. Verbindlich ist
+das Formatdokument der Engine (`docs/formats/figure-clip.md`, Fassung 1) samt Vertrag §6; dieser
+Konverter ist die Autorenseite davon, `clips.py`. Abspielen ist Sache der Engine
+(`grimoire_render::figure_clip`), nicht dieses Ordners.
+
+```sh
+python -B build_figure_pack.py --figure soul=<ziel>/witch.glb
+    --clips soul=idle,walk --clip-events soul=<bericht>.json --out <ausgabeordner>
+```
+
+(Je Aufruf eine Zeile.) `--clips NAME=a,b` wählt die Clips einer Figur, `--clip-events NAME=PFAD`
+nennt den Autorenbericht mit `clips[].events`, `--clip-rate` die Bildrate der Vorlage (Vorgabe 24).
+
+Was der Konverter dabei festlegt:
+
+- **Ein Wert je Bild.** Keine Schlüsselreduktion, keine Quantisierung. Eine Spur, die sich nie
+  ändert, steht einmal da — das ist die ganze Kompression des Formats. Gemessen an der Hexe: von
+  93 Spuren (31 Gelenke × 3) verändern sich in `idle` 5 und in `walk` 9.
+- **Die Zeit beginnt bei null.** Die exportierten `.glb` setzen ihren ersten Schlüssel auf
+  `1/24 s`, weil Blender ab Bild 1 zählt. Dieser Versatz ist Autorenbasis und wird abgezogen;
+  Bild 0 der Nutzlast ist der erste Schlüssel.
+- **Schleife wird gemessen, nicht eingestellt.** Ein Clip schleift, wenn sein letztes Bild das
+  erste wiederholt (Format §3). `idle` und `walk` der Hexe tun das, `death` nicht. Für Drehungen
+  zählt auch die andere Hemisphäre (`q` und `-q` sind dieselbe Drehung).
+- **Markierungen sind nullbasiert.** Der Autorenbericht zählt Blender-Bilder ab 1, der Konverter
+  zieht eines ab und weist eine Markierung außerhalb des Clips zurück, statt sie zu beschneiden.
+  `idle` und `walk` haben keine; `melee_1` hätte `hit` auf Bild 6 (Nutzlast 5).
+- **Die Wurzelkorrektur gilt auch für Clips.** Das Wurzelgelenk trägt in jedem Bild dieselbe
+  Achskorrektur wie in der Ruhepose, sonst legt sich die Figur beim Abspielen hin.
+- **Drehungen bleiben Einheitsquaternionen.** Zwischen zwei Schlüsseln wird mit Slerp
+  interpoliert; der Konverter normiert einen Schlüssel nie stillschweigend nach, sondern bricht ab,
+  wenn die Länge um mehr als `1e-3` abweicht — genau die Grenze, an der der Dekoder ablehnt.
+- **Der Skelett-Fingerabdruck** (`StableHasher` v1 über Gelenkzahl und Elternindizes) wird hier
+  nachgebildet, damit der Konverter ohne Engine-Code auskommt. `test_clips.py` prüft ihn gegen den
+  im Formatdokument genannten Wert und die ganze Nutzlast gegen die handabgeleitete Golden-Datei
+  der Engine (`figure_clip_v1.bin`, 190 Bytes): mit `FNP_GRIMOIRE_REPO=<engine-checkout>` wird
+  zusätzlich Byte für Byte gegen die Datei selbst verglichen, sonst gegen die hier ausgeschriebene
+  Herleitung.
+
+Die zweite Stufe prüft eine Clip-Nutzlast noch einmal aus den rohen Bytes, bevor sie in das Pack
+geht (Magic, Fassung, reservierte Flag-Bits, Gelenkzahl gegen das Skelett derselben Figur, Grenzen,
+endliche Werte, Einheitsquaternionen, Markierungen in Reihenfolge und im Clip, keine überzähligen
+Bytes) — bewusst eine zweite Umsetzung neben dem Dekoder der Engine.
+
+**Alte Engine, neues Pack.** Ein Pack mit Clip-Einträgen lädt auch mit der noch gepinnten Fassung
+v0.5.0: die Art `0x8005` wird dort schlicht nie angefragt. Erst das Abspielen braucht die neue
+Engine.
 
 ## Texturen
 

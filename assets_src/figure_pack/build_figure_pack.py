@@ -55,6 +55,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from clips import (
+    CLIP_FORMAT_VERSION,
+    FNP_CLIP,
+    ClipError,
+    encode_clip,
+    markers_from_events,
+    sample_clip,
+    skeleton_fingerprint,
+)
 from glb_reader import Glb, GlbError, load_glb, primitive_attribute_counts_agree, read_accessor
 from pack_payloads import (
     FNP_FIGURE,
@@ -98,6 +107,10 @@ def glb_path_for(source: Path, name: str, suffix: str = GLB_SUFFIX) -> Path:
     figures needs a command-line argument, not a code change.
     """
     return source / f"{name}{suffix}"
+# The rate the figures are authored at; every clip is stored at the rate it was authored at
+# (format document `figure-clip.md` §3), never resampled to the simulation's tick rate.
+DEFAULT_CLIP_RATE_HZ = 24.0
+
 FK_CHECK_SAMPLE_PER_PART = 8
 FK_CHECK_TOLERANCE = 5.0e-3  # generous: float32 source data round-tripped through float64 math
 
@@ -131,6 +144,7 @@ class FigureReport:
     tangent_primitive_count: int = 0
     no_tangent_primitive_count: int = 0
     textures: list[str] = field(default_factory=list)
+    clips: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
 
@@ -514,7 +528,10 @@ def _forward_kinematics_check(
 
 
 def build_figure(
-    name: str, glb_path: Path, max_texture_size: int | None = None
+    name: str,
+    glb_path: Path,
+    max_texture_size: int | None = None,
+    clip_request: ClipRequest | None = None,
 ) -> tuple[list[PackEntry], FigureReport]:
     try:
         glb = load_glb(glb_path)
@@ -652,6 +669,36 @@ def build_figure(
         PackEntry(builder.path("skeleton"), FNP_SKELETON, KIND_VERSION, skeleton_payload)
     )
 
+    if clip_request is not None:
+        skin_nodes = glb.json_doc["skins"][skin_index]["joints"]
+        fingerprint = skeleton_fingerprint(skeleton_result.joints)
+        for clip_name in clip_request.clips:
+            try:
+                sampled = sample_clip(
+                    glb,
+                    skeleton_result,
+                    skin_nodes,
+                    clip_name,
+                    frame_rate=clip_request.frame_rate_hz,
+                )
+                markers = markers_from_events(
+                    clip_request.events.get(clip_name, {}), sampled.frame_count, clip=clip_name
+                )
+                payload = encode_clip(
+                    sampled, fingerprint, markers, label=f"{name}/clip/{clip_name}"
+                )
+            except ClipError as error:
+                raise BuildError(f"{name}: {error}") from error
+            builder.entries.append(
+                PackEntry(builder.path("clip", clip_name), FNP_CLIP, CLIP_FORMAT_VERSION, payload)
+            )
+            builder.report.clips.append(
+                f"{clip_name}: {sampled.frame_count} frames at {sampled.frame_rate_hz:g} Hz, "
+                f"{'looping' if sampled.loops else 'single'}, {sampled.varying_tracks} of "
+                f"{3 * len(skeleton_result.joints)} tracks vary, {len(markers)} marker(s), "
+                f"{len(payload)} bytes"
+            )
+
     figure_payload = encode_figure(
         parts=parts,
         texture_ids=builder.texture_ids(),
@@ -695,6 +742,49 @@ def write_output(out_dir: Path, all_entries: dict[str, list[PackEntry]]) -> None
     )
 
 
+@dataclass
+class ClipRequest:
+    """Which clips of one figure to export, at which rate, with which markers."""
+
+    clips: list[str]
+    frame_rate_hz: float
+    # Clip name -> `{marker name: Blender frame}`, as the authoring report writes it.
+    events: dict[str, dict[str, int]] = field(default_factory=dict)
+
+
+def parse_clip_requests(args) -> dict[str, ClipRequest]:
+    """`--clips NAME=a,b` plus `--clip-events NAME=<report.json>` into one request per figure."""
+    requests: dict[str, ClipRequest] = {}
+    for item in args.clips:
+        name, _, listing = item.partition("=")
+        clips = [clip.strip() for clip in listing.split(",") if clip.strip()]
+        if not name or not clips:
+            raise BuildError(f"--clips expects NAME=clip[,clip...], got {item!r}")
+        requests.setdefault(
+            name, ClipRequest(clips=[], frame_rate_hz=args.clip_rate)
+        ).clips.extend(clips)
+    for item in args.clip_events:
+        name, _, path = item.partition("=")
+        if not name or not path:
+            raise BuildError(f"--clip-events expects NAME=PATH, got {item!r}")
+        if name not in requests:
+            raise BuildError(f"--clip-events for {name!r}, which has no --clips")
+        try:
+            report = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            raise BuildError(f"--clip-events {path}: {error}") from error
+        events = {
+            str(clip.get("name")): dict(clip.get("events") or {})
+            for clip in report.get("clips", [])
+            if clip.get("name")
+        }
+        missing = [clip for clip in requests[name].clips if clip not in events]
+        if missing:
+            raise BuildError(f"--clip-events {path}: no entry for {missing}")
+        requests[name].events = events
+    return requests
+
+
 def _print_report(reports: list[FigureReport]) -> None:
     for report in reports:
         print(f"== {report.name} ==")
@@ -722,6 +812,8 @@ def _print_report(reports: list[FigureReport]) -> None:
         )
         for texture in report.textures:
             print(f"  texture {texture}")
+        for clip in report.clips:
+            print(f"  clip {clip}")
         for note in report.notes:
             print(f"  note: {note}")
 
@@ -775,6 +867,26 @@ def main(argv: list[str]) -> int:
         help="one more figure from any .glb, packed under NAME (repeatable)",
     )
     parser.add_argument(
+        "--clips",
+        action="append",
+        default=[],
+        metavar="NAME=CLIP,CLIP",
+        help="clips of NAME to export as FNP_CLIP entries (repeatable)",
+    )
+    parser.add_argument(
+        "--clip-events",
+        action="append",
+        default=[],
+        metavar="NAME=PATH",
+        help="authoring report holding clips[].events (Blender frames, counted from 1)",
+    )
+    parser.add_argument(
+        "--clip-rate",
+        type=float,
+        default=DEFAULT_CLIP_RATE_HZ,
+        help=f"rate the clips were authored at, in Hz (default: {DEFAULT_CLIP_RATE_HZ:g})",
+    )
+    parser.add_argument(
         "--max-texture-size",
         type=int,
         help="reduce textures whose longer side exceeds this by a power of two (needs numpy)",
@@ -785,6 +897,10 @@ def main(argv: list[str]) -> int:
     reports: list[FigureReport] = []
     try:
         sources = parse_figure_sources(args)
+        clip_requests = parse_clip_requests(args)
+        unknown = sorted(set(clip_requests) - {name for name, _ in sources})
+        if unknown:
+            raise BuildError(f"--clips names {unknown}, which are not among the figures")
         for name, glb_path in sources:
             if not glb_path.is_file():
                 raise BuildError(f"source file not found: {glb_path}")
@@ -799,10 +915,20 @@ def main(argv: list[str]) -> int:
             listing = "\n  ".join(problems)
             raise BuildError(f"{len(problems)} texture problem(s), nothing packed:\n  {listing}")
         for name, glb_path in sources:
-            entries, report = build_figure(name, glb_path, args.max_texture_size)
+            entries, report = build_figure(
+                name, glb_path, args.max_texture_size, clip_requests.get(name)
+            )
             all_entries[name] = entries
             reports.append(report)
-    except (BuildError, GlbError, SkeletonError, PayloadError, PngError, TextureError) as error:
+    except (
+        BuildError,
+        ClipError,
+        GlbError,
+        SkeletonError,
+        PayloadError,
+        PngError,
+        TextureError,
+    ) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
