@@ -1,7 +1,11 @@
 //! Deterministic run plans and floor layouts. This module has no renderer state:
 //! the same `(seed, room)` always produces the same rooms, tiles and puddles.
-//! Straight material bands reflect the six authored transition tiles; arbitrary
-//! corners and junctions need more art before they can be admitted here.
+//! The small room uses authored straight transitions. The larger world keeps
+//! organic region boundaries as terrain-neighbour data for future edge blending;
+//! the authored straight tiles alone cannot cover corners and junctions.
+
+use grimoire::prelude::dmath;
+use std::collections::VecDeque;
 
 /// Tiles along either axis of the current 48 m combat-room prototype.
 pub const FLOOR_SIDE: usize = 12;
@@ -227,10 +231,23 @@ pub struct WorldChunk {
     pub x: u8,
     /// Zero-based chunk Y coordinate.
     pub y: u8,
-    /// Row-major one-metre tiles.
-    pub tiles: [TileInstance; WORLD_CHUNK_SIDE * WORLD_CHUNK_SIDE],
+    /// Row-major one-metre tiles, including boundary-blending information.
+    pub tiles: [WorldTile; WORLD_CHUNK_SIDE * WORLD_CHUNK_SIDE],
     /// World-space puddle placements, in centimetres.
     pub puddles: [PuddlePlacement; PUDDLES_PER_CHUNK],
+}
+
+/// One logical tile. Adjacent terrain labels let the renderer soften curved
+/// borders without demanding corner variants of every hand-painted texture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WorldTile {
+    /// One of the authored base textures; no straight transition is forced onto a corner.
+    pub visual: TileInstance,
+    /// Terrain occupying most of this square metre.
+    pub terrain: Terrain,
+    /// Neighbours in north, east, south, west order. At world edges this repeats
+    /// the nearest in-bounds terrain.
+    pub adjacent: [Terrain; 4],
 }
 
 /// A room's purpose in the linear run plan. The current combat prototype only
@@ -457,20 +474,217 @@ pub fn generate_floor(seed: u64, district: ArenaDistrict) -> RoomFloor {
     }
 }
 
-fn world_terrain_layout(seed: u64, district: ArenaDistrict) -> (usize, usize, [Terrain; 3]) {
-    let mut rng = Rng::new(seed ^ 0x2E7A_1A9D_004D_2560);
-    let first = 64 + rng.below(32) as usize;
-    let second = 160 + rng.below(32) as usize;
-    let mut terrains = district.terrains();
-    if rng.below(2) == 1 {
-        terrains.reverse();
+struct RegionSite {
+    x: i32,
+    y: i32,
+    radius: f32,
+    phase: f32,
+    terrain: Terrain,
+}
+
+impl RegionSite {
+    fn contains(&self, x: i32, y: i32) -> bool {
+        let dx = x - self.x;
+        let dy = y - self.y;
+        // Reject most tiles before the trigonometry. All sites are at least 20
+        // tiles from the world edge and at least 34 tiles from one another.
+        let squared = dx * dx + dy * dy;
+        if squared > 16 * 16 {
+            return false;
+        }
+        let angle = dmath::atan2(dy as f32, dx as f32);
+        let outline = self.radius
+            * (0.83
+                + 0.18 * dmath::sin(3.0 * angle + self.phase)
+                + 0.12 * dmath::sin(5.0 * angle - self.phase * 0.7));
+        squared as f32 <= outline * outline
     }
-    (first, second, terrains)
+}
+
+/// Seeded organic terrain plan, reusable across all 256 independently rendered
+/// chunks. Construct it once per world; the free function below is a shortcut.
+pub struct WorldPlan {
+    seed: u64,
+    background: Terrain,
+    path_terrain: Terrain,
+    path_phase: f32,
+    path_second_phase: f32,
+    sites: Vec<RegionSite>,
+    terrain_map: Vec<Terrain>,
+}
+
+impl WorldPlan {
+    /// Plan coherent regions for one world seed and biome.
+    #[must_use]
+    pub fn new(seed: u64, district: ArenaDistrict) -> Self {
+        use Terrain::{Ash, Bone, Earth, Iron, Stone, Wood};
+        // Buildings and ground have a dominant material. Ruined wooden floors,
+        // scorched patches and bone beds form distinct islands within it.
+        // Patch types never touch: every pair has an authored transition with
+        // the background, while unsupported patch-to-patch seams are avoided.
+        let [background, first, second] = match district {
+            ArenaDistrict::Crypt => [Stone, Wood, Earth],
+            ArenaDistrict::Foundry => [Iron, Stone, Ash],
+            ArenaDistrict::Ossuary => [Stone, Earth, Bone],
+        };
+        let biome_salt = (district as u64 + 1).wrapping_mul(0xD1B5_4A32_D192_ED03);
+        let mut rng = Rng::new(seed ^ biome_salt ^ 0x2E7A_1A9D_004D_2560);
+        let path_phase = rng.below(628) as f32 / 100.0;
+        let path_second_phase = rng.below(628) as f32 / 100.0;
+        let mut sites: Vec<RegionSite> = Vec::with_capacity(24);
+        for _ in 0..1000 {
+            if sites.len() == 24 {
+                break;
+            }
+            let x = 20 + rng.below(216) as i32;
+            let y = 20 + rng.below(216) as i32;
+            let first_patch = sites.len().is_multiple_of(2);
+            let distance_to_path =
+                (x as f32 - Self::path_center_at(y, path_phase, path_second_phase)).abs();
+            let second_patch_clearance = (-16..=16).step_by(4).all(|offset| {
+                (x as f32 - Self::path_center_at(y + offset, path_phase, path_second_phase)).abs()
+                    >= 30.0
+            });
+            if (first_patch && distance_to_path > 35.0) || (!first_patch && !second_patch_clearance)
+            {
+                continue;
+            }
+            if sites.iter().any(|site| {
+                let dx = site.x - x;
+                let dy = site.y - y;
+                dx * dx + dy * dy < 34 * 34
+            }) {
+                continue;
+            }
+            sites.push(RegionSite {
+                x,
+                y,
+                radius: (9 + rng.below(5)) as f32,
+                phase: rng.below(628) as f32 / 100.0,
+                terrain: if first_patch { first } else { second },
+            });
+        }
+        let mut plan = Self {
+            seed,
+            background,
+            path_terrain: first,
+            path_phase,
+            path_second_phase,
+            sites,
+            terrain_map: Vec::new(),
+        };
+        let mut terrain_map: Vec<_> = (0..WORLD_SIDE * WORLD_SIDE)
+            .map(|index| {
+                plan.raw_terrain_at((index % WORLD_SIDE) as i32, (index / WORLD_SIDE) as i32)
+            })
+            .collect();
+        merge_small_regions(&mut terrain_map);
+        plan.terrain_map = terrain_map;
+        plan
+    }
+
+    fn path_center_at(y: i32, phase: f32, second_phase: f32) -> f32 {
+        128.0
+            + 20.0 * dmath::sin(y as f32 * 0.025 + phase)
+            + 11.0 * dmath::sin(y as f32 * 0.071 + second_phase)
+    }
+
+    fn raw_terrain_at(&self, x: i32, y: i32) -> Terrain {
+        let x = x.clamp(0, WORLD_SIDE as i32 - 1);
+        let y = y.clamp(0, WORLD_SIDE as i32 - 1);
+        let center = Self::path_center_at(y, self.path_phase, self.path_second_phase);
+        let half_width = 6.0 + 2.0 * dmath::sin(y as f32 * 0.044 + self.path_second_phase);
+        if (x as f32 - center).abs() <= half_width {
+            return self.path_terrain;
+        }
+        self.sites
+            .iter()
+            .find(|site| site.contains(x, y))
+            .map_or(self.background, |site| site.terrain)
+    }
+
+    fn terrain_at(&self, x: i32, y: i32) -> Terrain {
+        let x = x.clamp(0, WORLD_SIDE as i32 - 1) as usize;
+        let y = y.clamp(0, WORLD_SIDE as i32 - 1) as usize;
+        self.terrain_map[y * WORLD_SIDE + x]
+    }
+
+    /// Generate a section from this plan, with no seam at a chunk boundary.
+    #[must_use]
+    pub fn chunk(&self, chunk_x: usize, chunk_y: usize) -> Option<WorldChunk> {
+        generate_chunk_from_plan(self, chunk_x, chunk_y)
+    }
+}
+
+fn merge_small_regions(map: &mut [Terrain]) {
+    const PALETTE: [Terrain; 6] = [
+        Terrain::Stone,
+        Terrain::Wood,
+        Terrain::Iron,
+        Terrain::Earth,
+        Terrain::Bone,
+        Terrain::Ash,
+    ];
+    loop {
+        let snapshot = map.to_vec();
+        let mut seen = vec![false; map.len()];
+        let mut merged = false;
+        for start in 0..map.len() {
+            if seen[start] {
+                continue;
+            }
+            let mut cells = Vec::new();
+            let mut queue = VecDeque::from([start]);
+            let mut neighbours = [0_usize; 6];
+            seen[start] = true;
+            while let Some(index) = queue.pop_front() {
+                cells.push(index);
+                let x = index % WORLD_SIDE;
+                let y = index / WORLD_SIDE;
+                for next in [
+                    (x > 0).then(|| index - 1),
+                    (x + 1 < WORLD_SIDE).then(|| index + 1),
+                    (y > 0).then(|| index - WORLD_SIDE),
+                    (y + 1 < WORLD_SIDE).then(|| index + WORLD_SIDE),
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    if snapshot[next] != snapshot[start] {
+                        neighbours[snapshot[next] as usize] += 1;
+                    } else if !seen[next] {
+                        seen[next] = true;
+                        queue.push_back(next);
+                    }
+                }
+            }
+            if cells.len() < 32
+                && let Some((colour, _)) = neighbours
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, count)| **count > 0)
+                    .max_by_key(|(_, count)| **count)
+            {
+                for index in cells {
+                    map[index] = PALETTE[colour];
+                }
+                // One component per pass makes the count of connected
+                // regions fall strictly; two small neighbours cannot swap
+                // colours forever in the same pass.
+                merged = true;
+                break;
+            }
+        }
+        if !merged {
+            break;
+        }
+    }
 }
 
 /// Generate a 16 by 16 metre world section without allocating a world-sized
 /// texture. Any section can be regenerated from its seed and coordinates.
-/// The current authored transitions support straight boundaries only.
+/// Irregular regions have a minimum contiguous area of 32 tiles; blending at
+/// their edges needs the adjacent terrain labels carried by [`WorldTile`].
 #[must_use]
 pub fn generate_world_chunk(
     seed: u64,
@@ -478,30 +692,41 @@ pub fn generate_world_chunk(
     chunk_x: usize,
     chunk_y: usize,
 ) -> Option<WorldChunk> {
+    WorldPlan::new(seed, district).chunk(chunk_x, chunk_y)
+}
+
+fn generate_chunk_from_plan(
+    layout: &WorldPlan,
+    chunk_x: usize,
+    chunk_y: usize,
+) -> Option<WorldChunk> {
     if chunk_x >= WORLD_CHUNKS_PER_SIDE || chunk_y >= WORLD_CHUNKS_PER_SIDE {
         return None;
     }
-    let (first, second, terrains) = world_terrain_layout(seed, district);
     let tiles = std::array::from_fn(|index| {
-        let col = chunk_x * WORLD_CHUNK_SIDE + index % WORLD_CHUNK_SIDE;
-        let row = chunk_y * WORLD_CHUNK_SIDE + index / WORLD_CHUNK_SIDE;
-        if col == first {
-            transition(terrains[0], terrains[1])
-        } else if col == second {
-            transition(terrains[1], terrains[2])
-        } else {
-            let zone = usize::from(col > first) + usize::from(col > second);
-            let mut rng =
-                Rng::new(seed ^ ((col as u64) << 32) ^ row as u64 ^ 0x7505_C0DE_A11C_E123);
-            TileInstance {
-                id: choose_base(&mut rng, terrains[zone]),
+        let col = (chunk_x * WORLD_CHUNK_SIDE + index % WORLD_CHUNK_SIDE) as i32;
+        let row = (chunk_y * WORLD_CHUNK_SIDE + index / WORLD_CHUNK_SIDE) as i32;
+        let terrain = layout.terrain_at(col, row);
+        let mut rng =
+            Rng::new(layout.seed ^ ((col as u64) << 32) ^ row as u64 ^ 0x7505_C0DE_A11C_E123);
+        WorldTile {
+            visual: TileInstance {
+                id: choose_base(&mut rng, terrain),
                 turns: 0,
-            }
+            },
+            terrain,
+            adjacent: [
+                layout.terrain_at(col, row + 1),
+                layout.terrain_at(col + 1, row),
+                layout.terrain_at(col, row - 1),
+                layout.terrain_at(col - 1, row),
+            ],
         }
     });
     let puddles = std::array::from_fn(|index| {
         let mut rng = Rng::new(
-            seed ^ ((chunk_x as u64) << 40)
+            layout.seed
+                ^ ((chunk_x as u64) << 40)
                 ^ ((chunk_y as u64) << 24)
                 ^ index as u64
                 ^ 0xD00D_1E55_2560_0001,
@@ -510,10 +735,10 @@ pub fn generate_world_chunk(
         let local_y_cm = 80 + rng.below(1440) as i16;
         let world_x_cm = (chunk_x as i16 * WORLD_CHUNK_SIDE as i16 - 128) * 100 + local_x_cm;
         let world_y_cm = (chunk_y as i16 * WORLD_CHUNK_SIDE as i16 - 128) * 100 + local_y_cm;
-        let col = chunk_x * WORLD_CHUNK_SIDE + local_x_cm as usize / 100;
-        let zone = usize::from(col > first) + usize::from(col > second);
+        let col = (chunk_x * WORLD_CHUNK_SIDE + local_x_cm as usize / 100) as i32;
+        let row = (chunk_y * WORLD_CHUNK_SIDE + local_y_cm as usize / 100) as i32;
         PuddlePlacement {
-            kind: puddle_kind(terrains[zone]),
+            kind: puddle_kind(layout.terrain_at(col, row)),
             x_cm: world_x_cm,
             y_cm: world_y_cm,
             size_cm: 70 + rng.below(71) as u16,
@@ -564,7 +789,7 @@ pub fn validate_floor(floor: &RoomFloor) -> Result<(), (usize, usize, &'static s
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeSet, VecDeque};
 
     use super::*;
 
@@ -651,7 +876,7 @@ mod tests {
     }
 
     #[test]
-    fn metre_scale_world_chunks_cover_256_metres_without_socket_gaps() {
+    fn metre_scale_world_chunks_cover_256_metres_without_chunk_seams() {
         assert_eq!(WORLD_SIDE * WORLD_TILE_SIZE_M as usize, 256);
         assert_eq!(WORLD_CHUNKS_PER_SIDE * WORLD_CHUNK_SIDE, WORLD_SIDE);
         for district in [
@@ -659,10 +884,11 @@ mod tests {
             ArenaDistrict::Foundry,
             ArenaDistrict::Ossuary,
         ] {
+            let plan = WorldPlan::new(41, district);
             let chunks: Vec<_> = (0..WORLD_CHUNKS_PER_SIDE)
                 .flat_map(|y| {
-                    (0..WORLD_CHUNKS_PER_SIDE)
-                        .map(move |x| generate_world_chunk(41, district, x, y).unwrap())
+                    let plan = &plan;
+                    (0..WORLD_CHUNKS_PER_SIDE).map(move |x| plan.chunk(x, y).unwrap())
                 })
                 .collect();
             for row in 0..WORLD_SIDE {
@@ -671,25 +897,31 @@ mod tests {
                         [(row / WORLD_CHUNK_SIDE) * WORLD_CHUNKS_PER_SIDE + col / WORLD_CHUNK_SIDE];
                     let local =
                         (row % WORLD_CHUNK_SIDE) * WORLD_CHUNK_SIDE + col % WORLD_CHUNK_SIDE;
-                    let here = edges(chunk.tiles[local]);
+                    let here = chunk.tiles[local];
+                    assert_eq!(here.visual.id.terrains(), (here.terrain, here.terrain));
                     if col + 1 < WORLD_SIDE {
                         let next_chunk = &chunks[(row / WORLD_CHUNK_SIDE) * WORLD_CHUNKS_PER_SIDE
                             + (col + 1) / WORLD_CHUNK_SIDE];
-                        let next = edges(
-                            next_chunk.tiles[(row % WORLD_CHUNK_SIDE) * WORLD_CHUNK_SIDE
-                                + (col + 1) % WORLD_CHUNK_SIDE],
-                        );
-                        assert_eq!(here[1], next[3], "east gap at {col},{row}");
+                        let next = next_chunk.tiles[(row % WORLD_CHUNK_SIDE) * WORLD_CHUNK_SIDE
+                            + (col + 1) % WORLD_CHUNK_SIDE];
+                        assert_eq!(here.adjacent[1], next.terrain, "east gap at {col},{row}");
+                        assert_eq!(next.adjacent[3], here.terrain);
+                        if here.terrain != next.terrain {
+                            transition(here.terrain, next.terrain);
+                        }
                     }
                     if row + 1 < WORLD_SIDE {
                         let next_chunk = &chunks[((row + 1) / WORLD_CHUNK_SIDE)
                             * WORLD_CHUNKS_PER_SIDE
                             + col / WORLD_CHUNK_SIDE];
-                        let next = edges(
-                            next_chunk.tiles[((row + 1) % WORLD_CHUNK_SIDE) * WORLD_CHUNK_SIDE
-                                + col % WORLD_CHUNK_SIDE],
-                        );
-                        assert_eq!(here[2], next[0], "north gap at {col},{row}");
+                        let next = next_chunk.tiles[((row + 1) % WORLD_CHUNK_SIDE)
+                            * WORLD_CHUNK_SIDE
+                            + col % WORLD_CHUNK_SIDE];
+                        assert_eq!(here.adjacent[0], next.terrain, "north gap at {col},{row}");
+                        assert_eq!(next.adjacent[2], here.terrain);
+                        if here.terrain != next.terrain {
+                            transition(here.terrain, next.terrain);
+                        }
                     }
                 }
             }
@@ -716,5 +948,73 @@ mod tests {
             a,
             generate_world_chunk(41, ArenaDistrict::Crypt, 8, 8).unwrap()
         );
+    }
+
+    #[test]
+    fn every_organic_region_has_at_least_32_connected_tiles() {
+        for seed in 0..100 {
+            for district in [
+                ArenaDistrict::Crypt,
+                ArenaDistrict::Foundry,
+                ArenaDistrict::Ossuary,
+            ] {
+                let plan = WorldPlan::new(seed, district);
+                let mut terrain = vec![Terrain::Stone; WORLD_SIDE * WORLD_SIDE];
+                for cy in 0..WORLD_CHUNKS_PER_SIDE {
+                    for cx in 0..WORLD_CHUNKS_PER_SIDE {
+                        let chunk = plan.chunk(cx, cy).unwrap();
+                        for local_y in 0..WORLD_CHUNK_SIDE {
+                            for local_x in 0..WORLD_CHUNK_SIDE {
+                                let x = cx * WORLD_CHUNK_SIDE + local_x;
+                                let y = cy * WORLD_CHUNK_SIDE + local_y;
+                                terrain[y * WORLD_SIDE + x] =
+                                    chunk.tiles[local_y * WORLD_CHUNK_SIDE + local_x].terrain;
+                            }
+                        }
+                    }
+                }
+                let mut seen = vec![false; terrain.len()];
+                let mut regions = 0;
+                for start in 0..terrain.len() {
+                    if seen[start] {
+                        continue;
+                    }
+                    let mut queue = VecDeque::from([start]);
+                    seen[start] = true;
+                    let mut area = 0;
+                    while let Some(index) = queue.pop_front() {
+                        area += 1;
+                        let x = index % WORLD_SIDE;
+                        let y = index / WORLD_SIDE;
+                        for neighbor in [
+                            (x > 0).then(|| index - 1),
+                            (x + 1 < WORLD_SIDE).then(|| index + 1),
+                            (y > 0).then(|| index - WORLD_SIDE),
+                            (y + 1 < WORLD_SIDE).then(|| index + WORLD_SIDE),
+                        ]
+                        .into_iter()
+                        .flatten()
+                        {
+                            if !seen[neighbor] && terrain[neighbor] == terrain[start] {
+                                seen[neighbor] = true;
+                                queue.push_back(neighbor);
+                            }
+                        }
+                    }
+                    assert!(
+                        area >= 32,
+                        "seed {seed}, {district:?}, region {regions} at ({}, {}) {:?}: {area} tiles",
+                        start % WORLD_SIDE,
+                        start / WORLD_SIDE,
+                        terrain[start]
+                    );
+                    regions += 1;
+                }
+                assert!(
+                    regions >= 10,
+                    "seed {seed}, {district:?}: only {regions} regions"
+                );
+            }
+        }
     }
 }
