@@ -1,0 +1,804 @@
+{
+  "schemaVersion": 1,
+  "tileSizeM": 4.0,
+  "status": "concept art and logical sockets; pixel seams and transition corners need production QA",
+  "edgeOrder": "N/S left-to-right; E/W top-to-bottom; rotation clockwise",
+  "tiles": [
+    {
+      "id": "stone_ornate_intact",
+      "kind": "base",
+      "terrain": "stone",
+      "damageVisual": 0,
+      "spawnWeight": 5,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "stone",
+          "stone"
+        ],
+        "E": [
+          "stone",
+          "stone"
+        ],
+        "S": [
+          "stone",
+          "stone"
+        ],
+        "W": [
+          "stone",
+          "stone"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "stone_ornate_intact.png",
+      "originalSha256": "06be1e9a4725b606d6618d3d1af54bd04dfddcc31156a45787d895bec95688eb",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 20.3,
+        "topBottomMeanAbs8bit": 41.3
+      },
+      "sha256": "fd124b7e2573bd4fbe52f4e1e3427655bd374059cd2f033a8e356087180b4f11"
+    },
+    {
+      "id": "stone_ornate_cracked",
+      "kind": "base",
+      "terrain": "stone",
+      "damageVisual": 1,
+      "spawnWeight": 8,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "stone",
+          "stone"
+        ],
+        "E": [
+          "stone",
+          "stone"
+        ],
+        "S": [
+          "stone",
+          "stone"
+        ],
+        "W": [
+          "stone",
+          "stone"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "stone_ornate_cracked.png",
+      "originalSha256": "72b998cf331081f9564c1a35549bac1c04eaa427f693ba26355d4c15d7a325a2",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 17.3,
+        "topBottomMeanAbs8bit": 46.3
+      },
+      "sha256": "869294272382373eaae74f487b8dbb08b24929de441fa2781a174bc0b063626a"
+    },
+    {
+      "id": "stone_ornate_shattered",
+      "kind": "base",
+      "terrain": "stone",
+      "damageVisual": 3,
+      "spawnWeight": 2,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "stone",
+          "stone"
+        ],
+        "E": [
+          "stone",
+          "stone"
+        ],
+        "S": [
+          "stone",
+          "stone"
+        ],
+        "W": [
+          "stone",
+          "stone"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "stone_ornate_shattered.png",
+      "originalSha256": "4384c1df16746ac4219f03e385964f60e6222adcc88026800be3ba7cf26fdbdf",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 20.6,
+        "topBottomMeanAbs8bit": 46.4
+      },
+      "sha256": "a4afef86fc1ef2f7ad9ed5068d16d64dbcac574fda3dce151cd701bacb2377f0"
+    },
+    {
+      "id": "stone_plain",
+      "kind": "base",
+      "terrain": "stone",
+      "damageVisual": 1,
+      "spawnWeight": 8,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "stone",
+          "stone"
+        ],
+        "E": [
+          "stone",
+          "stone"
+        ],
+        "S": [
+          "stone",
+          "stone"
+        ],
+        "W": [
+          "stone",
+          "stone"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "stone_plain.png",
+      "originalSha256": "7c0810974b91a946aee713dd3f9a86c7aebe8a006835cbfe47377af94ef38964",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 23.9,
+        "topBottomMeanAbs8bit": 20.9
+      },
+      "sha256": "cc8349970abc8729d069d438442cf761beba65f8790feb4fd60c053ed6b1cf78"
+    },
+    {
+      "id": "stone_mossy",
+      "kind": "base",
+      "terrain": "stone",
+      "damageVisual": 2,
+      "spawnWeight": 3,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "stone",
+          "stone"
+        ],
+        "E": [
+          "stone",
+          "stone"
+        ],
+        "S": [
+          "stone",
+          "stone"
+        ],
+        "W": [
+          "stone",
+          "stone"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "stone_mossy.png",
+      "originalSha256": "f8b06b46af344e9572d01e9dfc489bf9597a186b49f53170988a16d746307dc5",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 12.6,
+        "topBottomMeanAbs8bit": 30.2
+      },
+      "sha256": "954baf796c1eccf095e8df20623eba31a82b3f1c9eca654908918daad49de9db"
+    },
+    {
+      "id": "wood_oak",
+      "kind": "base",
+      "terrain": "wood",
+      "damageVisual": 0,
+      "spawnWeight": 5,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "wood",
+          "wood"
+        ],
+        "E": [
+          "wood",
+          "wood"
+        ],
+        "S": [
+          "wood",
+          "wood"
+        ],
+        "W": [
+          "wood",
+          "wood"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "wood_oak.png",
+      "originalSha256": "a7fa121f22e261c842d28cfbe75a5c158d1440c606eb54038ce2037277c7d010",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 7.4,
+        "topBottomMeanAbs8bit": 45.2
+      },
+      "sha256": "b0b5ebfcacd0868af1c056ec4641c7230c5c824498e117a76a84cd554b540487"
+    },
+    {
+      "id": "wood_rotted",
+      "kind": "base",
+      "terrain": "wood",
+      "damageVisual": 3,
+      "spawnWeight": 3,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "wood",
+          "wood"
+        ],
+        "E": [
+          "wood",
+          "wood"
+        ],
+        "S": [
+          "wood",
+          "wood"
+        ],
+        "W": [
+          "wood",
+          "wood"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "wood_rotted.png",
+      "originalSha256": "01fe3ae4d47b50e74ffb2b6b289610724fc3cd4889b83fbedd37fb5d1d3d135b",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 24.3,
+        "topBottomMeanAbs8bit": 52.8
+      },
+      "sha256": "8cef2541e798d5e1a62f84b6995b5cb5642180f5d9588084cc799c4239130fa1"
+    },
+    {
+      "id": "wood_charred",
+      "kind": "base",
+      "terrain": "wood",
+      "damageVisual": 2,
+      "spawnWeight": 2,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "wood",
+          "wood"
+        ],
+        "E": [
+          "wood",
+          "wood"
+        ],
+        "S": [
+          "wood",
+          "wood"
+        ],
+        "W": [
+          "wood",
+          "wood"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "wood_charred.png",
+      "originalSha256": "423b1cc7ff62177a8e1dce8079b48a1b8b9d41cb39db4345854af1d092cac3ac",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 18.9,
+        "topBottomMeanAbs8bit": 49.6
+      },
+      "sha256": "ed12c5a1ea6449d1eb00e52dd3ed4d4d3a8226c586a2790d17057a9d65db7907"
+    },
+    {
+      "id": "iron_rusted",
+      "kind": "base",
+      "terrain": "iron",
+      "damageVisual": 2,
+      "spawnWeight": 5,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "iron",
+          "iron"
+        ],
+        "E": [
+          "iron",
+          "iron"
+        ],
+        "S": [
+          "iron",
+          "iron"
+        ],
+        "W": [
+          "iron",
+          "iron"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "iron_rusted.png",
+      "originalSha256": "038e3d52096716aa15fc7037de6e5107c2f99d6319c245075986a4fc15014050",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 23.5,
+        "topBottomMeanAbs8bit": 50.1
+      },
+      "sha256": "4fe970a71bd35b8e014954e9eee6b1df38037fd1b66c3765f9a6ffa7844546db"
+    },
+    {
+      "id": "iron_clockwork",
+      "kind": "base",
+      "terrain": "iron",
+      "damageVisual": 1,
+      "spawnWeight": 2,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "iron",
+          "iron"
+        ],
+        "E": [
+          "iron",
+          "iron"
+        ],
+        "S": [
+          "iron",
+          "iron"
+        ],
+        "W": [
+          "iron",
+          "iron"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "iron_clockwork.png",
+      "originalSha256": "db1bcb57ed2047ecc88964acc04b7326da854c8ae2a4a087929713edbfa06931",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 30.1,
+        "topBottomMeanAbs8bit": 47.1
+      },
+      "sha256": "f57ea949b2476d5840710e2357962f7f6eca9ab0636700684ccbee56e99f8e1f"
+    },
+    {
+      "id": "earth_dry",
+      "kind": "base",
+      "terrain": "earth",
+      "damageVisual": 0,
+      "spawnWeight": 6,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "earth",
+          "earth"
+        ],
+        "E": [
+          "earth",
+          "earth"
+        ],
+        "S": [
+          "earth",
+          "earth"
+        ],
+        "W": [
+          "earth",
+          "earth"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "earth_dry.png",
+      "originalSha256": "25c73905f94e95b3aa97b1ff8e0db2d149b990f5627f0d7bdbeaa698ef4c264d",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 21.6,
+        "topBottomMeanAbs8bit": 21.1
+      },
+      "sha256": "666393a810654c7673f87089833e4f618fcede94477f4d93f806c947826f46b2"
+    },
+    {
+      "id": "earth_wet",
+      "kind": "base",
+      "terrain": "earth",
+      "damageVisual": 2,
+      "spawnWeight": 4,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "earth",
+          "earth"
+        ],
+        "E": [
+          "earth",
+          "earth"
+        ],
+        "S": [
+          "earth",
+          "earth"
+        ],
+        "W": [
+          "earth",
+          "earth"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "earth_wet.png",
+      "originalSha256": "bef75c3d5217011171f456911daf14b7a673d43123fb7e233777dc150ee5542e",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 17.2,
+        "topBottomMeanAbs8bit": 17.4
+      },
+      "sha256": "ab04c3d3f0bf17d1a2fdf0387d056d6d92ba4180041c3978a0659a84c53bc225"
+    },
+    {
+      "id": "bone_gravel",
+      "kind": "base",
+      "terrain": "bone",
+      "damageVisual": 2,
+      "spawnWeight": 3,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "bone",
+          "bone"
+        ],
+        "E": [
+          "bone",
+          "bone"
+        ],
+        "S": [
+          "bone",
+          "bone"
+        ],
+        "W": [
+          "bone",
+          "bone"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "bone_gravel.png",
+      "originalSha256": "9f56711989de40936c8176b4707082cba069422bbfd0d431279fdd3a4c74d2fe",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 26.9,
+        "topBottomMeanAbs8bit": 26.7
+      },
+      "sha256": "c50b418b1980f9cce5d172835bda2d7751375ccd45700dfba1b9e5bd1bce68ad"
+    },
+    {
+      "id": "ash_burned",
+      "kind": "base",
+      "terrain": "ash",
+      "damageVisual": 2,
+      "spawnWeight": 3,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "ash",
+          "ash"
+        ],
+        "E": [
+          "ash",
+          "ash"
+        ],
+        "S": [
+          "ash",
+          "ash"
+        ],
+        "W": [
+          "ash",
+          "ash"
+        ]
+      },
+      "rotations": [
+        0
+      ],
+      "image": "ash_burned.png",
+      "originalSha256": "aaebd76565580bdb3fc0e7237a7a79f4c5bd945ae1e4d6aeb1bf98d4a3e0bdd1",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 21.5,
+        "topBottomMeanAbs8bit": 21.2
+      },
+      "sha256": "a34000a682c1e82221f749254294deef6e07355a693fbcb45056695800d11478"
+    },
+    {
+      "id": "edge_stone_wood",
+      "kind": "transition",
+      "terrain": [
+        "stone",
+        "wood"
+      ],
+      "damageVisual": 1,
+      "spawnWeight": 1,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "stone",
+          "wood"
+        ],
+        "E": [
+          "wood",
+          "wood"
+        ],
+        "S": [
+          "stone",
+          "wood"
+        ],
+        "W": [
+          "stone",
+          "stone"
+        ]
+      },
+      "rotations": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "image": "edge_stone_wood.png",
+      "originalSha256": "4fac3837a1baf056510ef32823be903e90ebaaefc01d01a06b21d4c7d227f818",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 27.1,
+        "topBottomMeanAbs8bit": 45.1
+      },
+      "sha256": "3cf233e922c6935a6b85340fac683997ac660dccbf68bb7f86393bd61f21d930"
+    },
+    {
+      "id": "edge_stone_earth",
+      "kind": "transition",
+      "terrain": [
+        "stone",
+        "earth"
+      ],
+      "damageVisual": 1,
+      "spawnWeight": 1,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "stone",
+          "earth"
+        ],
+        "E": [
+          "earth",
+          "earth"
+        ],
+        "S": [
+          "stone",
+          "earth"
+        ],
+        "W": [
+          "stone",
+          "stone"
+        ]
+      },
+      "rotations": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "image": "edge_stone_earth.png",
+      "originalSha256": "7eba18e3cf28ab97c166f605a93db177dd8fa211bab972c7c93113ad6020675e",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 25.0,
+        "topBottomMeanAbs8bit": 35.9
+      },
+      "sha256": "7cdb3fb706504394fbf9de5332df1ad296fe54aac1979173205b2122e7960b46"
+    },
+    {
+      "id": "edge_stone_iron",
+      "kind": "transition",
+      "terrain": [
+        "stone",
+        "iron"
+      ],
+      "damageVisual": 1,
+      "spawnWeight": 1,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "stone",
+          "iron"
+        ],
+        "E": [
+          "iron",
+          "iron"
+        ],
+        "S": [
+          "stone",
+          "iron"
+        ],
+        "W": [
+          "stone",
+          "stone"
+        ]
+      },
+      "rotations": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "image": "edge_stone_iron.png",
+      "originalSha256": "f750d584a637c8dbf65a9b5ae2a3aa659ee3f5de0413e31465c650b8b5c81aa6",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 29.0,
+        "topBottomMeanAbs8bit": 44.8
+      },
+      "sha256": "10374c444dbdd8ff467374c7ca46017967fca0a3def71d292e24edb2c9e2f4ea"
+    },
+    {
+      "id": "edge_wood_earth",
+      "kind": "transition",
+      "terrain": [
+        "wood",
+        "earth"
+      ],
+      "damageVisual": 1,
+      "spawnWeight": 1,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "wood",
+          "earth"
+        ],
+        "E": [
+          "earth",
+          "earth"
+        ],
+        "S": [
+          "wood",
+          "earth"
+        ],
+        "W": [
+          "wood",
+          "wood"
+        ]
+      },
+      "rotations": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "image": "edge_wood_earth.png",
+      "originalSha256": "cc38cbda925bf987276c51d3da87da006bd257d3c6d9678212d01842e1cdeaae",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 25.1,
+        "topBottomMeanAbs8bit": 34.7
+      },
+      "sha256": "401226d8375aa90ce3c70bd84e17fba09e6f1fef588b8de1777fae53a5177963"
+    },
+    {
+      "id": "edge_iron_ash",
+      "kind": "transition",
+      "terrain": [
+        "iron",
+        "ash"
+      ],
+      "damageVisual": 1,
+      "spawnWeight": 1,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "iron",
+          "ash"
+        ],
+        "E": [
+          "ash",
+          "ash"
+        ],
+        "S": [
+          "iron",
+          "ash"
+        ],
+        "W": [
+          "iron",
+          "iron"
+        ]
+      },
+      "rotations": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "image": "edge_iron_ash.png",
+      "originalSha256": "d767577cc1f21f0d66ed4c4eba3ffc9f4bfefd7e869177a7f170359132eaf77d",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 22.2,
+        "topBottomMeanAbs8bit": 33.6
+      },
+      "sha256": "289f3511794fa738b8bcc2a1f61014032169d95ffa9f7188293da418cb253008"
+    },
+    {
+      "id": "edge_stone_bone",
+      "kind": "transition",
+      "terrain": [
+        "stone",
+        "bone"
+      ],
+      "damageVisual": 1,
+      "spawnWeight": 1,
+      "walkable": true,
+      "groundHeightM": 0.0,
+      "gameplayModifier": null,
+      "edges": {
+        "N": [
+          "stone",
+          "bone"
+        ],
+        "E": [
+          "bone",
+          "bone"
+        ],
+        "S": [
+          "stone",
+          "bone"
+        ],
+        "W": [
+          "stone",
+          "stone"
+        ]
+      },
+      "rotations": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "image": "edge_stone_bone.png",
+      "originalSha256": "994a842c5afcf798300a5422ad345ed2215cd2a019afd848af14193d2be32ef9",
+      "originalSeamQA": {
+        "leftRightMeanAbs8bit": 30.5,
+        "topBottomMeanAbs8bit": 42.6
+      },
+      "sha256": "85a1a238eab2dee2f037e5b7548ad8f02459befb9f159998d671a7e35b6ab142"
+    }
+  ]
+}

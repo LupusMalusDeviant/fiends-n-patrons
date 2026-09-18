@@ -70,6 +70,7 @@ Gamepads liest die Plattformschicht der Engine noch nicht; der linke Stick folgt
 | `--seed <u64>` | Seed der Simulation (Standard 0); ungültige Werte beenden mit Fehlermeldung und Exit-Code 2 |
 | `FNP_PLAYER_FIGURE=<Name>`, `FNP_ENEMY_FIGURE=<Name>` | Figur im Pack wählen; mit `:plusz` oder `:minusz` auch, wohin ihr Modell schaut |
 | `--figure-front <auto\|plusz\|minusz>` oder `FNP_FIGURE_FRONT=<...>` | Blickrichtung der Pack-Figuren; Vorgabe `auto` (am Rig gemessen) |
+| `FNP_ARENA_DISTRICT=crypt\|foundry\|ossuary` | Bodenbezirk und dazu verteilte Pfützen wählen; Vorgabe `crypt` |
 | `GRIMOIRE_EXAMPLE_MAX_FRAMES=<n>` | Lauf nach `n` Frames beenden |
 | `GRIMOIRE_GPU_ADAPTER=software` | Software-Adapter der Plattform statt der Grafikkarte |
 | `GRIMOIRE_WINDOW_MONITOR=secondary`, `GRIMOIRE_WINDOW_FOCUS=0` | Fenster auf dem Zweitmonitor und ohne Fokus öffnen (Konvention für Läufe auf dem Entwicklungsrechner) |

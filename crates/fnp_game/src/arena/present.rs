@@ -377,14 +377,9 @@ pub struct StageMeshData {
 /// Builds [`StageMeshData`].
 #[must_use]
 pub fn stage_mesh_data() -> StageMeshData {
-    let mut floor = floor_tile_grid(FLOOR_TILES, FLOOR_TILE_SIZE);
-    // Twelve repeats across the 48 m arena: one authored 4 m stone patch per repeat.
-    // The renderer uses repeat addressing. Keep the mesh's 2 m subdivisions for smooth
-    // interpolation while sampling the texture at a consistent world scale.
-    for vertex in &mut floor.vertices {
-        vertex.uv[0] *= FLOOR_TILES as f32 * 0.5;
-        vertex.uv[1] *= FLOOR_TILES as f32 * 0.5;
-    }
+    // The 12 x 12 authored modules are baked into one colour image. Keep the
+    // mesh's normalized UVs, so its 48 m extent samples the entire district.
+    let floor = floor_tile_grid(FLOOR_TILES, FLOOR_TILE_SIZE);
     StageMeshData {
         floor,
         pillar: octagonal_pillar(PILLAR_RADIUS, PILLAR_HEIGHT),
@@ -435,6 +430,8 @@ pub struct ArenaVisuals {
     pub floor: MeshHandle,
     /// Base colour, tangent normal and ORM for the stone floor, when available.
     pub floor_textures: Option<[TextureHandle; 3]>,
+    /// Which baked procedural district supplies the floor and its puddle dressing.
+    pub district: ArenaDistrict,
     /// Blood, plague and void decals; absent in placeholder-only tests.
     pub puddles: Option<[PuddleVisual; 3]>,
     /// Registered [`StageMeshData::pillar`].
@@ -455,10 +452,45 @@ impl ArenaVisuals {
             imp: FigureVisual::placeholder(MeshHandle(0)),
             floor: MeshHandle(0),
             floor_textures: None,
+            district: ArenaDistrict::Crypt,
             puddles: None,
             pillar: MeshHandle(0),
             block: MeshHandle(0),
             marker_ring: MeshHandle(0),
+        }
+    }
+}
+
+/// First-room floor layouts baked from the 20 compatible floor modules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArenaDistrict {
+    /// Stone, wood, then damp earth.
+    Crypt,
+    /// Stone, clockwork iron, then ash.
+    Foundry,
+    /// Earth, stone, then scattered bones.
+    Ossuary,
+}
+
+impl ArenaDistrict {
+    /// Stable name used by `FNP_ARENA_DISTRICT` and the floor asset filenames.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Crypt => "crypt",
+            Self::Foundry => "foundry",
+            Self::Ossuary => "ossuary",
+        }
+    }
+
+    /// Parse one of the three authored districts.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "crypt" => Some(Self::Crypt),
+            "foundry" => Some(Self::Foundry),
+            "ossuary" => Some(Self::Ossuary),
+            _ => None,
         }
     }
 }
@@ -682,6 +714,49 @@ pub fn apply_arena_lighting(frame: &mut StageFrame) {
     frame.shadow_config = shadows;
 }
 
+/// Blood (0), plague bile (1), and void ichor (2), distributed across each
+/// district's material bands. All are visual only and stay inside the curbs.
+fn puddle_placements(district: ArenaDistrict) -> &'static [(usize, [f32; 2], f32)] {
+    match district {
+        ArenaDistrict::Crypt => &[
+            (0, [-8.3, -4.8], 1.5),
+            (0, [-7.1, 2.9], 1.2),
+            (2, [-4.8, -0.9], 1.3),
+            (0, [-2.7, 4.8], 1.1),
+            (0, [-1.2, -3.4], 1.5),
+            (2, [1.6, 1.6], 1.2),
+            (0, [3.6, 4.8], 1.1),
+            (1, [5.0, -4.9], 1.4),
+            (1, [8.2, -0.5], 1.3),
+            (1, [7.2, 4.7], 1.1),
+        ],
+        ArenaDistrict::Foundry => &[
+            (0, [-8.2, 4.7], 1.5),
+            (0, [-7.0, -3.7], 1.2),
+            (2, [-4.7, 1.0], 1.2),
+            (2, [-2.2, -4.8], 1.5),
+            (0, [-0.6, 4.8], 1.2),
+            (2, [1.4, -0.6], 1.3),
+            (1, [3.4, -4.8], 1.2),
+            (1, [5.7, 2.5], 1.5),
+            (0, [8.3, 4.8], 1.1),
+            (1, [8.1, -2.7], 1.2),
+        ],
+        ArenaDistrict::Ossuary => &[
+            (1, [-8.1, -4.7], 1.4),
+            (1, [-7.2, 2.7], 1.1),
+            (0, [-5.2, 4.9], 1.1),
+            (0, [-3.9, -3.6], 1.5),
+            (2, [-1.3, 0.8], 1.3),
+            (0, [1.1, 4.8], 1.2),
+            (2, [3.4, -4.8], 1.1),
+            (0, [5.0, -1.9], 1.2),
+            (2, [8.2, 2.5], 1.5),
+            (1, [8.1, 4.9], 1.1),
+        ],
+    }
+}
+
 /// The static part of the stage: lighting, floor, pillars, curbs, the imp's plinth.
 fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
     apply_arena_lighting(frame);
@@ -691,14 +766,7 @@ fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
         .push(mesh(visuals.floor, slot::FLOOR, IDENTITY));
 
     if let Some(puddles) = visuals.puddles {
-        // Fixed first-room dressing. The eventual level generator can replace this
-        // list with seeded tile placements without changing the decal meshes.
-        for (kind, at, size) in [
-            (0, [-4.8, -1.2], 1.45),
-            (1, [5.0, 1.4], 1.35),
-            (2, [-5.8, 4.6], 1.20),
-            (0, [4.3, -5.1], 1.0),
-        ] {
+        for &(kind, at, size) in puddle_placements(visuals.district) {
             let transform = mul(translation([at[0], at[1], 0.025]), scale([size, size, 1.0]));
             frame.meshes.push(mesh(
                 puddles[kind].mesh,
@@ -1058,6 +1126,30 @@ mod tests {
         assert_eq!(stats.bullets_drawn, 0);
         // Floor, 9 pillars, 2 braziers, 4 curbs, plinth, imp, soul and the marker ring.
         assert_eq!(frame.meshes.len(), 1 + 9 + 2 + 4 + 1 + 1 + 1 + 1);
+    }
+
+    #[test]
+    fn district_puddles_stay_inside_the_arena_and_use_all_three_species() {
+        for district in [
+            ArenaDistrict::Crypt,
+            ArenaDistrict::Foundry,
+            ArenaDistrict::Ossuary,
+        ] {
+            assert_eq!(ArenaDistrict::parse(district.name()), Some(district));
+            let placements = puddle_placements(district);
+            assert_eq!(placements.len(), 10);
+            for kind in 0..3 {
+                assert!(placements.iter().any(|placement| placement.0 == kind));
+            }
+            for &(kind, [x, y], size) in placements {
+                assert!(kind < 3);
+                assert!(size > 0.0);
+                // The silhouette is at most 1.5 local units wide and 1 unit tall.
+                assert!(x.abs() + size * 0.75 < ARENA_HALF.x);
+                assert!(y.abs() + size * 0.5 < ARENA_HALF.y);
+            }
+        }
+        assert_eq!(ArenaDistrict::parse("unknown"), None);
     }
 
     #[test]

@@ -40,8 +40,8 @@ use fnp_app::figures::PACK_FIGURES_FRONT;
 use fnp_app::stage::stage_renderer_config;
 use fnp_game::TICK_RATE_HZ;
 use fnp_game::arena::present::{
-    AuthoredFront, CAMERA_PRESETS, FigureVisual, Mat4, apply_arena_lighting, camera_preset,
-    floor_material, mul, player_lantern, rotation_z, stage_mesh_data, translation,
+    ArenaDistrict, AuthoredFront, CAMERA_PRESETS, FigureVisual, Mat4, apply_arena_lighting,
+    camera_preset, floor_material, mul, player_lantern, rotation_z, stage_mesh_data, translation,
 };
 use grimoire::adapters::figure_assets::load_figure_into;
 use grimoire::debug::FrameProfile;
@@ -388,7 +388,7 @@ impl GamePlugin for ShowcaseStage {
             self.posed = Some((index, matrices));
         }
         self.floor = Some(assets.register_mesh(stage_mesh_data().floor)?);
-        self.floor_textures = Some(arena_floor::register(assets)?);
+        self.floor_textures = Some(arena_floor::register(assets, ArenaDistrict::Crypt)?);
         Ok(())
     }
 

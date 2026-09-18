@@ -201,3 +201,48 @@ fn capture_a_scripted_run() {
     assert_eq!(stats.bullets_rejected_invalid, 0, "{stats:?}");
     assert_eq!(stats.bullets_rejected_palette_space, 0, "{stats:?}");
 }
+
+/// Short software-rendered visual smoke test for a selected floor district.
+/// Unlike the long scripted capture, this only checks that the scene loads and
+/// renders two frames; it does not expect a combat hit or round restart.
+#[test]
+#[ignore = "needs FNP_FIGURE_PACK, FNP_WORLD_PREVIEW_DIR, and GRIMOIRE_GPU_ADAPTER=software"]
+fn capture_a_district_preview() {
+    let (Some(pack), Some(dir)) = (
+        std::env::var_os("FNP_FIGURE_PACK"),
+        std::env::var_os("FNP_WORLD_PREVIEW_DIR"),
+    ) else {
+        eprintln!("FNP_FIGURE_PACK or FNP_WORLD_PREVIEW_DIR not set; skipping the preview");
+        return;
+    };
+    let dir = PathBuf::from(dir);
+    std::fs::create_dir_all(&dir).expect("the preview directory can be created");
+    let pack = PathBuf::from(pack);
+    let figures = resolve_figures(&pack, fnp_app::figures::FrontChoice::Measure, None, None)
+        .expect("the pack has a player and an enemy figure");
+    let (app, _) = arena_app(ArenaConfig {
+        seed: 42,
+        figures: Figures::Pack {
+            path: pack,
+            figures,
+        },
+        max_frames: None,
+        camera_preset: 0,
+    });
+    let mut run = OffscreenRun::new(
+        960,
+        540,
+        2,
+        Duration::from_nanos(1_000_000_000 / u64::from(TICK_RATE_HZ)),
+    );
+    run.capture_every = 1;
+    let mut written = 0_u32;
+    let result = app.run_offscreen(run, &mut script, &mut |_, rgba| {
+        let path = dir.join(format!("frame_{written:05}.ppm"));
+        write_ppm(&path, (960, 540), rgba).expect("the preview image can be written");
+        written += 1;
+    });
+    let report = result.expect("the district renders through the software adapter");
+    assert_eq!(report.frames, 2);
+    assert_eq!(written, 2);
+}

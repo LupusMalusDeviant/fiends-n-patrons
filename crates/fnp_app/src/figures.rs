@@ -12,8 +12,8 @@ use std::fmt;
 use std::path::Path;
 
 use fnp_game::arena::present::{
-    ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, PuddleVisual, StageMeshData,
-    stage_mesh_data,
+    ArenaDistrict, ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, PuddleVisual,
+    StageMeshData, stage_mesh_data,
 };
 use grimoire::RenderAssets;
 use grimoire::adapters::figure_assets::{
@@ -396,6 +396,8 @@ pub enum VisualsError {
     StageMesh(MeshError),
     /// The bundled arena floor maps could not be registered.
     StageTexture(TextureError),
+    /// The named floor district is not one of the three bundled layouts.
+    InvalidDistrict(String),
     /// A puddle decal mesh or colour could not be registered.
     Puddle(crate::arena_puddles::PuddleError),
 }
@@ -410,6 +412,10 @@ impl fmt::Display for VisualsError {
             }
             Self::StageMesh(error) => write!(f, "cannot register a stage mesh: {error}"),
             Self::StageTexture(error) => write!(f, "cannot register an arena texture: {error}"),
+            Self::InvalidDistrict(name) => write!(
+                f,
+                "unknown arena district `{name}`; choose crypt, foundry, or ossuary"
+            ),
             Self::Puddle(error) => write!(f, "cannot register a puddle: {error}"),
         }
     }
@@ -566,8 +572,13 @@ pub fn load_visuals(
     let player = load(&figures.player)?;
     let enemy = load(&figures.enemy)?;
     let stage = register_stage(assets, stage_mesh_data())?;
+    let district = std::env::var("FNP_ARENA_DISTRICT")
+        .ok()
+        .map(|name| ArenaDistrict::parse(&name).ok_or(VisualsError::InvalidDistrict(name)))
+        .transpose()?
+        .unwrap_or(ArenaDistrict::Crypt);
     let floor_textures =
-        crate::arena_floor::register(assets).map_err(VisualsError::StageTexture)?;
+        crate::arena_floor::register(assets, district).map_err(VisualsError::StageTexture)?;
     let puddles = crate::arena_puddles::register(assets)
         .map_err(VisualsError::Puddle)?
         .map(|puddle| PuddleVisual {
@@ -616,6 +627,7 @@ pub fn load_visuals(
             imp: enemy_visual,
             floor: stage.floor,
             floor_textures: Some(floor_textures),
+            district,
             puddles: Some(puddles),
             pillar: stage.pillar,
             block: stage.block,
@@ -663,6 +675,7 @@ pub fn placeholder_visuals(assets: &mut dyn RenderAssets) -> Result<ArenaVisuals
         imp: FigureVisual::placeholder(stage.block),
         floor: stage.floor,
         floor_textures: None,
+        district: ArenaDistrict::Crypt,
         puddles: None,
         pillar: stage.pillar,
         block: stage.block,

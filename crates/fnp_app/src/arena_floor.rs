@@ -1,26 +1,37 @@
-//! Bundled ornate crypt slabs matching the project's illustrated floor cluster.
-//! The source art is perspective concept art; its top-down companion is kept in
-//! `_showcase/From2DTO3D/level_ground_pbr/crypt_ornate_topdown_v1.png`.
-//! The colour image is embedded as raw RGBA and a neutral normal/rough stone ORM
-//! map leaves the painted highlights alone until measured height maps exist.
+//! Three seeded arena districts baked from the project's 20 authored floor modules.
+//! The offline builder and the downsampled source tiles are included with the app.
+//! A neutral normal/ORM map is provisional until measured PBR maps exist.
 
+use fnp_game::arena::present::ArenaDistrict;
 use grimoire::RenderAssets;
 use grimoire::render::{TextureColorSpace, TextureData, TextureError, TextureHandle};
 
-const SIDE: u32 = 512;
-const BASE: &[u8; (SIDE * SIDE * 4) as usize] =
-    include_bytes!("../assets/arena_floor/crypt_ornate_basecolor.rgba");
+const SIDE: u32 = 1152;
+const CRYPT: &[u8; (SIDE * SIDE * 4) as usize] =
+    include_bytes!("../assets/arena_floor/arena_crypt.rgba");
+const FOUNDRY: &[u8; (SIDE * SIDE * 4) as usize] =
+    include_bytes!("../assets/arena_floor/arena_foundry.rgba");
+const OSSUARY: &[u8; (SIDE * SIDE * 4) as usize] =
+    include_bytes!("../assets/arena_floor/arena_ossuary.rgba");
 
 /// Registers the base colour (sRGB), normal and ORM maps (linear) in that order.
 ///
 /// # Errors
 /// Forwards a texture registration failure, including software and hardware renderer errors.
-pub fn register(assets: &mut dyn RenderAssets) -> Result<[TextureHandle; 3], TextureError> {
+pub fn register(
+    assets: &mut dyn RenderAssets,
+    district: ArenaDistrict,
+) -> Result<[TextureHandle; 3], TextureError> {
+    let base = match district {
+        ArenaDistrict::Crypt => CRYPT,
+        ArenaDistrict::Foundry => FOUNDRY,
+        ArenaDistrict::Ossuary => OSSUARY,
+    };
     Ok([
         assets.register_texture(TextureData {
             width: SIDE,
             height: SIDE,
-            pixels: BASE.to_vec(),
+            pixels: base.to_vec(),
             color_space: TextureColorSpace::Srgb,
         })?,
         assets.register_texture(TextureData {
