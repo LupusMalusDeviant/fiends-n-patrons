@@ -12,8 +12,8 @@ use std::fmt;
 use std::path::Path;
 
 use fnp_game::arena::present::{
-    ArenaDistrict, ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, PuddleVisual,
-    StageMeshData, stage_mesh_data,
+    ArenaDistrict, ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, PropVisuals,
+    PuddleVisual, StageMeshData, stage_mesh_data,
 };
 use fnp_game::worldgen::{WorldPlan, generate_floor, generate_run, validate_floor};
 use grimoire::RenderAssets;
@@ -537,6 +537,8 @@ struct StageHandles {
     pillar: MeshHandle,
     block: MeshHandle,
     marker_ring: MeshHandle,
+    gravestone: MeshHandle,
+    urn: MeshHandle,
 }
 
 fn register_stage(
@@ -549,6 +551,8 @@ fn register_stage(
         pillar: register(meshes.pillar)?,
         block: register(meshes.block)?,
         marker_ring: register(meshes.marker_ring)?,
+        gravestone: register(meshes.gravestone)?,
+        urn: register(meshes.urn)?,
     })
 }
 
@@ -574,6 +578,8 @@ pub fn load_visuals(
     let player = load(&figures.player)?;
     let enemy = load(&figures.enemy)?;
     let stage = register_stage(assets, stage_mesh_data())?;
+    let prop_colors =
+        crate::arena_floor::register_prop_textures(assets).map_err(VisualsError::StageTexture)?;
     let run_plan = generate_run(world_seed);
     let first_stage = &run_plan.stages[0];
     let district = std::env::var("FNP_ARENA_DISTRICT")
@@ -660,6 +666,12 @@ pub fn load_visuals(
             pillar: stage.pillar,
             block: stage.block,
             marker_ring: stage.marker_ring,
+            props: Some(PropVisuals {
+                gravestone: stage.gravestone,
+                urn: stage.urn,
+                colors: prop_colors,
+                seed: world_seed,
+            }),
         },
         summary,
     ))
@@ -709,6 +721,7 @@ pub fn placeholder_visuals(assets: &mut dyn RenderAssets) -> Result<ArenaVisuals
         pillar: stage.pillar,
         block: stage.block,
         marker_ring: stage.marker_ring,
+        props: None,
     })
 }
 #[cfg(test)]

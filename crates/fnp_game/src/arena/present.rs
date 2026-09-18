@@ -374,6 +374,10 @@ pub struct StageMeshData {
     pub block: MeshData,
     /// Flat ring on the ground marking the player's hit capsule.
     pub marker_ring: MeshData,
+    /// Fractured gravestone, modelled at gameplay scale.
+    pub gravestone: MeshData,
+    /// Twelve-sided ceramic funerary urn.
+    pub urn: MeshData,
 }
 
 /// Builds [`StageMeshData`].
@@ -387,7 +391,96 @@ pub fn stage_mesh_data() -> StageMeshData {
         pillar: octagonal_pillar(PILLAR_RADIUS, PILLAR_HEIGHT),
         block: altar_block(1.0, 1.0, 1.0),
         marker_ring: flat_ring(0.82, 1.0, 40),
+        gravestone: extruded_stone(),
+        urn: funerary_urn(),
     }
+}
+
+/// A slab with a broken, asymmetric crown; the side faces retain real thickness.
+fn extruded_stone() -> MeshData {
+    let outline = [
+        [-0.42, 0.0],
+        [0.42, 0.0],
+        [0.42, 1.05],
+        [0.24, 1.35],
+        [0.07, 1.29],
+        [-0.07, 1.46],
+        [-0.22, 1.25],
+        [-0.42, 1.17],
+    ];
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    for (y, normal) in [(-0.105, [0.0, -1.0, 0.0]), (0.105, [0.0, 1.0, 0.0])] {
+        let start = vertices.len() as u32;
+        for [x, z] in outline {
+            vertices.push(MeshVertex::new([x, y, z], normal, [x + 0.5, z / 1.5]));
+        }
+        for i in 1..outline.len() as u32 - 1 {
+            if y < 0.0 {
+                indices.extend_from_slice(&[start, start + i + 1, start + i]);
+            } else {
+                indices.extend_from_slice(&[start, start + i, start + i + 1]);
+            }
+        }
+    }
+    for i in 0..outline.len() {
+        let a = outline[i];
+        let b = outline[(i + 1) % outline.len()];
+        let dx = b[0] - a[0];
+        let dz = b[1] - a[1];
+        let length = f32::sqrt(dx * dx + dz * dz);
+        let normal = [dz / length, 0.0, -dx / length];
+        let base = vertices.len() as u32;
+        for (x, y, z) in [
+            (a[0], -0.105, a[1]),
+            (b[0], -0.105, b[1]),
+            (b[0], 0.105, b[1]),
+            (a[0], 0.105, a[1]),
+        ] {
+            vertices.push(MeshVertex::new([x, y, z], normal, [x + 0.5, z / 1.5]));
+        }
+        indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+    }
+    MeshData { vertices, indices }
+}
+
+/// Revolved silhouette with neck, shoulder, belly, foot and an open mouth.
+fn funerary_urn() -> MeshData {
+    let profile = [
+        (0.17_f32, 0.0_f32),
+        (0.22, 0.08),
+        (0.29, 0.18),
+        (0.36, 0.45),
+        (0.32, 0.7),
+        (0.22, 0.82),
+        (0.19, 0.96),
+        (0.23, 1.0),
+    ];
+    const SEGMENTS: u32 = 12;
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    for (ring, &(radius, z)) in profile.iter().enumerate() {
+        for segment in 0..=SEGMENTS {
+            let theta = segment as f32 / SEGMENTS as f32 * dmath::TAU;
+            let (s, c) = (dmath::sin(theta), dmath::cos(theta));
+            vertices.push(MeshVertex::new(
+                [radius * c, radius * s, z],
+                [c, s, 0.2],
+                [
+                    segment as f32 / SEGMENTS as f32,
+                    ring as f32 / (profile.len() - 1) as f32,
+                ],
+            ));
+        }
+    }
+    for ring in 0..profile.len() as u32 - 1 {
+        for segment in 0..SEGMENTS {
+            let a = ring * (SEGMENTS + 1) + segment;
+            let b = a + SEGMENTS + 1;
+            indices.extend_from_slice(&[a, a + 1, b, a + 1, b + 1, b]);
+        }
+    }
+    MeshData { vertices, indices }
 }
 
 /// A flat ring on `Z = 0` between `inner` and `outer` radius, normal `+Z`.
@@ -444,6 +537,21 @@ pub struct ArenaVisuals {
     pub block: MeshHandle,
     /// Registered [`StageMeshData::marker_ring`].
     pub marker_ring: MeshHandle,
+    /// Seeded visual dressing; absent from headless placeholder scenes.
+    pub props: Option<PropVisuals>,
+}
+
+/// Static level props registered once and reused as instances.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PropVisuals {
+    /// Fractured gravestone mesh.
+    pub gravestone: MeshHandle,
+    /// Ceramic urn mesh.
+    pub urn: MeshHandle,
+    /// Cracked stone and dark clay base colour maps.
+    pub colors: [TextureHandle; 2],
+    /// Seed controlling the arrangement without changing gameplay state.
+    pub seed: u64,
 }
 
 impl ArenaVisuals {
@@ -462,6 +570,7 @@ impl ArenaVisuals {
             pillar: MeshHandle(0),
             block: MeshHandle(0),
             marker_ring: MeshHandle(0),
+            props: None,
         }
     }
 }
@@ -611,6 +720,13 @@ fn push_stage_materials(frame: &mut StageFrame, visuals: &ArenaVisuals) {
             frame.materials.push(mat);
         }
     }
+    if let Some(props) = visuals.props {
+        let mut stone = material([0.76, 0.76, 0.76], 0.92, [0.0; 3]);
+        stone.base_color_texture = Some(props.colors[0]);
+        let mut clay = material([0.72, 0.66, 0.64], 0.82, [0.0; 3]);
+        clay.base_color_texture = Some(props.colors[1]);
+        frame.materials.extend([stone, clay]);
+    }
 }
 
 /// The arena floor's material, shared with the offscreen comparison scene.
@@ -709,6 +825,7 @@ fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
             ));
         }
     }
+    push_level_props(visuals, frame);
 
     let edge = ARENA_HALF + Vec2::splat(CURB_GAP + CURB_DEPTH * 0.5);
     let pillar_x = edge.x + CURB_DEPTH;
@@ -762,6 +879,39 @@ fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
     );
     frame.meshes.push(mesh(visuals.block, slot::PLINTH, plinth));
     frame.blob_shadows.push(blob(IMP_POSITION, 1.6, 0.5));
+}
+
+/// Dress the perimeter without covering the centre where enemies and bullets move.
+/// The visuals are intentionally non-colliding until prop collision is part of worldgen.
+fn push_level_props(visuals: &ArenaVisuals, frame: &mut StageFrame) {
+    let Some(props) = visuals.props else {
+        return;
+    };
+    let stone_slot = slot::COUNT + if visuals.puddles.is_some() { 3 } else { 0 };
+    let positions = [
+        ([-8.4, 2.8], false),
+        ([-7.2, 4.3], true),
+        ([-8.5, -0.5], false),
+        ([8.4, 2.7], false),
+        ([7.2, 4.2], true),
+        ([8.5, -0.6], false),
+        ([-8.2, -3.6], true),
+        ([8.2, -3.5], true),
+    ];
+    for (index, (at, urn)) in positions.into_iter().enumerate() {
+        let mixed = props.seed.wrapping_add(index as u64 * 0x9E37_79B9);
+        let turn = ((mixed ^ (mixed >> 23)) % 23) as f32 * 0.045 - 0.5;
+        let at = Vec2::new(at[0], at[1]);
+        let transform = mul(translation([at.x, at.y, 0.015]), rotation_z(turn));
+        frame.meshes.push(mesh(
+            if urn { props.urn } else { props.gravestone },
+            stone_slot + u32::from(urn),
+            transform,
+        ));
+        frame
+            .blob_shadows
+            .push(blob(at, if urn { 0.45 } else { 0.6 }, 0.38));
+    }
 }
 
 fn push_pillar(visuals: &ArenaVisuals, frame: &mut StageFrame, at: Vec2, torch_index: &mut u32) {

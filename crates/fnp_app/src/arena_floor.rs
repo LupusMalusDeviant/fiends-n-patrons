@@ -10,7 +10,12 @@ const TILE_SIDE: usize = 96;
 const TILE_BYTES: usize = TILE_SIDE * TILE_SIDE * 4;
 const SIDE: u32 = (FLOOR_SIDE * TILE_SIDE) as u32;
 const WORLD_PATCH_TILES: usize = 48;
-const WORLD_PATCH_TILE_PIXELS: usize = SIDE as usize / WORLD_PATCH_TILES;
+// The 48 m preview has one-metre world tiles. Reusing the 12-room texture's
+// 1152 pixels gave each world tile only 24 pixels and visibly blurred the art.
+// Half of each 96 px source tile keeps details while limiting the upload to
+// 2304² RGBA (about 20 MiB) on the hardware renderer.
+const WORLD_PATCH_TILE_PIXELS: usize = TILE_SIDE / 2;
+const WORLD_PATCH_SIDE: u32 = (WORLD_PATCH_TILES * WORLD_PATCH_TILE_PIXELS) as u32;
 
 // The order matches worldgen::TileId and tiles/catalog.json. The offline asset
 // builder checks source hashes; the runtime never needs a PNG decoder.
@@ -130,7 +135,7 @@ fn sample_world_pixel(
 
 fn bake_world_puddles(plan: &WorldPlan, first: (usize, usize), pixels: &mut [u8]) {
     use crate::arena_puddles::{SOURCE_HEIGHT, SOURCE_WIDTH, pixels_for_kind};
-    let side = SIDE as usize;
+    let side = WORLD_PATCH_SIDE as usize;
     let last_x = first.0 + WORLD_PATCH_TILES;
     let last_y = first.1 + WORLD_PATCH_TILES;
     for chunk_y in first.1 / 16..last_y.div_ceil(16) {
@@ -181,11 +186,11 @@ fn bake_world_puddles(plan: &WorldPlan, first: (usize, usize), pixels: &mut [u8]
     }
 }
 
-/// The engine's present floor is 48 m wide. For a software preview, show a
+/// The engine's present floor is 48 m wide. For the playable preview, show a
 /// selected 48 × 48 one-metre patch from the full generated 256 m map. The 16 m
 /// generation chunks never appear as visual boundaries in this texture.
 fn compose_world_patch(plan: &WorldPlan, center: (usize, usize)) -> Vec<u8> {
-    let side = SIDE as usize;
+    let side = WORLD_PATCH_SIDE as usize;
     let mut pixels = vec![255_u8; side * side * 4];
     let half = WORLD_PATCH_TILES / 2;
     let first_x = center.0.clamp(half, WORLD_SIDE - half) - half;
@@ -233,7 +238,7 @@ pub fn register(
     assets: &mut dyn RenderAssets,
     floor: &RoomFloor,
 ) -> Result<[TextureHandle; 3], TextureError> {
-    register_pixels(assets, compose(floor))
+    register_pixels(assets, compose(floor), SIDE)
 }
 
 /// Register a selected patch of a generated 256 m world for an offscreen
@@ -246,17 +251,36 @@ pub fn register_world_patch(
     plan: &WorldPlan,
     center: (usize, usize),
 ) -> Result<[TextureHandle; 3], TextureError> {
-    register_pixels(assets, compose_world_patch(plan, center))
+    register_pixels(assets, compose_world_patch(plan, center), WORLD_PATCH_SIDE)
+}
+
+/// Reuse the authored cracked stone and wet earth art for lightweight 3D props.
+///
+/// # Errors
+/// Forwards texture registration failures.
+pub fn register_prop_textures(
+    assets: &mut dyn RenderAssets,
+) -> Result<[TextureHandle; 2], TextureError> {
+    let mut register = |index: usize| {
+        assets.register_texture(TextureData {
+            width: TILE_SIDE as u32,
+            height: TILE_SIDE as u32,
+            pixels: TILES[index].to_vec(),
+            color_space: TextureColorSpace::Srgb,
+        })
+    };
+    Ok([register(1)?, register(11)?])
 }
 
 fn register_pixels(
     assets: &mut dyn RenderAssets,
     pixels: Vec<u8>,
+    side: u32,
 ) -> Result<[TextureHandle; 3], TextureError> {
     Ok([
         assets.register_texture(TextureData {
-            width: SIDE,
-            height: SIDE,
+            width: side,
+            height: side,
             pixels,
             color_space: TextureColorSpace::Srgb,
         })?,
@@ -292,10 +316,16 @@ mod tests {
 
     #[test]
     fn central_world_patch_fits_the_existing_floor_mesh() {
-        assert_eq!(WORLD_PATCH_TILES * WORLD_PATCH_TILE_PIXELS, SIDE as usize);
+        assert_eq!(
+            WORLD_PATCH_TILES * WORLD_PATCH_TILE_PIXELS,
+            WORLD_PATCH_SIDE as usize
+        );
         let first = compose_world_patch(&WorldPlan::new(41, ArenaDistrict::Crypt), (100, 128));
         let second = compose_world_patch(&WorldPlan::new(42, ArenaDistrict::Crypt), (100, 128));
-        assert_eq!(first.len(), SIDE as usize * SIDE as usize * 4);
+        assert_eq!(
+            first.len(),
+            WORLD_PATCH_SIDE as usize * WORLD_PATCH_SIDE as usize * 4
+        );
         assert_ne!(first, second);
     }
 
@@ -319,11 +349,13 @@ mod tests {
         let pixel = |samples: &[WorldTile], x, y| {
             sample_world_pixel(samples, (10, 5), (24, 24), (x, y), 41)
         };
-        assert_ne!(pixel(&flat, 12, 23), pixel(&mixed, 12, 23),);
-        assert_ne!(pixel(&flat, 23, 12), pixel(&mixed, 23, 12));
-        assert_ne!(pixel(&flat, 12, 0), pixel(&mixed, 12, 0));
-        assert_ne!(pixel(&flat, 23, 23), pixel(&mixed, 23, 23));
-        assert_eq!(pixel(&flat, 0, 12), pixel(&mixed, 0, 12));
+        let mid = WORLD_PATCH_TILE_PIXELS / 2;
+        let far = WORLD_PATCH_TILE_PIXELS - 1;
+        assert_ne!(pixel(&flat, mid, far), pixel(&mixed, mid, far));
+        assert_ne!(pixel(&flat, far, mid), pixel(&mixed, far, mid));
+        assert_ne!(pixel(&flat, mid, 0), pixel(&mixed, mid, 0));
+        assert_ne!(pixel(&flat, far, far), pixel(&mixed, far, far));
+        assert_eq!(pixel(&flat, 0, mid), pixel(&mixed, 0, mid));
     }
 
     #[test]
@@ -344,7 +376,7 @@ mod tests {
         let plan = WorldPlan::new(41, ArenaDistrict::Crypt);
         let left = compose_world_patch(&plan, (100, 128));
         let right = compose_world_patch(&plan, (101, 128));
-        let side = SIDE as usize;
+        let side = WORLD_PATCH_SIDE as usize;
         for row in 0..side {
             let left_start = (row * side + WORLD_PATCH_TILE_PIXELS) * 4;
             let right_start = row * side * 4;
@@ -367,7 +399,7 @@ mod tests {
             return;
         };
         let pixels = compose_world_patch(&WorldPlan::new(41, ArenaDistrict::Crypt), (108, 128));
-        let mut ppm = format!("P6\n{SIDE} {SIDE}\n255\n").into_bytes();
+        let mut ppm = format!("P6\n{WORLD_PATCH_SIDE} {WORLD_PATCH_SIDE}\n255\n").into_bytes();
         for rgba in pixels.as_chunks::<4>().0 {
             ppm.extend_from_slice(&rgba[..3]);
         }
