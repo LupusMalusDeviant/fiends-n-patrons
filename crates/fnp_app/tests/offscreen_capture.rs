@@ -126,8 +126,11 @@ fn capture_a_scripted_run() {
         .unwrap_or((960, 540));
 
     let pack = PathBuf::from(pack);
+    let front = fnp_app::cli::resolve_front(None, std::env::var_os(fnp_app::cli::FRONT_VAR))
+        .expect("a valid figure front");
     let figures = resolve_figures(
         &pack,
+        front,
         std::env::var(FNP_PLAYER_FIGURE_VAR).ok().as_deref(),
         std::env::var(FNP_ENEMY_FIGURE_VAR).ok().as_deref(),
     )

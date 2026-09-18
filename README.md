@@ -42,9 +42,13 @@ cargo run --release -p fnp_app -- --pack <Pfad zu figures.pack> --seed 42
 ```
 
 Das Spiel braucht ein Figuren-Pack mit einer Spieler- und einer Gegner-Figur (erzeugt von
-`assets_src/figure_pack/`, nicht versioniert). Gesucht wird zuerst nach den neuen Figuren `witch`
-und `imp_hi3d`, sonst nach den älteren `soul` und `imp`; `FNP_PLAYER_FIGURE` und
-`FNP_ENEMY_FIGURE` wählen eine andere. Das Spiel löst das auf, **bevor** ein Fenster aufgeht: Fehlt
+`assets_src/figure_pack/`, nicht versioniert). Gesucht wird zuerst nach den Figuren `witch`
+und `imp_hi3d`, sonst nach `soul` und `imp`; `FNP_PLAYER_FIGURE` und `FNP_ENEMY_FIGURE` wählen eine
+andere. Wohin eine Figur schaut, sagt nicht ihr Name — die Packs benennen Figuren über
+Generationen gleich —, sondern ihr eigenes Rig: Das Spiel misst es an den Zehen-, Fuß- oder
+Hand-Gelenken der Ruhepose (`--figure-front auto`, Vorgabe) und schreibt das Ergebnis beim Start in
+die Konsole. `--figure-front plusz|minusz` (oder `FNP_FIGURE_FRONT`) setzt es fest, falls ein Rig
+einmal nichts hergibt. Das Spiel löst das auf, **bevor** ein Fenster aufgeht: Fehlt
 das Pack oder hat es keine passende Figur, endet es mit einer Meldung, die sagt, welche Figuren das
 Pack hat, und Exit-Code 2. Die Toolchain ist über `rust-toolchain.toml` gepinnt (1.98.1).
 Im Spiel:
@@ -65,6 +69,7 @@ Gamepads liest die Plattformschicht der Engine noch nicht; der linke Stick folgt
 | `--pack <Pfad>` oder `FNP_FIGURE_PACK=<Pfad>` | Figuren-Pack (Pflicht); das Argument gewinnt |
 | `--seed <u64>` | Seed der Simulation (Standard 0); ungültige Werte beenden mit Fehlermeldung und Exit-Code 2 |
 | `FNP_PLAYER_FIGURE=<Name>`, `FNP_ENEMY_FIGURE=<Name>` | Figur im Pack wählen; mit `:plusz` oder `:minusz` auch, wohin ihr Modell schaut |
+| `--figure-front <auto\|plusz\|minusz>` oder `FNP_FIGURE_FRONT=<...>` | Blickrichtung der Pack-Figuren; Vorgabe `auto` (am Rig gemessen) |
 | `GRIMOIRE_EXAMPLE_MAX_FRAMES=<n>` | Lauf nach `n` Frames beenden |
 | `GRIMOIRE_GPU_ADAPTER=software` | Software-Adapter der Plattform statt der Grafikkarte |
 | `GRIMOIRE_WINDOW_MONITOR=secondary`, `GRIMOIRE_WINDOW_FOCUS=0` | Fenster auf dem Zweitmonitor und ohne Fokus öffnen (Konvention für Läufe auf dem Entwicklungsrechner) |

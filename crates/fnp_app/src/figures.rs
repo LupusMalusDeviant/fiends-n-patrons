@@ -17,6 +17,7 @@ use fnp_game::arena::present::{
 use grimoire::RenderAssets;
 use grimoire::adapters::figure_assets::{FigureLoadError, load_figure_into};
 use grimoire::platform::StdFileSystem;
+use grimoire::render::figure_format::SkeletonData;
 use grimoire::render::{MeshError, MeshHandle};
 use grimoire_assets::{AssetError, AssetSource, AssetStore, PackReader};
 
@@ -26,90 +27,192 @@ pub const FNP_PLAYER_FIGURE_VAR: &str = "FNP_PLAYER_FIGURE";
 /// Environment variable that names the enemy figure inside the pack.
 pub const FNP_ENEMY_FIGURE_VAR: &str = "FNP_ENEMY_FIGURE";
 
-/// A figure the game knows by name, with the direction its model was authored to look in.
-///
-/// The game's convention is glTF +Z (the glTF standard and the Hi3D assets); the figures of the
-/// earlier packs (`soul`, `imp` of rounds 3 and 4) look along glTF -Z and are turned by half a
-/// turn before anything else ([`AuthoredFront`]). Measured on those rigs: hands and toes sit at
-/// negative glTF Z, the imp's tail at positive Z, and the `.L` joints at negative X, which is the
-/// figure's left only when it looks along -Z.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct KnownFigure {
-    /// Name inside the pack (`figures/<name>/figure`).
-    pub name: &'static str,
-    /// Which way the model looks.
-    pub front: AuthoredFront,
-}
-
 /// Player figures the game looks for, best first.
-pub const PLAYER_FIGURES: &[KnownFigure] = &[
-    KnownFigure {
-        name: "witch",
-        front: AuthoredFront::PlusZ,
-    },
-    KnownFigure {
-        name: "soul",
-        front: AuthoredFront::MinusZ,
-    },
-];
+pub const PLAYER_FIGURES: &[&str] = &["witch", "soul"];
 
 /// Enemy figures the game looks for, best first.
-pub const ENEMY_FIGURES: &[KnownFigure] = &[
-    KnownFigure {
-        name: "imp_hi3d",
-        front: AuthoredFront::PlusZ,
-    },
-    KnownFigure {
-        name: "imp",
-        front: AuthoredFront::MinusZ,
-    },
-];
+pub const ENEMY_FIGURES: &[&str] = &["imp_hi3d", "imp"];
 
-/// Which way a figure the tables do not know is assumed to look: the game's convention.
-pub const UNKNOWN_FIGURE_FRONT: AuthoredFront = AuthoredFront::PlusZ;
+/// Which way a figure whose rig says nothing is assumed to look: the game's convention, glTF +Z
+/// (the glTF standard and the Hi3D assets).
+pub const DEFAULT_FIGURE_FRONT: AuthoredFront = AuthoredFront::PlusZ;
 
-/// Which way the figures of the earlier packs (rounds 3 and 4: `soul`, `imp`) look.
+/// Which way the figures of the earlier packs (rounds 3 and 4) look: glTF -Z, against the
+/// convention, so they are turned by half a turn before anything else ([`AuthoredFront`]).
 pub const PACK_FIGURES_FRONT: AuthoredFront = AuthoredFront::MinusZ;
+
+/// Environment variable that fixes the front of both figures instead of measuring it.
+pub const FNP_FIGURE_FRONT_VAR: &str = "FNP_FIGURE_FRONT";
+
+/// Which way a figure looks, or the order to find out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrontChoice {
+    /// Measure it on the figure's own rig ([`measure_front`]), falling back to the default.
+    Measure,
+    /// Take this front, whatever the rig says.
+    Fixed(AuthoredFront),
+}
+
+/// Joint names whose rest position says where a figure's front is, best first: toes stick out
+/// forward, feet less so, hands hang beside the body but still lead.
+const FRONT_JOINT_HINTS: [&str; 3] = ["toe", "foot", "hand"];
+
+/// How far from the body's middle such a joint has to sit before it counts, in metres.
+const FRONT_JOINT_MIN_OFFSET: f32 = 0.01;
+
+/// Which way the figure of `skeleton` was authored to look, measured on its rest pose.
+///
+/// The pack figures carry the glTF-to-engine axis change in the root joint's rotation, so a joint's
+/// rest position is already in the game's space (X right, Y away from the viewer, Z up). A figure
+/// that follows the convention (glTF +Z is its front) has its toes towards the viewer, at negative
+/// Y; one authored the other way round has them at positive Y.
+///
+/// Returns `None` when the rig has no joint the measurement knows or the joints sit too close to
+/// the middle to decide — then the caller's default applies.
+#[must_use]
+pub fn measure_front(skeleton: &SkeletonData) -> Option<AuthoredFront> {
+    let positions = rest_positions(skeleton);
+    for hint in FRONT_JOINT_HINTS {
+        let mut sum = 0.0_f32;
+        let mut count = 0_u32;
+        for (joint, position) in skeleton.joints.iter().zip(&positions) {
+            if joint.name.to_ascii_lowercase().contains(hint) {
+                sum += position[1];
+                count += 1;
+            }
+        }
+        if count == 0 {
+            continue;
+        }
+        let mean = sum / count as f32;
+        if !mean.is_finite() || mean.abs() < FRONT_JOINT_MIN_OFFSET {
+            continue;
+        }
+        return Some(if mean < 0.0 {
+            AuthoredFront::PlusZ
+        } else {
+            AuthoredFront::MinusZ
+        });
+    }
+    None
+}
+
+/// Rest position of every joint in model space, parents before children (the skeleton's own
+/// invariant), from the rest translations and rotations.
+fn rest_positions(skeleton: &SkeletonData) -> Vec<[f32; 3]> {
+    let mut globals: Vec<[[f32; 3]; 3]> = Vec::with_capacity(skeleton.joints.len());
+    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(skeleton.joints.len());
+    for joint in &skeleton.joints {
+        let local = rotation_matrix(joint.rotation, joint.scale);
+        let (parent_rotation, parent_position) = match joint.parent {
+            Some(parent) => {
+                let index = parent as usize;
+                match (globals.get(index), positions.get(index)) {
+                    (Some(rotation), Some(position)) => (*rotation, *position),
+                    // A forward reference cannot happen (parents come first), but never panic.
+                    _ => (IDENTITY_3, [0.0; 3]),
+                }
+            }
+            None => (IDENTITY_3, [0.0; 3]),
+        };
+        let offset = apply(parent_rotation, joint.translation);
+        positions.push([
+            parent_position[0] + offset[0],
+            parent_position[1] + offset[1],
+            parent_position[2] + offset[2],
+        ]);
+        globals.push(multiply(parent_rotation, local));
+    }
+    positions
+}
+
+/// The 3x3 identity.
+const IDENTITY_3: [[f32; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+
+/// Column-major rotation matrix of the quaternion `(x, y, z, w)` with a per-axis scale.
+fn rotation_matrix(quaternion: [f32; 4], scale: [f32; 3]) -> [[f32; 3]; 3] {
+    let [x, y, z, w] = quaternion;
+    let columns = [
+        [
+            1.0 - 2.0 * (y * y + z * z),
+            2.0 * (x * y + z * w),
+            2.0 * (x * z - y * w),
+        ],
+        [
+            2.0 * (x * y - z * w),
+            1.0 - 2.0 * (x * x + z * z),
+            2.0 * (y * z + x * w),
+        ],
+        [
+            2.0 * (x * z + y * w),
+            2.0 * (y * z - x * w),
+            1.0 - 2.0 * (x * x + y * y),
+        ],
+    ];
+    let mut scaled = columns;
+    for (column, factor) in scaled.iter_mut().zip(scale) {
+        for value in column.iter_mut() {
+            *value *= factor;
+        }
+    }
+    scaled
+}
+
+/// `matrix * vector` for column-major 3x3 matrices.
+fn apply(matrix: [[f32; 3]; 3], vector: [f32; 3]) -> [f32; 3] {
+    let mut out = [0.0_f32; 3];
+    for (column, value) in matrix.iter().zip(vector) {
+        for (slot, entry) in out.iter_mut().zip(column) {
+            *slot += entry * value;
+        }
+    }
+    out
+}
+
+/// `left * right` for column-major 3x3 matrices.
+fn multiply(left: [[f32; 3]; 3], right: [[f32; 3]; 3]) -> [[f32; 3]; 3] {
+    let mut out = IDENTITY_3;
+    for (column, source) in out.iter_mut().zip(right) {
+        *column = apply(left, source);
+    }
+    out
+}
 
 /// A figure picked out of a pack.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChosenFigure {
     /// Name inside the pack.
     pub name: String,
-    /// Which way its model looks.
-    pub front: AuthoredFront,
+    /// Which way its model looks, or the order to measure it.
+    pub front: FrontChoice,
 }
 
 impl ChosenFigure {
-    /// The figure `name`, with the front of the table entry of that name or
-    /// [`UNKNOWN_FIGURE_FRONT`].
+    /// The figure `name`, with `front`.
     #[must_use]
-    pub fn new(name: &str, known: &[KnownFigure]) -> Self {
-        let front = known
-            .iter()
-            .find(|figure| figure.name == name)
-            .map_or(UNKNOWN_FIGURE_FRONT, |figure| figure.front);
+    pub fn new(name: &str, front: FrontChoice) -> Self {
         Self {
             name: name.to_owned(),
             front,
         }
     }
 
-    /// Parses an override of the form `name` or `name:plusz` / `name:minusz`.
+    /// Parses an override of the form `name` or `name:plusz` / `name:minusz`; without a suffix the
+    /// figure's front is `front`.
     ///
     /// # Errors
     /// [`FigureChoiceError::InvalidOverride`] if the value is empty or the suffix is not one of
     /// the two fronts.
     pub fn parse(
         value: &str,
-        known: &[KnownFigure],
+        front: FrontChoice,
         variable: &'static str,
     ) -> Result<Self, FigureChoiceError> {
         let invalid = || FigureChoiceError::InvalidOverride {
             variable,
             value: value.to_owned(),
         };
-        let (name, front) = match value.split_once(':') {
+        let (name, given) = match value.split_once(':') {
             None => (value, None),
             Some((name, "plusz")) => (name, Some(AuthoredFront::PlusZ)),
             Some((name, "minusz")) => (name, Some(AuthoredFront::MinusZ)),
@@ -118,11 +221,10 @@ impl ChosenFigure {
         if name.is_empty() {
             return Err(invalid());
         }
-        let mut chosen = ChosenFigure::new(name, known);
-        if let Some(front) = front {
-            chosen.front = front;
-        }
-        Ok(chosen)
+        Ok(ChosenFigure::new(
+            name,
+            given.map_or(front, FrontChoice::Fixed),
+        ))
     }
 }
 
@@ -214,25 +316,28 @@ fn list(names: &[String]) -> String {
         .join(", ")
 }
 
-/// Picks the player and the enemy out of `available` (the figures a pack has).
+/// Picks the player and the enemy out of `available` (the figures a pack has), both with `front`.
 ///
 /// An override wins over the tables; without one, the first known figure of the role that the
 /// pack has wins, so a pack with `witch` and `imp_hi3d` and one with `soul` and `imp` both run.
+/// The names say nothing about which way a figure looks — the packs reuse them across
+/// generations — so that is `front`'s business.
 ///
 /// # Errors
 /// A [`FigureChoiceError`] naming what was looked for and what the pack has.
 pub fn choose_figures(
     available: &[String],
+    front: FrontChoice,
     player_override: Option<&str>,
     enemy_override: Option<&str>,
 ) -> Result<PackFigures, FigureChoiceError> {
     let pick = |role: &'static str,
-                known: &'static [KnownFigure],
+                known: &'static [&'static str],
                 variable: &'static str,
                 given: Option<&str>|
      -> Result<ChosenFigure, FigureChoiceError> {
         if let Some(value) = given {
-            let chosen = ChosenFigure::parse(value, known, variable)?;
+            let chosen = ChosenFigure::parse(value, front, variable)?;
             if !available.contains(&chosen.name) {
                 return Err(FigureChoiceError::Missing {
                     variable,
@@ -244,14 +349,11 @@ pub fn choose_figures(
         }
         known
             .iter()
-            .find(|figure| available.iter().any(|name| name == figure.name))
-            .map(|figure| ChosenFigure {
-                name: figure.name.to_owned(),
-                front: figure.front,
-            })
+            .find(|figure| available.iter().any(|name| name == *figure))
+            .map(|figure| ChosenFigure::new(figure, front))
             .ok_or_else(|| FigureChoiceError::NoFigure {
                 role,
-                wanted: known.iter().map(|figure| figure.name).collect(),
+                wanted: known.to_vec(),
                 available: available.to_vec(),
                 variable,
             })
@@ -334,11 +436,17 @@ pub fn figures_in_pack(pack: &Path) -> Result<Vec<String>, VisualsError> {
 /// [`VisualsError::OpenPack`] or [`VisualsError::Choice`], both of them before a window opens.
 pub fn resolve_figures(
     pack: &Path,
+    front: FrontChoice,
     player_override: Option<&str>,
     enemy_override: Option<&str>,
 ) -> Result<PackFigures, VisualsError> {
     let available = figures_in_pack(pack)?;
-    Ok(choose_figures(&available, player_override, enemy_override)?)
+    Ok(choose_figures(
+        &available,
+        front,
+        player_override,
+        enemy_override,
+    )?)
 }
 
 /// Summary of what [`load_visuals`] registered, for the startup log.
@@ -358,20 +466,34 @@ pub struct LoadSummary {
     pub enemy_parts: usize,
     /// Height of the enemy's bounds in world units.
     pub enemy_height: f32,
+    /// Which way the player's model looks and whether that was measured or set.
+    pub player_front: (AuthoredFront, bool),
+    /// Which way the enemy's model looks and whether that was measured or set.
+    pub enemy_front: (AuthoredFront, bool),
 }
 
 impl fmt::Display for LoadSummary {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let front = |(front, measured): (AuthoredFront, bool)| {
+            let name = match front {
+                AuthoredFront::PlusZ => "+Z",
+                AuthoredFront::MinusZ => "-Z",
+            };
+            let source = if measured { "measured" } else { "set" };
+            format!("front {name} ({source})")
+        };
         write!(
             f,
-            "player `{}`: {} parts, {} joints, {:.2} m; enemy `{}`: {} parts, {:.2} m",
+            "player `{}`: {} parts, {} joints, {:.2} m, {}; enemy `{}`: {} parts, {:.2} m, {}",
             self.player_name,
             self.player_parts,
             self.player_joints,
             self.player_height,
+            front(self.player_front),
             self.enemy_name,
             self.enemy_parts,
-            self.enemy_height
+            self.enemy_height,
+            front(self.enemy_front)
         )
     }
 }
@@ -419,8 +541,18 @@ pub fn load_visuals(
     let enemy = load(&figures.enemy)?;
     let stage = register_stage(assets, stage_mesh_data())?;
 
-    let player_visual = FigureVisual::from_loaded(&player, figures.player.front);
-    let enemy_visual = FigureVisual::from_loaded(&enemy, figures.enemy.front);
+    // Which way a figure looks is a property of the figure, not of its name: the packs reuse
+    // `soul` and `imp` across generations that were authored differently.
+    let front = |chosen: &ChosenFigure, skeleton: &SkeletonData| match chosen.front {
+        FrontChoice::Fixed(front) => (front, false),
+        FrontChoice::Measure => {
+            measure_front(skeleton).map_or((DEFAULT_FIGURE_FRONT, false), |front| (front, true))
+        }
+    };
+    let (player_front, player_measured) = front(&figures.player, &player.skeleton);
+    let (enemy_front, enemy_measured) = front(&figures.enemy, &enemy.skeleton);
+    let player_visual = FigureVisual::from_loaded(&player, player_front);
+    let enemy_visual = FigureVisual::from_loaded(&enemy, enemy_front);
     let summary = LoadSummary {
         player_name: figures.player.name.clone(),
         player_parts: player.parts.len(),
@@ -429,6 +561,8 @@ pub fn load_visuals(
         enemy_name: figures.enemy.name.clone(),
         enemy_parts: enemy.parts.len(),
         enemy_height: enemy_visual.height,
+        player_front: (player_front, player_measured),
+        enemy_front: (enemy_front, enemy_measured),
     };
     Ok((
         ArenaVisuals {
@@ -459,37 +593,79 @@ pub fn placeholder_visuals(assets: &mut dyn RenderAssets) -> Result<ArenaVisuals
         marker_ring: stage.marker_ring,
     })
 }
-
 #[cfg(test)]
 mod tests {
+    use grimoire::render::figure_format::JointData;
+
     use super::*;
 
     fn names(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| (*value).to_owned()).collect()
     }
 
+    fn joint(name: &str, parent: Option<u32>, translation: [f32; 3]) -> JointData {
+        JointData {
+            parent,
+            inverse_bind: [[0.0; 4]; 4],
+            name: name.to_owned(),
+            translation,
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            scale: [1.0, 1.0, 1.0],
+        }
+    }
+
+    /// A rig with a root, a hip and two toes; `forward` is the direction the toes stick out in.
+    fn rig(forward: f32) -> SkeletonData {
+        SkeletonData {
+            joints: vec![
+                joint("root", None, [0.0, 0.0, 0.0]),
+                joint("hips", Some(0), [0.0, 0.0, 1.0]),
+                joint("toe.l", Some(1), [-0.1, forward, -1.0]),
+                joint("toe.r", Some(1), [0.1, forward, -1.0]),
+            ],
+        }
+    }
+
     #[test]
     fn the_new_pack_gives_the_witch_and_the_hi3d_imp() {
-        let chosen = choose_figures(&names(&["imp_hi3d", "witch"]), None, None).expect("a pair");
+        let chosen = choose_figures(
+            &names(&["imp_hi3d", "witch"]),
+            FrontChoice::Measure,
+            None,
+            None,
+        )
+        .expect("a pair");
         assert_eq!(chosen.player.name, "witch");
-        assert_eq!(chosen.player.front, AuthoredFront::PlusZ);
         assert_eq!(chosen.enemy.name, "imp_hi3d");
-        assert_eq!(chosen.enemy.front, AuthoredFront::PlusZ);
+        assert_eq!(chosen.player.front, FrontChoice::Measure);
     }
 
     #[test]
     fn the_older_pack_still_gives_the_soul_and_the_imp() {
-        let chosen = choose_figures(&names(&["imp", "soul"]), None, None).expect("a pair");
+        let chosen = choose_figures(
+            &names(&["imp", "soul"]),
+            FrontChoice::Fixed(PACK_FIGURES_FRONT),
+            None,
+            None,
+        )
+        .expect("a pair");
         assert_eq!(chosen.player.name, "soul");
-        assert_eq!(chosen.player.front, AuthoredFront::MinusZ);
         assert_eq!(chosen.enemy.name, "imp");
-        assert_eq!(chosen.enemy.front, AuthoredFront::MinusZ);
+        assert_eq!(
+            chosen.enemy.front,
+            FrontChoice::Fixed(AuthoredFront::MinusZ)
+        );
     }
 
     #[test]
     fn a_pack_with_both_generations_prefers_the_new_figures() {
-        let chosen =
-            choose_figures(&names(&["imp", "imp_hi3d", "soul", "witch"]), None, None).expect("ok");
+        let chosen = choose_figures(
+            &names(&["imp", "imp_hi3d", "soul", "witch"]),
+            FrontChoice::Measure,
+            None,
+            None,
+        )
+        .expect("ok");
         assert_eq!(chosen.player.name, "witch");
         assert_eq!(chosen.enemy.name, "imp_hi3d");
     }
@@ -497,24 +673,31 @@ mod tests {
     #[test]
     fn an_override_wins_and_can_say_which_way_the_figure_looks() {
         let available = names(&["imp", "soul", "stranger"]);
-        let chosen =
-            choose_figures(&available, Some("stranger"), Some("imp:plusz")).expect("a pair");
+        let chosen = choose_figures(
+            &available,
+            FrontChoice::Measure,
+            Some("stranger"),
+            Some("imp:plusz"),
+        )
+        .expect("a pair");
         assert_eq!(chosen.player.name, "stranger");
         assert_eq!(
-            chosen.player.front, UNKNOWN_FIGURE_FRONT,
-            "an unknown figure follows the convention"
+            chosen.player.front,
+            FrontChoice::Measure,
+            "without a suffix the rig decides"
         );
         assert_eq!(chosen.enemy.name, "imp");
         assert_eq!(
             chosen.enemy.front,
-            AuthoredFront::PlusZ,
-            "the suffix overrules the table"
+            FrontChoice::Fixed(AuthoredFront::PlusZ),
+            "the suffix overrules everything"
         );
     }
 
     #[test]
     fn a_pack_without_a_player_figure_says_what_it_has() {
-        let error = choose_figures(&names(&["imp", "pillar"]), None, None).expect_err("no player");
+        let error = choose_figures(&names(&["imp", "pillar"]), FrontChoice::Measure, None, None)
+            .expect_err("no player");
         let message = error.to_string();
         assert!(message.contains("no player figure"), "{message}");
         assert!(message.contains("`witch`"), "{message}");
@@ -525,14 +708,50 @@ mod tests {
     #[test]
     fn an_override_that_names_nothing_in_the_pack_is_refused() {
         let available = names(&["imp", "soul"]);
-        let error = choose_figures(&available, Some("witch"), None).expect_err("not in the pack");
+        let error = choose_figures(&available, FrontChoice::Measure, Some("witch"), None)
+            .expect_err("not in the pack");
         assert!(
             matches!(&error, FigureChoiceError::Missing { name, .. } if name == "witch"),
             "{error}"
         );
-        let error = choose_figures(&available, Some("soul:sideways"), None).expect_err("invalid");
+        let error = choose_figures(
+            &available,
+            FrontChoice::Measure,
+            Some("soul:sideways"),
+            None,
+        )
+        .expect_err("invalid");
         assert!(matches!(error, FigureChoiceError::InvalidOverride { .. }));
-        let error = choose_figures(&available, Some(""), None).expect_err("empty");
+        let error =
+            choose_figures(&available, FrontChoice::Measure, Some(""), None).expect_err("empty");
         assert!(matches!(error, FigureChoiceError::InvalidOverride { .. }));
+    }
+
+    #[test]
+    fn the_rig_says_which_way_a_figure_looks() {
+        // Toes towards the viewer (negative Y in the game's space) means the model follows the
+        // convention; away from it means it was authored the other way round.
+        assert_eq!(measure_front(&rig(-0.15)), Some(AuthoredFront::PlusZ));
+        assert_eq!(measure_front(&rig(0.15)), Some(AuthoredFront::MinusZ));
+    }
+
+    #[test]
+    fn a_rig_that_says_nothing_leaves_the_front_open() {
+        // No joint the measurement knows.
+        let anonymous = SkeletonData {
+            joints: vec![joint("bone_0", None, [0.0, 0.0, 0.0])],
+        };
+        assert_eq!(measure_front(&anonymous), None);
+        // Toes right under the body: too close to the middle to decide.
+        assert_eq!(measure_front(&rig(0.0)), None);
+        assert_eq!(measure_front(&rig(FRONT_JOINT_MIN_OFFSET / 2.0)), None);
+    }
+
+    #[test]
+    fn a_parents_rotation_turns_its_children_before_they_are_measured() {
+        // The same rig, turned half a turn around Z by its root: the toes end up behind the body.
+        let mut turned = rig(-0.15);
+        turned.joints[0].rotation = [0.0, 0.0, 1.0, 0.0];
+        assert_eq!(measure_front(&turned), Some(AuthoredFront::MinusZ));
     }
 }

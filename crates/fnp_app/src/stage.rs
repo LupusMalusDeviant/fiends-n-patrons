@@ -447,7 +447,7 @@ mod tests {
     use grimoire::platform::{PlatformEvent, RawInputEvent};
 
     use super::*;
-    use crate::figures::{ChosenFigure, ENEMY_FIGURES, PLAYER_FIGURES};
+    use crate::figures::{ChosenFigure, FrontChoice};
 
     const FRAME: Duration = Duration::from_nanos(1_000_000_000 / TICK_RATE_HZ as u64);
 
@@ -570,8 +570,8 @@ mod tests {
             figures: Figures::Pack {
                 path: PathBuf::from("this/pack/does/not/exist.pack"),
                 figures: PackFigures {
-                    player: ChosenFigure::new("soul", PLAYER_FIGURES),
-                    enemy: ChosenFigure::new("imp", ENEMY_FIGURES),
+                    player: ChosenFigure::new("soul", FrontChoice::Measure),
+                    enemy: ChosenFigure::new("imp", FrontChoice::Measure),
                 },
             },
             max_frames: Some(5),

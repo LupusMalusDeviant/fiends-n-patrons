@@ -11,9 +11,10 @@
 
 use std::process::ExitCode;
 
-use fnp_app::cli::{self, Command, MAX_FRAMES_VAR, PACK_VAR, USAGE};
-use fnp_app::figures::{FNP_ENEMY_FIGURE_VAR, FNP_PLAYER_FIGURE_VAR, resolve_figures};
+use fnp_app::cli::{self, Command, FRONT_VAR, MAX_FRAMES_VAR, PACK_VAR, USAGE};
+use fnp_app::figures::{FNP_ENEMY_FIGURE_VAR, FNP_PLAYER_FIGURE_VAR, FrontChoice, resolve_figures};
 use fnp_app::stage::{ArenaConfig, Figures, arena_app};
+use fnp_game::arena::present::AuthoredFront;
 
 /// Exit code for invalid arguments or environment (as in the BSD `sysexits` `EX_USAGE` spirit).
 const EXIT_USAGE: u8 = 2;
@@ -24,8 +25,8 @@ fn usage_error(error: &cli::ConfigError) -> ExitCode {
 }
 
 fn main() -> ExitCode {
-    let (seed, pack_argument) = match cli::parse_args(std::env::args_os().skip(1)) {
-        Ok(Command::Run { seed, pack }) => (seed, pack),
+    let (seed, pack_argument, front_argument) = match cli::parse_args(std::env::args_os().skip(1)) {
+        Ok(Command::Run { seed, pack, front }) => (seed, pack, front),
         Ok(Command::Help) => {
             println!("{USAGE}");
             return ExitCode::SUCCESS;
@@ -43,11 +44,20 @@ fn main() -> ExitCode {
         Ok(max_frames) => max_frames,
         Err(error) => return usage_error(&error),
     };
+    let front = match cli::resolve_front(front_argument, std::env::var_os(FRONT_VAR)) {
+        Ok(front) => front,
+        Err(error) => return usage_error(&error),
+    };
 
     // Before the window: a pack without a usable pair of figures must not open one.
     let player_figure = std::env::var(FNP_PLAYER_FIGURE_VAR).ok();
     let enemy_figure = std::env::var(FNP_ENEMY_FIGURE_VAR).ok();
-    let figures = match resolve_figures(&pack, player_figure.as_deref(), enemy_figure.as_deref()) {
+    let figures = match resolve_figures(
+        &pack,
+        front,
+        player_figure.as_deref(),
+        enemy_figure.as_deref(),
+    ) {
         Ok(figures) => figures,
         Err(error) => {
             eprintln!("fiends-n-patrons: {error}");
@@ -55,8 +65,14 @@ fn main() -> ExitCode {
         }
     };
     eprintln!(
-        "fiends-n-patrons: figures: player `{}`, enemy `{}`",
-        figures.player.name, figures.enemy.name
+        "fiends-n-patrons: figures: player `{}`, enemy `{}` (front: {})",
+        figures.player.name,
+        figures.enemy.name,
+        match front {
+            FrontChoice::Measure => "measured on each rig",
+            FrontChoice::Fixed(AuthoredFront::PlusZ) => "+Z, set",
+            FrontChoice::Fixed(AuthoredFront::MinusZ) => "-Z, set",
+        }
     );
 
     let (app, _stats) = arena_app(ArenaConfig {

@@ -4,6 +4,10 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use fnp_game::arena::present::AuthoredFront;
+
+use crate::figures::FrontChoice;
+
 /// Seed used when `--seed` is not given; runs without a seed stay reproducible.
 pub const DEFAULT_SEED: u64 = 0;
 
@@ -13,6 +17,10 @@ pub const MAX_FRAMES_VAR: &str = "GRIMOIRE_EXAMPLE_MAX_FRAMES";
 /// Environment variable naming the figure pack when `--pack` is not given.
 pub const PACK_VAR: &str = "FNP_FIGURE_PACK";
 
+/// Environment variable fixing which way the pack's figures look when `--figure-front` is not
+/// given.
+pub const FRONT_VAR: &str = "FNP_FIGURE_FRONT";
+
 /// Usage text printed by `--help` and after argument errors.
 pub const USAGE: &str = "\
 Usage: fiends-n-patrons --pack <figures.pack> [--seed <u64>]
@@ -20,6 +28,9 @@ Usage: fiends-n-patrons --pack <figures.pack> [--seed <u64>]
 Options:
   --pack <path>  Figure pack with a player and an enemy figure (or set FNP_FIGURE_PACK):
                  `witch` and `imp_hi3d`, or the older `soul` and `imp`
+  --figure-front <auto|plusz|minusz>
+                 Which way the pack's figures were authored to look (default auto: measured
+                 on each figure's own rig). The packs of round 4 and earlier are minusz.
   --seed <u64>   Simulation seed (default 0)
   -h, --help     Print this help
 
@@ -37,6 +48,7 @@ Environment:
   FNP_PLAYER_FIGURE=<name>           Player figure in the pack (append `:plusz` or `:minusz`
                                      to say which way its model looks)
   FNP_ENEMY_FIGURE=<name>            Enemy figure in the pack, same form
+  FNP_FIGURE_FRONT=<auto|plusz|minusz>  Like --figure-front, used when it is not given
   GRIMOIRE_EXAMPLE_MAX_FRAMES=<u64>  End the run after this many frames";
 
 /// What the command line asks for.
@@ -48,6 +60,8 @@ pub enum Command {
         seed: u64,
         /// Figure pack given with `--pack`, if any.
         pack: Option<PathBuf>,
+        /// Front given with `--figure-front`, if any.
+        front: Option<FrontChoice>,
     },
     /// Print the usage text and exit successfully.
     Help,
@@ -66,6 +80,12 @@ pub enum ConfigError {
     MissingPackValue,
     /// `--pack` was given more than once.
     DuplicatePack,
+    /// `--figure-front` was the last argument.
+    MissingFrontValue,
+    /// The value of `--figure-front` is not `auto`, `plusz` or `minusz`.
+    InvalidFront(String),
+    /// `--figure-front` was given more than once.
+    DuplicateFront,
     /// An argument the executable does not know.
     UnknownArgument(String),
     /// The frame limit variable is set but not an unsigned 64-bit integer.
@@ -95,14 +115,20 @@ impl fmt::Display for ConfigError {
             ),
             Self::NoPack => write!(
                 f,
-                "no figure pack given: the game needs a figure pack with the figures `soul` and \
-                 `imp`. Pass --pack <path to the .pack file> or set {PACK_VAR}=<path>"
+                "no figure pack given: the game needs a figure pack with a player and an enemy \
+                 figure. Pass --pack <path to the .pack file> or set {PACK_VAR}=<path>"
             ),
             Self::PackNotFound(path) => write!(
                 f,
                 "figure pack {} does not exist or is not a file",
                 path.display()
             ),
+            Self::MissingFrontValue => write!(f, "--figure-front needs a value"),
+            Self::InvalidFront(value) => write!(
+                f,
+                "invalid figure front {value:?}: expected `auto`, `plusz` or `minusz`"
+            ),
+            Self::DuplicateFront => write!(f, "--figure-front given more than once"),
         }
     }
 }
@@ -116,6 +142,7 @@ impl std::error::Error for ConfigError {}
 pub fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<Command, ConfigError> {
     let mut seed = None;
     let mut pack = None;
+    let mut front = None;
     let mut args = args.into_iter();
     while let Some(argument) = args.next() {
         let Some(text) = argument.to_str() else {
@@ -133,11 +160,17 @@ pub fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<Command, C
                 let value = args.next().ok_or(ConfigError::MissingPackValue)?;
                 set_pack(&mut pack, value)?;
             }
+            "--figure-front" => {
+                let value = args.next().ok_or(ConfigError::MissingFrontValue)?;
+                set_front(&mut front, &value)?;
+            }
             _ => {
                 if let Some(value) = text.strip_prefix("--seed=") {
                     set_seed(&mut seed, &OsString::from(value))?;
                 } else if let Some(value) = text.strip_prefix("--pack=") {
                     set_pack(&mut pack, OsString::from(value))?;
+                } else if let Some(value) = text.strip_prefix("--figure-front=") {
+                    set_front(&mut front, &OsString::from(value))?;
                 } else {
                     return Err(ConfigError::UnknownArgument(text.to_owned()));
                 }
@@ -147,7 +180,49 @@ pub fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<Command, C
     Ok(Command::Run {
         seed: seed.unwrap_or(DEFAULT_SEED),
         pack,
+        front,
     })
+}
+
+fn set_front(front: &mut Option<FrontChoice>, value: &OsString) -> Result<(), ConfigError> {
+    if front.is_some() {
+        return Err(ConfigError::DuplicateFront);
+    }
+    *front = Some(parse_front(value)?);
+    Ok(())
+}
+
+/// Parses `auto`, `plusz` or `minusz`.
+///
+/// # Errors
+/// [`ConfigError::InvalidFront`] for anything else.
+pub fn parse_front(value: &OsString) -> Result<FrontChoice, ConfigError> {
+    match value.to_str() {
+        Some("auto") => Ok(FrontChoice::Measure),
+        Some("plusz") => Ok(FrontChoice::Fixed(AuthoredFront::PlusZ)),
+        Some("minusz") => Ok(FrontChoice::Fixed(AuthoredFront::MinusZ)),
+        _ => Err(ConfigError::InvalidFront(
+            value.to_string_lossy().into_owned(),
+        )),
+    }
+}
+
+/// Which way the pack's figures look: `--figure-front` wins over [`FRONT_VAR`]; without either,
+/// every figure's own rig decides ([`FrontChoice::Measure`]).
+///
+/// # Errors
+/// [`ConfigError::InvalidFront`] if the variable holds something else.
+pub fn resolve_front(
+    argument: Option<FrontChoice>,
+    environment: Option<OsString>,
+) -> Result<FrontChoice, ConfigError> {
+    if let Some(front) = argument {
+        return Ok(front);
+    }
+    match environment.filter(|value| !value.is_empty()) {
+        Some(value) => parse_front(&value),
+        None => Ok(FrontChoice::Measure),
+    }
 }
 
 fn set_seed(seed: &mut Option<u64>, value: &OsString) -> Result<(), ConfigError> {
@@ -232,7 +307,71 @@ mod tests {
         Ok(Command::Run {
             seed,
             pack: pack.map(PathBuf::from),
+            front: None,
         })
+    }
+
+    fn run_with_front(
+        seed: u64,
+        pack: Option<&str>,
+        front: FrontChoice,
+    ) -> Result<Command, ConfigError> {
+        Ok(Command::Run {
+            seed,
+            pack: pack.map(PathBuf::from),
+            front: Some(front),
+        })
+    }
+
+    #[test]
+    fn the_figure_front_is_accepted_as_separate_or_joined_value() {
+        assert_eq!(
+            parse_args(args(&["--figure-front", "minusz"])),
+            run_with_front(
+                DEFAULT_SEED,
+                None,
+                FrontChoice::Fixed(AuthoredFront::MinusZ)
+            )
+        );
+        assert_eq!(
+            parse_args(args(&["--figure-front=plusz"])),
+            run_with_front(DEFAULT_SEED, None, FrontChoice::Fixed(AuthoredFront::PlusZ))
+        );
+        assert_eq!(
+            parse_args(args(&["--figure-front=auto"])),
+            run_with_front(DEFAULT_SEED, None, FrontChoice::Measure)
+        );
+        assert_eq!(
+            parse_args(args(&["--figure-front", "sideways"])),
+            Err(ConfigError::InvalidFront(String::from("sideways")))
+        );
+        assert_eq!(
+            parse_args(args(&["--figure-front"])),
+            Err(ConfigError::MissingFrontValue)
+        );
+        assert_eq!(
+            parse_args(args(&["--figure-front=auto", "--figure-front=plusz"])),
+            Err(ConfigError::DuplicateFront)
+        );
+    }
+
+    #[test]
+    fn the_front_falls_back_to_the_variable_and_then_to_measuring() {
+        assert_eq!(
+            resolve_front(Some(FrontChoice::Measure), Some(OsString::from("minusz"))),
+            Ok(FrontChoice::Measure),
+            "the argument wins"
+        );
+        assert_eq!(
+            resolve_front(None, Some(OsString::from("minusz"))),
+            Ok(FrontChoice::Fixed(AuthoredFront::MinusZ))
+        );
+        assert_eq!(
+            resolve_front(None, Some(OsString::new())),
+            Ok(FrontChoice::Measure)
+        );
+        assert_eq!(resolve_front(None, None), Ok(FrontChoice::Measure));
+        assert!(resolve_front(None, Some(OsString::from("upwards"))).is_err());
     }
 
     #[test]
