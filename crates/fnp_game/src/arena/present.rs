@@ -14,7 +14,7 @@
 use grimoire::adapters::figure_assets::{LoadedFigure, LoadedFigurePart};
 use grimoire::adapters::sigil_render::{BulletExtractionStats, extract_bullets};
 use grimoire::prelude::*;
-use grimoire::render::figure_clip::{ClipData, ClipSampler};
+use grimoire::render::figure_clip::{ClipData, ClipSampler, sample_pose_into};
 use grimoire::render::figure_format::{
     JointPose, SkeletonData, compute_skin_matrices, rest_pose_skin_matrices,
 };
@@ -227,6 +227,249 @@ pub struct FigureAnimation {
     pub idle: ClipData,
     /// Clip played while the figure walks.
     pub walk: ClipData,
+    /// How fast the walk clip plays, so its stride covers the ground the figure crosses
+    /// ([`walk_clip_rate`]). `1.0` is the authored tempo.
+    pub walk_rate: f32,
+}
+
+/// Bounds of the walk clip's playback rate.
+///
+/// The lower bound keeps a clip from crawling into a pose that reads as a freeze; the upper bound
+/// keeps legs from whirring when a figure is faster than the clip was ever meant for. Both are
+/// the tempo band engine ADR-0017 proposes for the converter's check of anchors against markers
+/// (a factor of 0.5 to 2.0), the upper one widened to 3.0: the arena's top speed is well above
+/// what a walk clip is authored at, and cutting it to 2.0 would put the slide back in.
+pub const WALK_CLIP_RATE_BOUNDS: (f32, f32) = (0.5, 3.0);
+
+/// How many poses one cycle is sampled at when the walk clip is measured.
+const STRIDE_SAMPLES: usize = 120;
+
+/// What the measurement of a walk clip found: how far its planted foot carries the figure, and
+/// how much of the ground the figure covers the foot does *not* carry — the slide.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FootSlip {
+    /// Distance the measured foot travels through the figure's own space in one cycle, in metres:
+    /// the ground a step covers if nothing slides.
+    pub stride_length: f32,
+    /// Ground speed the clip walks at when it plays at rate `1.0`, in metres per second.
+    pub clip_ground_speed: f32,
+    /// Mean sliding speed of the planted foot over the ground, in metres per second: what is left
+    /// of the figure's speed after the foot's own motion is subtracted.
+    pub slip: f32,
+    /// Joints whose position moves during the cycle (a clip that animates a parent moves its
+    /// children too, so this counts more than the clip's own tracks).
+    pub moving_joints: usize,
+}
+
+/// Global rest positions of every joint for `pose`, parents before children.
+fn global_positions(skeleton: &SkeletonData, pose: &[JointPose]) -> Vec<[f32; 3]> {
+    let mut world: Vec<Mat4> = Vec::with_capacity(skeleton.joints.len());
+    let mut positions = Vec::with_capacity(skeleton.joints.len());
+    for (index, joint) in skeleton.joints.iter().enumerate() {
+        let local = pose.get(index).map_or(IDENTITY, joint_matrix);
+        let matrix = match joint.parent {
+            // `decode_skeleton` guarantees the parent comes first.
+            Some(parent) => mul(world[parent as usize], local),
+            None => local,
+        };
+        positions.push([matrix[3][0], matrix[3][1], matrix[3][2]]);
+        world.push(matrix);
+    }
+    positions
+}
+
+/// Column-major matrix of one joint's rest transform.
+fn joint_matrix(pose: &JointPose) -> Mat4 {
+    let [x, y, z, w] = pose.rotation;
+    let [sx, sy, sz] = pose.scale;
+    let [tx, ty, tz] = pose.translation;
+    [
+        [
+            (1.0 - 2.0 * (y * y + z * z)) * sx,
+            2.0 * (x * y + z * w) * sx,
+            2.0 * (x * z - y * w) * sx,
+            0.0,
+        ],
+        [
+            2.0 * (x * y - z * w) * sy,
+            (1.0 - 2.0 * (x * x + z * z)) * sy,
+            2.0 * (y * z + x * w) * sy,
+            0.0,
+        ],
+        [
+            2.0 * (x * z + y * w) * sz,
+            2.0 * (y * z - x * w) * sz,
+            (1.0 - 2.0 * (x * x + y * y)) * sz,
+            0.0,
+        ],
+        [tx, ty, tz, 1.0],
+    ]
+}
+
+/// Measures `animation`'s walk clip against a figure moving at `speed`, with the clip playing at
+/// `rate`.
+///
+/// The method is the one a foot itself imposes: while a foot is planted it stands still on the
+/// ground, so in the figure's own space it must travel backwards exactly as fast as the figure
+/// travels forwards. Whatever is missing slides. The foot is found rather than named — the lowest
+/// joint with the largest horizontal travel — so a rig with other joint names still measures.
+///
+/// Returns `None` if no joint moves at all (a clip that poses the figure and holds it), where a
+/// stride has no meaning.
+#[must_use]
+pub fn foot_slip(animation: &FigureAnimation, speed: f32, rate: f32) -> Option<FootSlip> {
+    let duration = animation.walk.duration_seconds();
+    if !duration.is_finite() || duration <= 0.0 || !rate.is_finite() || rate <= 0.0 {
+        return None;
+    }
+    let mut pose = Vec::new();
+    let mut tracks: Vec<Vec<[f32; 3]>> = Vec::new();
+    for sample in 0..STRIDE_SAMPLES {
+        let time = duration * sample as f32 / STRIDE_SAMPLES as f32;
+        sample_pose_into(&animation.walk, time, &mut pose);
+        let positions = global_positions(&animation.skeleton, &pose);
+        if tracks.is_empty() {
+            tracks = positions.iter().map(|point| vec![*point]).collect();
+        } else {
+            for (track, point) in tracks.iter_mut().zip(positions) {
+                track.push(point);
+            }
+        }
+    }
+    if tracks.is_empty() {
+        return None;
+    }
+    let travel = |track: &[[f32; 3]], axis: usize| {
+        let mut low = f32::INFINITY;
+        let mut high = f32::NEG_INFINITY;
+        for point in track {
+            low = dmath::min(low, point[axis]);
+            high = dmath::max(high, point[axis]);
+        }
+        high - low
+    };
+    let moving_joints = tracks
+        .iter()
+        .filter(|track| (0..3).any(|axis| travel(track, axis) > 1.0e-4))
+        .count();
+    // The walking axis is the horizontal one the whole figure swings along.
+    let axis = if tracks
+        .iter()
+        .map(|track| travel(track, 0))
+        .fold(0.0_f32, dmath::max)
+        >= tracks
+            .iter()
+            .map(|track| travel(track, 1))
+            .fold(0.0_f32, dmath::max)
+    {
+        0
+    } else {
+        1
+    };
+    // The foot: of the joints in the lowest third of the figure, the one that travels farthest
+    // along the walking axis.
+    let mut lowest = f32::INFINITY;
+    let mut highest = f32::NEG_INFINITY;
+    for track in &tracks {
+        for point in track {
+            lowest = dmath::min(lowest, point[2]);
+            highest = dmath::max(highest, point[2]);
+        }
+    }
+    let ground = lowest + (highest - lowest) / 3.0;
+    let foot = tracks
+        .iter()
+        .filter(|track| {
+            track
+                .iter()
+                .map(|point| point[2])
+                .fold(f32::INFINITY, dmath::min)
+                <= ground
+        })
+        .max_by(|left, right| {
+            travel(left, axis)
+                .partial_cmp(&travel(right, axis))
+                .unwrap_or(core::cmp::Ordering::Equal)
+        })?;
+    let stride_length = travel(foot, axis);
+    if stride_length <= 1.0e-4 {
+        return Some(FootSlip {
+            stride_length,
+            clip_ground_speed: 0.0,
+            slip: speed.abs(),
+            moving_joints,
+        });
+    }
+    // Planted samples: the foot is low and moving backwards along the walking axis. Their mean
+    // backward speed is the ground speed the clip itself walks at.
+    let step = duration / STRIDE_SAMPLES as f32;
+    let mut planted = Vec::new();
+    for index in 0..STRIDE_SAMPLES {
+        let next = (index + 1) % STRIDE_SAMPLES;
+        let height = foot[index][2];
+        let velocity = (foot[next][axis] - foot[index][axis]) / step;
+        if height <= ground {
+            planted.push(velocity);
+        }
+    }
+    if planted.is_empty() {
+        return None;
+    }
+    // The foot may travel either way in the figure's space, depending on which way the rig faces;
+    // the sign that carries the figure forwards is the one the planted phase spends most time on.
+    let forward = if planted.iter().filter(|value| **value < 0.0).count() * 2 >= planted.len() {
+        -1.0
+    } else {
+        1.0
+    };
+    let carried: Vec<f32> = planted
+        .iter()
+        .map(|velocity| forward * velocity * rate)
+        .filter(|velocity| *velocity > 0.0)
+        .collect();
+    if carried.is_empty() {
+        return None;
+    }
+    let clip_ground_speed =
+        carried.iter().sum::<f32>() / carried.len() as f32 / dmath::max(rate, 1.0e-6);
+    let slip = carried
+        .iter()
+        .map(|carries| (speed.abs() - *carries).abs())
+        .sum::<f32>()
+        / carried.len() as f32;
+    Some(FootSlip {
+        stride_length,
+        clip_ground_speed,
+        slip,
+        moving_joints,
+    })
+}
+
+/// The rate at which `animation`'s walk clip has to play so its stride covers `speed`.
+///
+/// Measured on the clip itself ([`foot_slip`]), not guessed: the planted foot's own backward
+/// speed says how fast the clip walks, and the rate is the quotient with the speed the figure
+/// actually moves at, clamped to [`WALK_CLIP_RATE_BOUNDS`]. A clip whose feet never move cannot
+/// be matched and keeps its authored tempo.
+#[must_use]
+pub fn walk_clip_rate(animation: &FigureAnimation, speed: f32) -> f32 {
+    let Some(measured) = foot_slip(animation, speed, 1.0) else {
+        return 1.0;
+    };
+    walk_rate_for(speed, measured.clip_ground_speed)
+}
+
+/// The clamped quotient behind [`walk_clip_rate`]: how much faster than authored a clip that walks
+/// `clip_ground_speed` has to play to carry a figure moving at `speed`.
+///
+/// A clip that does not walk at all, or a speed that is not a number, keeps the authored tempo.
+#[must_use]
+pub fn walk_rate_for(speed: f32, clip_ground_speed: f32) -> f32 {
+    if !clip_ground_speed.is_finite() || clip_ground_speed <= 1.0e-3 || !speed.is_finite() {
+        return 1.0;
+    }
+    let rate = speed.abs() / clip_ground_speed;
+    rate.clamp(WALK_CLIP_RATE_BOUNDS.0, WALK_CLIP_RATE_BOUNDS.1)
 }
 
 /// Speed at which the walk clip starts to mix in, in world units per second.
@@ -285,13 +528,15 @@ impl Animator {
         time: f32,
         blend: f32,
     ) -> Option<&[Mat4]> {
+        // The walk clip runs on its own, stride-matched clock; the idle clip keeps real time.
+        let walk_time = time * animation.walk_rate;
         if blend <= 0.0 {
             self.sampler.sample(&animation.idle, time);
         } else if blend >= 1.0 {
-            self.sampler.sample(&animation.walk, time);
+            self.sampler.sample(&animation.walk, walk_time);
         } else {
             self.sampler
-                .sample_crossfade(&animation.idle, time, &animation.walk, time, blend)
+                .sample_crossfade(&animation.idle, time, &animation.walk, walk_time, blend)
                 .ok()?;
         }
         self.sampler.skin_matrices(&animation.skeleton).ok()
@@ -1008,6 +1253,22 @@ mod tests {
             assert!(blend >= previous, "speed {speed}: {blend} < {previous}");
             previous = blend;
         }
+    }
+
+    #[test]
+    fn the_stride_rate_is_the_quotient_of_the_two_speeds_within_bounds() {
+        // The clip's own ground speed decides: a clip that walks half as fast as the figure plays
+        // twice as fast, and the bounds keep a crawl from freezing and a dash from whirring.
+        assert_eq!(walk_rate_for(2.0, 1.0), 2.0);
+        assert_eq!(walk_rate_for(1.0, 1.0), 1.0);
+        assert_eq!(walk_rate_for(0.1, 1.0), WALK_CLIP_RATE_BOUNDS.0);
+        assert_eq!(walk_rate_for(99.0, 1.0), WALK_CLIP_RATE_BOUNDS.1);
+        assert_eq!(walk_rate_for(-2.0, 1.0), 2.0, "direction does not matter");
+        // Nothing to match: the authored tempo stands.
+        assert_eq!(walk_rate_for(5.5, 0.0), 1.0);
+        assert_eq!(walk_rate_for(5.5, f32::NAN), 1.0);
+        assert_eq!(walk_rate_for(f32::NAN, 1.0), 1.0);
+        assert!(WALK_CLIP_RATE_BOUNDS.0 > 0.0 && WALK_CLIP_RATE_BOUNDS.1 > 1.0);
     }
 
     #[test]

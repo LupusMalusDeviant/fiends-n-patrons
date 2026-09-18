@@ -11,8 +11,10 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::path::Path;
 
+use fnp_game::arena::PLAYER_SPEED;
 use fnp_game::arena::present::{
     ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, StageMeshData, stage_mesh_data,
+    walk_clip_rate,
 };
 use grimoire::RenderAssets;
 use grimoire::adapters::figure_assets::{
@@ -622,14 +624,18 @@ fn load_animation(
         load_clip(store, name, clip, &figure.skeleton).map_err(|error| format!("{clip}: {error}"))
     };
     match (load(IDLE_CLIP), load(WALK_CLIP)) {
-        (Ok(idle), Ok(walk)) => (
-            Some(FigureAnimation {
+        (Ok(idle), Ok(walk)) => {
+            let mut animation = FigureAnimation {
                 skeleton: figure.skeleton.clone(),
                 idle,
                 walk,
-            }),
-            Ok(()),
-        ),
+                walk_rate: 1.0,
+            };
+            // Measured once, here: how fast the walk clip has to run so its stride covers the
+            // ground the figure crosses at the arena's top speed.
+            animation.walk_rate = walk_clip_rate(&animation, PLAYER_SPEED);
+            (Some(animation), Ok(()))
+        }
         (Err(reason), _) | (Ok(_), Err(reason)) => (None, Err(reason)),
     }
 }
