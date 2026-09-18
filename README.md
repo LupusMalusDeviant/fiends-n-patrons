@@ -58,7 +58,7 @@ Im Spiel:
 | `WASD` oder Pfeiltasten | Seele bewegen (mit leichtem Nachgleiten) |
 | `P` | Muster des Gegners wechseln, reihum: `imp_volley`, `swarm_weave`, `shooter_rails`, `harrier_scatter`, `summoner_bloom`, `breaker_toll` (Wechsel löscht die Bullets des alten Musters) |
 | `V` | Vorhang-Modus ein/aus: rund 10.000 Bullets, die Spielfigur ist dabei unverwundbar |
-| `C` | Kamera-Voreinstellung wechseln: A (60°, 14,5 m, Vorgabe), B (52°, 12,5 m), C (45°, 11 m); Blickwinkel immer 42°, die aktive Voreinstellung steht im Fenstertitel |
+| `C` | Kamera-Voreinstellung wechseln: A (60°, 14,5 m, Vorgabe), B (52°, 12,5 m), C (45°, 11 m); Blickwinkel immer 42°, die aktive Voreinstellung steht im Fenstertitel. Reine Darstellungstaste: Sie läuft über `GamePlugin::presentation_input` (Vertrag §9.12) und steht in keiner Aufzeichnung |
 | `F3` | Stats-Overlay der Engine ein/aus (Profiler-Scopes mit Budgetbalken) |
 | `Escape` | Beenden |
 
@@ -86,10 +86,12 @@ gemessen dasselbe ist. Die Patterns nutzen nur Katalognamen, die der Bullet-Pass
 Vorläufig im Prototyp: Die Figuren haben keine Animation, nur Ruhe- und Treffer-Pose.
 
 Die Kamera führt `ArenaStage` selbst (Voreinstellung, Folgefeder, Zug zum Imp), der Zielanker fürs
-Mauszielen ist die Seele. Die Kamera ist reine Darstellung: Ein Test spielt denselben Lauf unter
-allen drei Voreinstellungen mit Wechseln mitten im Lauf und vergleicht den Zustands-Hash nach
-jedem Tick; ein zweiter prüft, dass derselbe Bodenpunkt unter dem Mauszeiger unter jeder
-Voreinstellung dieselbe Zielrichtung ergibt.
+Mauszielen ist die Spielfigur. Die Kamera ist reine Darstellung: Die Taste `C` kommt über
+`GamePlugin::presentation_input` (Vertrag §9.12) und nicht über die `InputMap`, taucht also in
+keinem Tick und keiner Aufzeichnung auf. Ein Test spielt denselben Lauf unter allen drei
+Voreinstellungen mit Wechseln mitten im Lauf und vergleicht den Zustands-Hash nach jedem Tick —
+auch gegen denselben Lauf ganz ohne Kamera-Tasten ist jeder Hash gleich; ein zweiter prüft, dass
+derselbe Bodenpunkt unter dem Mauszeiger unter jeder Voreinstellung dieselbe Zielrichtung ergibt.
 
 Ohne Fenster läuft dieselbe Simulation über `fnp_sim_harness::run_arena(seed, ticks, input)`; der
 Determinismus-Test liegt in `crates/fnp_sim_harness/tests/determinism.rs`. Eine Bildfolge eines
