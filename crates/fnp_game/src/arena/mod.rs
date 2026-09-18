@@ -29,6 +29,7 @@
 //! Same rules as the rest of the crate: all state is in the world, motion scales by [`DT`], math
 //! goes through `dmath`, no randomness is drawn outside the Sigil interpreter's own streams.
 
+pub mod patterns;
 pub mod present;
 
 use std::sync::Arc;
@@ -83,6 +84,10 @@ pub const BULLET_CAPACITY: u32 = 16_384;
 /// Input button that toggles the curtain mode (bound to a key by the executable).
 pub const CURTAIN_BUTTON: u8 = 3;
 
+/// Input button that cycles the fiend's fight pattern through the roster (bound to a key by
+/// the executable); only a game built with [`ArenaGame::with_roster`] listens to it.
+pub const PATTERN_BUTTON: u8 = 5;
+
 /// Input button that cycles the camera presets (bound to a key by the executable).
 ///
 /// Presentation only: the stage plugin reads it from the tick input; no system of the simulation
@@ -134,6 +139,87 @@ pub struct ArenaMode {
     pub toggle_held: bool,
 }
 impl_stable_hash!(ArenaMode { mode, toggle_held });
+
+/// One entry of a playable roster: a pattern with the emitters the fiend fires and the name the
+/// window title shows.
+#[derive(Clone, Debug)]
+pub struct RosterEntry {
+    /// Short name of the pattern, as `content/sigil/` spells it.
+    pub name: &'static str,
+    /// The unit and the emitters fired from it.
+    pub pattern: ScenePattern,
+}
+
+impl RosterEntry {
+    /// An entry named `name` that plays `pattern`.
+    #[must_use]
+    pub fn new(name: &'static str, pattern: ScenePattern) -> Self {
+        Self { name, pattern }
+    }
+}
+
+/// What a playable arena can throw at the player: the fight patterns [`PATTERN_BUTTON`] cycles and
+/// the curtain [`CURTAIN_BUTTON`] toggles.
+#[derive(Clone, Debug)]
+pub struct Roster {
+    /// Fight patterns in cycling order; the first one starts the run. Never empty.
+    pub fight: Vec<RosterEntry>,
+    /// The curtain stress mode, if the roster has one.
+    pub curtain: Option<RosterEntry>,
+}
+
+impl Roster {
+    /// The entry that plays in `mode` with fight pattern `index`.
+    #[must_use]
+    pub fn entry(&self, mode: Mode, index: u16) -> Option<&RosterEntry> {
+        match mode {
+            Mode::Curtain => self.curtain.as_ref(),
+            Mode::Volley => self.fight.get(usize::from(index) % self.fight.len().max(1)),
+        }
+    }
+
+    /// Every unit the roster can play, each one once, as the Sigil library takes them.
+    #[must_use]
+    pub fn units(&self) -> Vec<SigilUnit> {
+        let mut units: Vec<SigilUnit> = Vec::new();
+        for entry in self.fight.iter().chain(self.curtain.iter()) {
+            let id = entry.pattern.unit.id();
+            if !units.iter().any(|unit| unit.id() == id) {
+                units.push(entry.pattern.unit.clone());
+            }
+        }
+        units
+    }
+}
+
+/// The roster the prototype plays: every fight pattern of `content/sigil/` in
+/// [`patterns::GamePattern::FIGHT_ORDER`], plus the imp's curtain.
+#[must_use]
+pub fn playable_roster() -> Roster {
+    Roster {
+        fight: patterns::GamePattern::FIGHT_ORDER
+            .iter()
+            .map(|pattern| RosterEntry::new(pattern.name(), pattern.scene_pattern()))
+            .collect(),
+        curtain: Some(RosterEntry::new(
+            patterns::GamePattern::ImpCurtain.name(),
+            patterns::GamePattern::ImpCurtain.scene_pattern(),
+        )),
+    }
+}
+
+/// Resource: which fight pattern of the roster plays and the edge detector of [`PATTERN_BUTTON`].
+///
+/// Only a game built with [`ArenaGame::with_roster`] has it; the imp's own arena (the golden
+/// path) does not, and its state is untouched by the roster.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RosterState {
+    /// Index into [`Roster::fight`].
+    pub index: u16,
+    /// Whether [`PATTERN_BUTTON`] was held in the previous tick (a press cycles once).
+    pub cycle_held: bool,
+}
+impl_stable_hash!(RosterState { index, cycle_held });
 
 /// Resource: the unit ids of the imp's two patterns, as loaded into the Sigil library.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -510,6 +596,87 @@ fn toggle_mode(world: &mut World) {
     world.insert_resource(mode);
 }
 
+/// Spawns the emitters of the roster entry that plays in `mode` with fight pattern `index`.
+fn spawn_roster_emitters(world: &mut World, roster: &Roster, mode: Mode, index: u16, at: u64) {
+    let Some(entry) = roster.entry(mode, index) else {
+        return;
+    };
+    let unit = entry.pattern.unit.id();
+    for &emitter in &entry.pattern.emitters {
+        world.spawn((Emitter {
+            unit,
+            emitter,
+            origin: IMP_POSITION,
+            rotation: 0.0,
+            started_at: at,
+        },));
+    }
+}
+
+/// Replaces the fiend's emitters with the ones of the entry playing now and clears the arena.
+///
+/// A switch always clears: in a real round the clear does most of the despawning, so leftovers of
+/// the previous pattern would otherwise keep flying through the new one (and, for a pattern that
+/// never ends on its own, pile up across rounds).
+fn restart_roster(world: &mut World, roster: &Roster, mode: Mode, index: u16) {
+    let tick = world.resource::<Tick>().map_or(0, |tick| tick.0);
+    // A lost round keeps its restart tick; the new emitters wait for it like the old ones.
+    let started_at = match world.resource::<RoundState>().map(|round| round.phase) {
+        Some(Phase::Hit { at_tick }) => at_tick.saturating_add(HIT_RECOVERY_TICKS),
+        _ => tick,
+    };
+    let old: Vec<Entity> = world
+        .query::<(Entity, &Emitter)>()
+        .map(|(entity, _)| entity)
+        .collect();
+    for entity in old {
+        world.despawn(entity);
+    }
+    spawn_roster_emitters(world, roster, mode, index, started_at);
+    // Games request clears, they never clear the pool themselves (contract §2a, §11.4).
+    world.spawn((ClearRequest {
+        filter: ClearFilter::All,
+    },));
+}
+
+/// The roster's system: [`PATTERN_BUTTON`] cycles the fight patterns, [`CURTAIN_BUTTON`] toggles
+/// the curtain, and cycling while the curtain plays leaves it.
+fn switch_pattern(world: &mut World, roster: &Roster) {
+    let input = world.resource::<TickInput>().copied().unwrap_or_default();
+    let (Some(mut mode), Some(mut state)) = (
+        world.resource::<ArenaMode>().copied(),
+        world.resource::<RosterState>().copied(),
+    ) else {
+        return;
+    };
+    let curtain_held = input.slots[0].is_pressed(CURTAIN_BUTTON);
+    let cycle_held = input.slots[0].is_pressed(PATTERN_BUTTON);
+    let curtain_pressed = curtain_held && !mode.toggle_held;
+    let cycle_pressed = cycle_held && !state.cycle_held;
+    mode.toggle_held = curtain_held;
+    state.cycle_held = cycle_held;
+    let mut switched = false;
+    if cycle_pressed && !roster.fight.is_empty() {
+        let next = usize::from(state.index).saturating_add(1) % roster.fight.len();
+        state.index = u16::try_from(next).unwrap_or(0);
+        // Cycling always shows a fight pattern, even while the curtain plays.
+        mode.mode = Mode::Volley;
+        switched = true;
+    }
+    if curtain_pressed && roster.curtain.is_some() {
+        mode.mode = match mode.mode {
+            Mode::Volley => Mode::Curtain,
+            Mode::Curtain => Mode::Volley,
+        };
+        switched = true;
+    }
+    if switched {
+        restart_roster(world, roster, mode.mode, state.index);
+    }
+    world.insert_resource(mode);
+    world.insert_resource(state);
+}
+
 /// One pattern of a harness scene: a compiled unit and the emitters of it the fiend fires.
 ///
 /// Sub-emitters (`role = sub`) never belong here; they fire through a bullet's `become_emitter`
@@ -532,22 +699,31 @@ impl ScenePattern {
 
 /// The first playable prototype's game plugin.
 ///
-/// [`ArenaGame::new`] builds the arena the game itself plays: the imp with its two patterns and
-/// the curtain toggle. [`ArenaGame::with_patterns`] builds the same arena — same player, same
-/// collision, same rounds — but with a pattern set the caller chooses, which is how the harness
-/// turns the game's content into scenes (Plan 0002 WP7.4). The default path is untouched by that
-/// option, down to the resources it inserts, so the golden hashes of the prototype stay valid.
+/// [`ArenaGame::new`] builds the arena of the imp alone: its two patterns and the curtain toggle,
+/// the shape the golden masters of `imp_arena` and `imp_curtain` pin.
+/// [`ArenaGame::with_roster`] builds the playable arena of the executable: the same player, the
+/// same collision and the same rounds, but with every pattern of `content/sigil/` on
+/// [`PATTERN_BUTTON`] ([`playable_roster`]). [`ArenaGame::with_patterns`] is the harness's way in:
+/// one fixed pattern set, all emitters from tick 0 (Plan 0002 WP7.4).
+///
+/// The three differ only in the units they install and the switching system they add, so neither
+/// of the latter two can move the golden hashes of the first.
 #[derive(Debug, Default)]
 pub struct ArenaGame {
     /// `None` is the imp with its two modes; `Some` is a scene's own pattern set.
     scene: Option<Vec<ScenePattern>>,
+    /// `Some` is the playable roster on [`PATTERN_BUTTON`] and [`CURTAIN_BUTTON`].
+    roster: Option<Arc<Roster>>,
 }
 
 impl ArenaGame {
-    /// Creates the plugin as the game plays it.
+    /// Creates the plugin as the imp's own arena plays it.
     #[must_use]
     pub fn new() -> Self {
-        Self { scene: None }
+        Self {
+            scene: None,
+            roster: None,
+        }
     }
 
     /// Creates the plugin with a pattern set of its own; the curtain toggle is inert in it.
@@ -555,6 +731,17 @@ impl ArenaGame {
     pub fn with_patterns(patterns: Vec<ScenePattern>) -> Self {
         Self {
             scene: Some(patterns),
+            roster: None,
+        }
+    }
+
+    /// Creates the playable plugin: the roster's first fight pattern starts, [`PATTERN_BUTTON`]
+    /// cycles the rest and [`CURTAIN_BUTTON`] toggles the curtain.
+    #[must_use]
+    pub fn with_roster(roster: Arc<Roster>) -> Self {
+        Self {
+            scene: None,
+            roster: Some(roster),
         }
     }
 }
@@ -583,17 +770,48 @@ impl GamePlugin for ArenaGame {
             },
             Player,
         ));
+        match self.roster.clone() {
+            // The roster's switching system carries the roster itself; only the index and the
+            // edge detectors live in the world.
+            Some(roster) => {
+                sim.schedule_mut().add_system(system_fn(
+                    "arena.switch_pattern",
+                    move |world: &mut World| switch_pattern(world, &roster),
+                ));
+            }
+            None => {
+                sim.schedule_mut()
+                    .add_system(system_fn("arena.toggle_mode", toggle_mode));
+            }
+        }
         sim.schedule_mut()
-            .add_system(system_fn("arena.toggle_mode", toggle_mode))
             .add_system(system_fn("arena.remember_previous", remember_previous))
             .add_system(system_fn("arena.steer_player", steer_player))
             .add_system(system_fn("arena.aim", aim_at_player));
 
         let scene = self.scene.take();
+        let roster = self.roster.take();
         let registry = BehaviorRegistryBuilder::new(BEHAVIOR_REGISTRY_VERSION).build();
         let bounds = ARENA_HALF + Vec2::splat(BULLET_BOUNDS_MARGIN);
-        let units = match &scene {
-            None => {
+        let units = match (&scene, &roster) {
+            (None, Some(roster)) => {
+                let library = SigilLibrary::new(roster.units(), Arc::clone(&registry))
+                    .expect("the roster's units form a valid library");
+                install(
+                    sim,
+                    library,
+                    registry,
+                    SigilConfig::new(BULLET_CAPACITY, -bounds, bounds),
+                )
+                .expect("the Sigil interpreter installs once");
+                // No ImpUnits resource: the roster's own system knows the units.
+                sim.world_mut().insert_resource(RosterState {
+                    index: 0,
+                    cycle_held: false,
+                });
+                None
+            }
+            (None, None) => {
                 let volley =
                     fnp_content::sigil::imp_volley().expect("the embedded volley unit decodes");
                 let curtain =
@@ -613,7 +831,7 @@ impl GamePlugin for ArenaGame {
                 .expect("the Sigil interpreter installs once");
                 Some(imp)
             }
-            Some(patterns) => {
+            (Some(patterns), _) => {
                 let library = SigilLibrary::new(
                     patterns
                         .iter()
@@ -640,12 +858,15 @@ impl GamePlugin for ArenaGame {
             PreviousPosition { at: IMP_POSITION },
             Imp,
         ));
-        match (units, &scene) {
-            (Some(units), _) => {
+        match (units, &scene, &roster) {
+            (Some(units), _, _) => {
                 world.insert_resource(units);
                 spawn_emitters(world, units, Mode::Volley, 0);
             }
-            (None, Some(patterns)) => {
+            (None, None, Some(roster)) => {
+                spawn_roster_emitters(world, roster, Mode::Volley, 0, 0);
+            }
+            (None, Some(patterns), _) => {
                 for pattern in patterns {
                     for &emitter in &pattern.emitters {
                         world.spawn((Emitter {
@@ -658,7 +879,7 @@ impl GamePlugin for ArenaGame {
                     }
                 }
             }
-            (None, None) => unreachable!("the imp path always has its units"),
+            (None, None, None) => unreachable!("the imp path always has its units"),
         }
 
         sim.schedule_mut()

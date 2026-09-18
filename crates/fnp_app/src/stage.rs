@@ -15,20 +15,26 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use fnp_game::arena::present::{self, ArenaVisuals, CAMERA_PRESETS, Hud};
-use fnp_game::arena::{ArenaGame, CAMERA_BUTTON, CURTAIN_BUTTON};
+use fnp_game::arena::{
+    ArenaGame, ArenaMode, CAMERA_BUTTON, CURTAIN_BUTTON, Mode, PATTERN_BUTTON, Roster, RosterState,
+    playable_roster,
+};
 use fnp_game::{GAME_TITLE, TICK_RATE_HZ};
 use grimoire::debug::FrameProfile;
 use grimoire::prelude::*;
 use grimoire::render::{CameraFollow, LightBudget, StageRendererConfig};
 use grimoire::{PluginError, RenderAssets};
 
-use crate::figures::{load_visuals, placeholder_visuals};
+use crate::figures::{PackFigures, load_visuals, placeholder_visuals};
 
 /// Key that toggles the imp's curtain mode.
 pub const CURTAIN_KEY: KeyCode = KeyCode::KeyV;
 
 /// Key that cycles the camera presets ([`CAMERA_PRESETS`]).
 pub const CAMERA_KEY: KeyCode = KeyCode::KeyC;
+
+/// Key that cycles the fiend's fight pattern through the roster.
+pub const PATTERN_KEY: KeyCode = KeyCode::KeyP;
 
 /// Frames between window title updates.
 const TITLE_EVERY_FRAMES: u64 = 30;
@@ -70,6 +76,10 @@ pub struct RunStats {
     pub camera_switches: u32,
     /// Aim axes 2 and 3 of the most recent tick input (the loop samples them through the camera).
     pub last_aim: [i16; 2],
+    /// Name of the pattern the fiend played at the end of the run.
+    pub pattern: &'static str,
+    /// Pattern switches during the run (the curtain toggle included).
+    pub pattern_switches: u32,
 }
 
 impl RunStats {
@@ -88,8 +98,8 @@ impl RunStats {
     pub fn summary(&self) -> String {
         format!(
             "{} frames, {} ticks, mean frame time {:.2} ms (max {:.2} ms), peak {} bullets, \
-             round {}, {} hits; bullets drawn {}, discarded: unmapped {}, invalid {}, palette \
-             space {}",
+             round {}, {} hits, pattern {} after {} switches; bullets drawn {}, discarded: \
+             unmapped {}, invalid {}, palette space {}",
             self.frames,
             self.ticks,
             self.mean_frame_time().as_secs_f64() * 1000.0,
@@ -97,6 +107,8 @@ impl RunStats {
             self.peak_bullets,
             self.round,
             self.hits,
+            self.pattern,
+            self.pattern_switches,
             self.bullets_drawn,
             self.bullets_unmapped,
             self.bullets_rejected_invalid,
@@ -108,8 +120,14 @@ impl RunStats {
 /// Where the arena's figures come from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Figures {
-    /// A figure pack with the figures `soul` and `imp`.
-    Pack(PathBuf),
+    /// A figure pack with the player and enemy figures picked from it
+    /// ([`crate::figures::resolve_figures`]).
+    Pack {
+        /// Path of the pack file.
+        path: PathBuf,
+        /// Which figure plays which role, and which way each one looks.
+        figures: PackFigures,
+    },
     /// Placeholder figures on the block mesh, for runs without a pack (headless tests).
     Placeholder,
 }
@@ -132,13 +150,20 @@ pub struct ArenaStage {
     follow: Option<CameraFollow>,
     /// Real time of the last reported frame in seconds, the follow spring's step.
     frame_seconds: f32,
+    /// The playable patterns, for the name of the one playing now.
+    roster: Arc<Roster>,
+    /// Name of the pattern playing now.
+    pattern: &'static str,
+    /// Mode and roster index seen in the previous tick, to count switches.
+    switched_from: (Mode, u16),
 }
 
 impl ArenaStage {
-    /// A stage that loads `figures` when the loop registers assets and starts with camera preset
-    /// `camera_preset` (an index into [`CAMERA_PRESETS`], wrapping).
+    /// A stage that loads `figures` when the loop registers assets, starts with camera preset
+    /// `camera_preset` (an index into [`CAMERA_PRESETS`], wrapping) and names the patterns of
+    /// `roster` in the window title.
     #[must_use]
-    pub fn new(figures: Figures, camera_preset: usize) -> Self {
+    pub fn new(figures: Figures, camera_preset: usize, roster: Arc<Roster>) -> Self {
         Self {
             figures,
             visuals: None,
@@ -157,6 +182,9 @@ impl ArenaStage {
             input_tick: None,
             follow: None,
             frame_seconds: 0.0,
+            pattern: roster.fight.first().map_or("", |entry| entry.name),
+            switched_from: (Mode::Volley, 0),
+            roster,
         }
     }
 
@@ -166,10 +194,11 @@ impl ArenaStage {
         Rc::clone(&self.stats)
     }
 
-    fn title(hud: Hud, camera_preset: usize, fps: f64) -> String {
+    fn title(hud: Hud, pattern: &str, camera_preset: usize, fps: f64) -> String {
         let preset = CAMERA_PRESETS[camera_preset % CAMERA_PRESETS.len()];
         let mut title = format!(
-            "{GAME_TITLE} - Prototyp - Runde {} - Treffer {} - Kamera {} ({:.0} Grad, {} m)",
+            "{GAME_TITLE} - Prototyp - Runde {} - Treffer {} - Muster {pattern} - Kamera {} \
+             ({:.0} Grad, {} m)",
             hud.round, hud.hits, preset.name, preset.tilt_degrees, preset.distance
         );
         if hud.curtain {
@@ -192,18 +221,12 @@ impl GamePlugin for ArenaStage {
 
     fn register_assets(&mut self, assets: &mut dyn RenderAssets) -> Result<(), PluginError> {
         let visuals = match &self.figures {
-            Figures::Pack(pack) => {
+            Figures::Pack { path, figures } => {
                 let started = Instant::now();
-                let (visuals, summary) = load_visuals(assets, pack)?;
+                let (visuals, summary) = load_visuals(assets, path, figures)?;
                 eprintln!(
-                    "fiends-n-patrons: figure pack loaded in {:.1} s (soul: {} parts, {} joints, \
-                     {:.2} m; imp: {} parts, {:.2} m)",
-                    started.elapsed().as_secs_f64(),
-                    summary.soul_parts,
-                    summary.soul_joints,
-                    summary.soul_height,
-                    summary.imp_parts,
-                    summary.imp_height
+                    "fiends-n-patrons: figure pack loaded in {:.1} s ({summary})",
+                    started.elapsed().as_secs_f64()
                 );
                 visuals
             }
@@ -231,10 +254,40 @@ impl GamePlugin for ArenaStage {
                     preset.name, preset.tilt_degrees, preset.distance
                 );
                 if let Some(window) = &self.window {
-                    window.set_title(&Self::title(self.hud, self.camera_preset, 0.0));
+                    window.set_title(&Self::title(
+                        self.hud,
+                        self.pattern,
+                        self.camera_preset,
+                        0.0,
+                    ));
                 }
             }
             self.camera_held = held;
+        }
+        let mode = world
+            .resource::<ArenaMode>()
+            .map_or(Mode::Volley, |mode| mode.mode);
+        let index = world
+            .resource::<RosterState>()
+            .map_or(0, |roster| roster.index);
+        self.pattern = self
+            .roster
+            .entry(mode, index)
+            .map_or("", |entry| entry.name);
+        if self.switched_from != (mode, index) {
+            self.switched_from = (mode, index);
+            if self.input_tick.is_some_and(|tick| tick > 0) {
+                self.stats.borrow_mut().pattern_switches += 1;
+                eprintln!("fiends-n-patrons: pattern {}", self.pattern);
+                if let Some(window) = &self.window {
+                    window.set_title(&Self::title(
+                        self.hud,
+                        self.pattern,
+                        self.camera_preset,
+                        0.0,
+                    ));
+                }
+            }
         }
         // The stage owns the camera (no `AppBuilder::camera25d`), so the preset can change; the
         // loop samples mouse aim through exactly this camera (contract §9.3, §9.4).
@@ -258,6 +311,7 @@ impl GamePlugin for ArenaStage {
         stats.hits = self.hud.hits;
         stats.curtain = self.hud.curtain;
         stats.camera_preset = self.camera_preset;
+        stats.pattern = self.pattern;
         stats.last_aim = [input.slots[0].axes[2], input.slots[0].axes[3]];
     }
 
@@ -277,7 +331,12 @@ impl GamePlugin for ArenaStage {
         if stats.frames.is_multiple_of(TITLE_EVERY_FRAMES)
             && let Some(window) = &self.window
         {
-            window.set_title(&Self::title(self.hud, self.camera_preset, frame.fps));
+            window.set_title(&Self::title(
+                self.hud,
+                self.pattern,
+                self.camera_preset,
+                frame.fps,
+            ));
         }
     }
 
@@ -296,7 +355,12 @@ impl GamePlugin for ArenaStage {
     }
 
     fn window_created(&mut self, window: &Arc<dyn PlatformWindow>) {
-        window.set_title(&Self::title(self.hud, self.camera_preset, 0.0));
+        window.set_title(&Self::title(
+            self.hud,
+            self.pattern,
+            self.camera_preset,
+            0.0,
+        ));
         self.window = Some(Arc::clone(window));
     }
 
@@ -318,14 +382,18 @@ pub fn stage_renderer_config() -> StageRendererConfig {
     config
 }
 
-/// The engine's default bindings plus [`CURTAIN_KEY`] on [`CURTAIN_BUTTON`] and [`CAMERA_KEY`] on
-/// [`CAMERA_BUTTON`].
+/// The engine's default bindings plus [`CURTAIN_KEY`] on [`CURTAIN_BUTTON`], [`PATTERN_KEY`] on
+/// [`PATTERN_BUTTON`] and [`CAMERA_KEY`] on [`CAMERA_BUTTON`].
 #[must_use]
 pub fn input_map() -> InputMap {
     InputMap::default()
         .with(
             InputSource::Key(CURTAIN_KEY),
             InputAction::Button(CURTAIN_BUTTON),
+        )
+        .with(
+            InputSource::Key(PATTERN_KEY),
+            InputAction::Button(PATTERN_BUTTON),
         )
         .with(
             InputSource::Key(CAMERA_KEY),
@@ -352,7 +420,8 @@ pub struct ArenaConfig {
 /// the builder and the run's shared measurements.
 #[must_use]
 pub fn arena_app(config: ArenaConfig) -> (AppBuilder, Shared<RunStats>) {
-    let stage = ArenaStage::new(config.figures, config.camera_preset);
+    let roster = Arc::new(playable_roster());
+    let stage = ArenaStage::new(config.figures, config.camera_preset, Arc::clone(&roster));
     let stats = stage.stats();
     let app = App::new(WindowConfig {
         title: String::from(GAME_TITLE),
@@ -365,7 +434,7 @@ pub fn arena_app(config: ArenaConfig) -> (AppBuilder, Shared<RunStats>) {
     .exit_key(KeyCode::Escape)
     // The stage comes first: the first plugin with a focus point anchors mouse aim.
     .plugin(stage)
-    .plugin(ArenaGame::new());
+    .plugin(ArenaGame::with_roster(roster));
     let app = match config.max_frames {
         Some(frames) => app.max_frames(frames),
         None => app,
@@ -378,6 +447,7 @@ mod tests {
     use grimoire::platform::{PlatformEvent, RawInputEvent};
 
     use super::*;
+    use crate::figures::{ChosenFigure, ENEMY_FIGURES, PLAYER_FIGURES};
 
     const FRAME: Duration = Duration::from_nanos(1_000_000_000 / TICK_RATE_HZ as u64);
 
@@ -446,10 +516,11 @@ mod tests {
         assert!(player.x > 1.0, "the soul moved right: {player:?}");
     }
 
-    /// Steps a fresh arena `ticks` times, holding D while `held(tick)`.
+    /// Steps a fresh arena `ticks` times, holding D while `held(tick)` — the same arena the app
+    /// runs, so its state hash can be compared with the loop's.
     fn simulate_holding_d(ticks: u64, held: impl Fn(u64) -> bool) -> Simulation {
         let mut sim = Simulation::new(11);
-        ArenaGame::new().build(&mut sim);
+        ArenaGame::with_roster(Arc::new(playable_roster())).build(&mut sim);
         for tick in 0..ticks {
             let mut input = TickInput::default();
             if held(tick) {
@@ -496,7 +567,13 @@ mod tests {
     fn a_missing_pack_ends_the_run_with_an_asset_error() {
         let (app, _) = arena_app(ArenaConfig {
             seed: 0,
-            figures: Figures::Pack(PathBuf::from("this/pack/does/not/exist.pack")),
+            figures: Figures::Pack {
+                path: PathBuf::from("this/pack/does/not/exist.pack"),
+                figures: PackFigures {
+                    player: ChosenFigure::new("soul", PLAYER_FIGURES),
+                    enemy: ChosenFigure::new("imp", ENEMY_FIGURES),
+                },
+            },
             max_frames: Some(5),
             camera_preset: 0,
         });
@@ -518,9 +595,9 @@ mod tests {
             curtain: false,
         };
         assert_eq!(
-            ArenaStage::title(hud, 0, 59.7),
-            "Fiends n Patrons - Prototyp - Runde 3 - Treffer 2 - Kamera A (60 Grad, 14.5 m) - \
-             GETROFFEN - 60 FPS"
+            ArenaStage::title(hud, "imp_volley", 0, 59.7),
+            "Fiends n Patrons - Prototyp - Runde 3 - Treffer 2 - Muster imp_volley - Kamera A \
+             (60 Grad, 14.5 m) - GETROFFEN - 60 FPS"
         );
         let curtain = Hud {
             hit_pending: false,
@@ -529,9 +606,9 @@ mod tests {
             ..hud
         };
         assert_eq!(
-            ArenaStage::title(curtain, 2, 0.0),
-            "Fiends n Patrons - Prototyp - Runde 3 - Treffer 2 - Kamera C (45 Grad, 11 m) - \
-             Vorhang: 10293 Bullets"
+            ArenaStage::title(curtain, "imp_curtain", 2, 0.0),
+            "Fiends n Patrons - Prototyp - Runde 3 - Treffer 2 - Muster imp_curtain - Kamera C \
+             (45 Grad, 11 m) - Vorhang: 10293 Bullets"
         );
     }
 
@@ -542,6 +619,54 @@ mod tests {
         }
         if frame > 0 && frames.contains(&(frame - 1)) {
             events.push(key(code, false));
+        }
+    }
+
+    #[test]
+    fn the_pattern_key_cycles_the_fiends_patterns_without_discards() {
+        // Four taps walk from the imp's volley into the role patterns; every one of them fires,
+        // and nothing the renderer sees is discarded on the way.
+        let roster = playable_roster();
+        let (app, stats) = headless(Some(900));
+        app.run_headless_frames_with_events(10_000, FRAME, &mut |frame, events| {
+            taps(PATTERN_KEY, &[150, 300, 450, 600], frame, events);
+        })
+        .expect("runs");
+        let stats = *stats.borrow();
+        assert_eq!(stats.pattern_switches, 4, "{stats:?}");
+        assert_eq!(stats.pattern, roster.fight[4].name, "{stats:?}");
+        assert!(stats.bullets_drawn > 0, "{stats:?}");
+        assert_eq!(stats.bullets_unmapped, 0, "{stats:?}");
+        assert_eq!(stats.bullets_rejected_invalid, 0, "{stats:?}");
+        assert_eq!(stats.bullets_rejected_palette_space, 0, "{stats:?}");
+    }
+
+    #[test]
+    fn every_pattern_of_the_roster_reaches_the_renderer() {
+        // One run per pattern: tap the key that often, let it fire, and count what is drawn.
+        let roster = playable_roster();
+        for (index, entry) in roster.fight.iter().enumerate() {
+            let (app, stats) = headless(Some(240 + 30 * index as u64));
+            app.run_headless_frames_with_events(10_000, FRAME, &mut |frame, events| {
+                // One tap per pattern, two frames apart, then time to fire.
+                let taps_needed: Vec<u64> = (0..index as u64).map(|step| 10 + 2 * step).collect();
+                taps(PATTERN_KEY, &taps_needed, frame, events);
+            })
+            .expect("runs");
+            let stats = *stats.borrow();
+            assert_eq!(stats.pattern, entry.name, "{stats:?}");
+            assert!(stats.peak_bullets > 0, "{} fired: {stats:?}", entry.name);
+            assert_eq!(stats.bullets_unmapped, 0, "{}: {stats:?}", entry.name);
+            assert_eq!(
+                stats.bullets_rejected_invalid, 0,
+                "{}: {stats:?}",
+                entry.name
+            );
+            assert_eq!(
+                stats.bullets_rejected_palette_space, 0,
+                "{}: {stats:?}",
+                entry.name
+            );
         }
     }
 

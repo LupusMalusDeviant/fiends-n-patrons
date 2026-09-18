@@ -18,19 +18,25 @@ pub const USAGE: &str = "\
 Usage: fiends-n-patrons --pack <figures.pack> [--seed <u64>]
 
 Options:
-  --pack <path>  Figure pack with the figures `soul` and `imp` (or set FNP_FIGURE_PACK)
+  --pack <path>  Figure pack with a player and an enemy figure (or set FNP_FIGURE_PACK):
+                 `witch` and `imp_hi3d`, or the older `soul` and `imp`
   --seed <u64>   Simulation seed (default 0)
   -h, --help     Print this help
 
 Controls:
-  WASD or arrow keys  Move the soul
-  V                   Toggle the imp's curtain mode (about 10,000 bullets, soul invulnerable)
+  WASD or arrow keys  Move the player
+  P                   Cycle the fiend's pattern: imp_volley, swarm_weave, shooter_rails,
+                      harrier_scatter, summoner_bloom, breaker_toll
+  V                   Toggle the curtain mode (about 10,000 bullets, the player invulnerable)
   C                   Cycle the camera presets A (60 deg, 14.5 m), B (52, 12.5), C (45, 11)
   F3                  Toggle the engine's stats overlay
   Escape              Quit
 
 Environment:
   FNP_FIGURE_PACK=<path>             Figure pack, used when --pack is not given
+  FNP_PLAYER_FIGURE=<name>           Player figure in the pack (append `:plusz` or `:minusz`
+                                     to say which way its model looks)
+  FNP_ENEMY_FIGURE=<name>            Enemy figure in the pack, same form
   GRIMOIRE_EXAMPLE_MAX_FRAMES=<u64>  End the run after this many frames";
 
 /// What the command line asks for.

@@ -5,6 +5,7 @@
 //! of it is a pure function of seed and tick (contract §3).
 
 use fnp_game::arena::ScenePattern;
+use fnp_game::arena::patterns::GamePattern;
 use grimoire::prelude::*;
 
 /// Axis value of a fully deflected stick.
@@ -47,90 +48,38 @@ impl Pattern {
     /// The pattern's short name, as a scene and a report spell it.
     #[must_use]
     pub const fn name(self) -> &'static str {
+        self.game_pattern().name()
+    }
+
+    /// The pattern of the game's own table this scene pattern names.
+    #[must_use]
+    pub const fn game_pattern(self) -> GamePattern {
         match self {
-            Pattern::BreakerToll => "breaker_toll",
-            Pattern::HarrierScatter => "harrier_scatter",
-            Pattern::ImpCurtain => "imp_curtain",
-            Pattern::ImpVolley => "imp_volley",
-            Pattern::ShooterRails => "shooter_rails",
-            Pattern::SummonerBloom => "summoner_bloom",
-            Pattern::SwarmWeave => "swarm_weave",
+            Pattern::BreakerToll => GamePattern::BreakerToll,
+            Pattern::HarrierScatter => GamePattern::HarrierScatter,
+            Pattern::ImpCurtain => GamePattern::ImpCurtain,
+            Pattern::ImpVolley => GamePattern::ImpVolley,
+            Pattern::ShooterRails => GamePattern::ShooterRails,
+            Pattern::SummonerBloom => GamePattern::SummonerBloom,
+            Pattern::SwarmWeave => GamePattern::SwarmWeave,
         }
     }
 
     /// The canonical content path the unit id derives from (contract §11.1).
     #[must_use]
     pub const fn content_path(self) -> &'static str {
-        match self {
-            Pattern::BreakerToll => fnp_content::sigil::BREAKER_TOLL_PATH,
-            Pattern::HarrierScatter => fnp_content::sigil::HARRIER_SCATTER_PATH,
-            Pattern::ImpCurtain => fnp_content::sigil::IMP_CURTAIN_PATH,
-            Pattern::ImpVolley => fnp_content::sigil::IMP_VOLLEY_PATH,
-            Pattern::ShooterRails => fnp_content::sigil::SHOOTER_RAILS_PATH,
-            Pattern::SummonerBloom => fnp_content::sigil::SUMMONER_BLOOM_PATH,
-            Pattern::SwarmWeave => fnp_content::sigil::SWARM_WEAVE_PATH,
-        }
+        self.game_pattern().content_path()
     }
 
-    /// The compiled unit with the emitters a fiend fires from it.
-    ///
-    /// Sub-emitters are left out: `summoner_bloom`'s `bloom` fires through a seed's
-    /// `become_emitter` transform, never from the fiend.
+    /// The compiled unit with the emitters a fiend fires from it, from the game's own table
+    /// ([`GamePattern`]), so a scene plays exactly what the game plays.
     ///
     /// # Panics
     /// If an embedded unit does not decode, which `fnp_content`'s own tests rule out for every
     /// build.
     #[must_use]
     pub fn scene_pattern(self) -> ScenePattern {
-        use fnp_content::sigil as content;
-        let (unit, emitters) = match self {
-            Pattern::BreakerToll => (
-                content::breaker_toll(),
-                vec![content::breaker_toll::NEEDLES, content::breaker_toll::TOLLS],
-            ),
-            Pattern::HarrierScatter => (
-                content::harrier_scatter(),
-                vec![
-                    content::harrier_scatter::REMINDER,
-                    content::harrier_scatter::SPRAY,
-                ],
-            ),
-            Pattern::ImpCurtain => (
-                content::imp_curtain(),
-                vec![content::imp_curtain::COUNTER, content::imp_curtain::CURTAIN],
-            ),
-            Pattern::ImpVolley => (
-                content::imp_volley(),
-                vec![
-                    content::imp_volley::AIMED,
-                    content::imp_volley::FAN,
-                    content::imp_volley::RING,
-                ],
-            ),
-            Pattern::ShooterRails => (
-                content::shooter_rails(),
-                vec![
-                    content::shooter_rails::LANE,
-                    content::shooter_rails::LEFT_RAIL,
-                    content::shooter_rails::RIGHT_RAIL,
-                ],
-            ),
-            Pattern::SummonerBloom => (
-                content::summoner_bloom(),
-                vec![content::summoner_bloom::SEEDS],
-            ),
-            Pattern::SwarmWeave => (
-                content::swarm_weave(),
-                vec![
-                    content::swarm_weave::PASSES,
-                    content::swarm_weave::STRAGGLERS,
-                ],
-            ),
-        };
-        ScenePattern::new(
-            unit.unwrap_or_else(|error| panic!("{} decodes: {error}", self.name())),
-            emitters,
-        )
+        self.game_pattern().scene_pattern()
     }
 }
 

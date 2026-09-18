@@ -1,13 +1,18 @@
 //! Fiends n Patrons — executable entry point.
 //!
 //! Opens the game window, loads the figure pack and runs the first playable prototype
-//! ([`fnp_game::arena::ArenaGame`]) in the engine's main loop. `Escape` exits, `V` toggles the
-//! imp's curtain mode, `C` cycles the camera presets, `F3` toggles the engine's stats overlay; see
-//! [`cli::USAGE`] for arguments and environment variables.
+//! ([`fnp_game::arena::ArenaGame`]) in the engine's main loop. `Escape` exits, `P` cycles the
+//! fiend's pattern, `V` toggles the curtain mode, `C` cycles the camera presets, `F3` toggles the
+//! engine's stats overlay; see [`cli::USAGE`] for arguments and environment variables.
+//!
+//! The figure pack is resolved before the window opens: which figure plays the player and which
+//! the enemy ([`fnp_app::figures::resolve_figures`]), so a pack without usable figures ends the
+//! run with a message and [`EXIT_USAGE`].
 
 use std::process::ExitCode;
 
 use fnp_app::cli::{self, Command, MAX_FRAMES_VAR, PACK_VAR, USAGE};
+use fnp_app::figures::{FNP_ENEMY_FIGURE_VAR, FNP_PLAYER_FIGURE_VAR, resolve_figures};
 use fnp_app::stage::{ArenaConfig, Figures, arena_app};
 
 /// Exit code for invalid arguments or environment (as in the BSD `sysexits` `EX_USAGE` spirit).
@@ -39,9 +44,27 @@ fn main() -> ExitCode {
         Err(error) => return usage_error(&error),
     };
 
+    // Before the window: a pack without a usable pair of figures must not open one.
+    let player_figure = std::env::var(FNP_PLAYER_FIGURE_VAR).ok();
+    let enemy_figure = std::env::var(FNP_ENEMY_FIGURE_VAR).ok();
+    let figures = match resolve_figures(&pack, player_figure.as_deref(), enemy_figure.as_deref()) {
+        Ok(figures) => figures,
+        Err(error) => {
+            eprintln!("fiends-n-patrons: {error}");
+            return ExitCode::from(EXIT_USAGE);
+        }
+    };
+    eprintln!(
+        "fiends-n-patrons: figures: player `{}`, enemy `{}`",
+        figures.player.name, figures.enemy.name
+    );
+
     let (app, _stats) = arena_app(ArenaConfig {
         seed,
-        figures: Figures::Pack(pack),
+        figures: Figures::Pack {
+            path: pack,
+            figures,
+        },
         max_frames,
         camera_preset: 0,
     });

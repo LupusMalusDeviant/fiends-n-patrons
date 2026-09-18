@@ -41,15 +41,19 @@ cargo test --workspace --locked
 cargo run --release -p fnp_app -- --pack <Pfad zu figures.pack> --seed 42
 ```
 
-Das Spiel braucht ein Figuren-Pack mit den Figuren `soul` und `imp` (erzeugt von
-`assets_src/figure_pack/`, nicht versioniert). Ohne `--pack` und ohne `FNP_FIGURE_PACK` endet es mit
-einer Fehlermeldung und Exit-Code 2. Die Toolchain ist über `rust-toolchain.toml` gepinnt (1.98.1).
+Das Spiel braucht ein Figuren-Pack mit einer Spieler- und einer Gegner-Figur (erzeugt von
+`assets_src/figure_pack/`, nicht versioniert). Gesucht wird zuerst nach den neuen Figuren `witch`
+und `imp_hi3d`, sonst nach den älteren `soul` und `imp`; `FNP_PLAYER_FIGURE` und
+`FNP_ENEMY_FIGURE` wählen eine andere. Das Spiel löst das auf, **bevor** ein Fenster aufgeht: Fehlt
+das Pack oder hat es keine passende Figur, endet es mit einer Meldung, die sagt, welche Figuren das
+Pack hat, und Exit-Code 2. Die Toolchain ist über `rust-toolchain.toml` gepinnt (1.98.1).
 Im Spiel:
 
 | Eingabe | Wirkung |
 |---------|---------|
 | `WASD` oder Pfeiltasten | Seele bewegen (mit leichtem Nachgleiten) |
-| `V` | Vorhang-Modus des Imps ein/aus: rund 10.000 Bullets, die Seele ist dabei unverwundbar |
+| `P` | Muster des Gegners wechseln, reihum: `imp_volley`, `swarm_weave`, `shooter_rails`, `harrier_scatter`, `summoner_bloom`, `breaker_toll` (Wechsel löscht die Bullets des alten Musters) |
+| `V` | Vorhang-Modus ein/aus: rund 10.000 Bullets, die Spielfigur ist dabei unverwundbar |
 | `C` | Kamera-Voreinstellung wechseln: A (60°, 14,5 m, Vorgabe), B (52°, 12,5 m), C (45°, 11 m); Blickwinkel immer 42°, die aktive Voreinstellung steht im Fenstertitel |
 | `F3` | Stats-Overlay der Engine ein/aus (Profiler-Scopes mit Budgetbalken) |
 | `Escape` | Beenden |
@@ -60,14 +64,19 @@ Gamepads liest die Plattformschicht der Engine noch nicht; der linke Stick folgt
 |---------------------------------|---------|
 | `--pack <Pfad>` oder `FNP_FIGURE_PACK=<Pfad>` | Figuren-Pack (Pflicht); das Argument gewinnt |
 | `--seed <u64>` | Seed der Simulation (Standard 0); ungültige Werte beenden mit Fehlermeldung und Exit-Code 2 |
+| `FNP_PLAYER_FIGURE=<Name>`, `FNP_ENEMY_FIGURE=<Name>` | Figur im Pack wählen; mit `:plusz` oder `:minusz` auch, wohin ihr Modell schaut |
 | `GRIMOIRE_EXAMPLE_MAX_FRAMES=<n>` | Lauf nach `n` Frames beenden |
 | `GRIMOIRE_GPU_ADAPTER=software` | Software-Adapter der Plattform statt der Grafikkarte |
 | `GRIMOIRE_WINDOW_MONITOR=secondary`, `GRIMOIRE_WINDOW_FOCUS=0` | Fenster auf dem Zweitmonitor und ohne Fokus öffnen (Konvention für Läufe auf dem Entwicklungsrechner) |
 
 Das Spiel läuft über `App::run` der Engine: Das Plugin `ArenaStage` lädt die Figuren über den
-Asset-Haken (`register_assets`, `load_figure_into`), `ArenaGame` ist die Simulation. Die Imp-Patterns
-(`content/sigil/`) sind aus den Referenz-Patterns der Engine abgeleitet und nutzen nur
-Katalognamen, die der Bullet-Pass zeichnet. Bullets laufen über den Adapter
+Asset-Haken (`register_assets`, `load_figure_into`), `ArenaGame` ist die Simulation. Gespielt wird
+mit dem Muster-Aufgebot (`ArenaGame::with_roster`, `arena::playable_roster`): alle sechs
+Kampf-Muster aus `content/sigil/` auf `P`, dazu der Vorhang auf `V`. Dieselbe Tabelle
+(`fnp_game::arena::patterns::GamePattern`) nutzen die Szenen des Harness, damit gespielt und
+gemessen dasselbe ist. Die Patterns nutzen nur Katalognamen, die der Bullet-Pass zeichnet.
+`ArenaGame::new()` bleibt daneben die Arena des Imps allein — die Form, die die Goldmasters
+`imp_arena` und `imp_curtain` festhalten. Bullets laufen über den Adapter
 `grimoire::adapters::sigil_render` in den Bullet-Pass, der auch die Geschoss-Lichter ableitet.
 Vorläufig im Prototyp: Die Figuren haben keine Animation, nur Ruhe- und Treffer-Pose.
 
