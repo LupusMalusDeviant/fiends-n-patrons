@@ -15,9 +15,9 @@ fnp_content.workspace = true
 fnp_game.workspace = true
 grimoire.workspace = true
 
-# The determinism tests run the golden scenario on thread pools with 1, 2 and N threads
-# (engine ADR-0006, building block 7).
-[dev-dependencies]
+# The golden-master narrowing (engine ADR-0018) compares one thread against a pool, and the
+# determinism tests run the golden scenario with 1, 2 and N threads (engine ADR-0006, building
+# block 7).
 grimoire_exec.workspace = true
 
 [lints]

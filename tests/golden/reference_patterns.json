@@ -1,0 +1,20 @@
+{
+  "schema": "grimoire.fnp.golden.reference",
+  "schema_version": 1,
+  "engine_tag": "v0.5.0",
+  "settings": { "ticks": 600, "seed": 0, "capacity": 16384, "bounds": "-13.5,-13.5,13.5,13.5", "target": "0,-7.5" },
+  "patterns": [
+  { "pattern": "01-opening-ring.sigil", "unit_id": "94cc793e0ff3945e", "content_hash": "db1daccbed382e28", "final_state_hash": "6a31d8ea2c0595f0" },
+  { "pattern": "02-spiral-curtain.sigil", "unit_id": "5bcbf0a79c11f14b", "content_hash": "71bacb17f56880a4", "final_state_hash": "2eb60d0273e557d2" },
+  { "pattern": "03-aimed-fan.sigil", "unit_id": "2187360669e3c9be", "content_hash": "e46435c8cbe33ab7", "final_state_hash": "b38dd127120b01d3" },
+  { "pattern": "04-bending-wave.sigil", "unit_id": "fc3742428309a4ca", "content_hash": "08042d7908de041e", "final_state_hash": "bc8dcf64203dcc4a" },
+  { "pattern": "05-rail-sweep.sigil", "unit_id": "80436f45e79f6cd9", "content_hash": "121e32b93a9551d0", "final_state_hash": "4447d6907ef729bb" },
+  { "pattern": "06-seeded-scatter.sigil", "unit_id": "d17cfd28d0bfa1f4", "content_hash": "1f6432719eda41a6", "final_state_hash": "4afb2b629b57f7f5" },
+  { "pattern": "07-mirror-bloom.sigil", "unit_id": "2cc020d2d25fc944", "content_hash": "1080f54a99f02df1", "final_state_hash": "907a6cd00a73cffd" },
+  { "pattern": "08-returning-needles.sigil", "unit_id": "7a43223cd6182d52", "content_hash": "3aafafccb1491d2f", "final_state_hash": "5241533bd2ec8d5c" },
+  { "pattern": "09-shatter-orbs.sigil", "unit_id": "f6d32b9f515ebf50", "content_hash": "f13bff606cc27e0c", "final_state_hash": "c648e3aad296ec23" },
+  { "pattern": "10-phase-shift.sigil", "unit_id": "f0319b6b5a55837b", "content_hash": "b5cde130182c8e9d", "final_state_hash": "0c175aa888ad3557" },
+  { "pattern": "11-seed-bloom.sigil", "unit_id": "f7fba40297f00d50", "content_hash": "28d55299479b03b9", "final_state_hash": "d315988eedb8c7b6" },
+  { "pattern": "12-finale-composite.sigil", "unit_id": "2589585e12d10aa8", "content_hash": "0486475b0c5bc8a3", "final_state_hash": "3164f281829edc2c" }
+  ]
+}

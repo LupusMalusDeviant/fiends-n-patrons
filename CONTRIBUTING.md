@@ -74,11 +74,13 @@ cargo test --workspace --locked --no-fail-fast
 cargo build --workspace --locked
 ```
 
-Wer an Content, Arena oder Harness arbeitet, fährt zusätzlich die Szenen-Suite; sie dauert
-Sekunden und sagt mehr als ein einzelner Testlauf (siehe „Sim-Harness"):
+Wer an Content, Arena oder Harness arbeitet, fährt zusätzlich die Szenen-Suite und die
+Golden-Master; beides dauert Sekunden und sagt mehr als ein einzelner Testlauf (siehe
+„Sim-Harness" und „Golden-Master und Referenzwerte"):
 
 ```bash
 cargo run -q -p fnp_sim_harness --bin fnp-sim-harness -- suite
+cargo run -q -p fnp_sim_harness --bin fnp-sim-harness -- golden check
 ```
 
 Wer etwas unter `assets_src/` ändert, führt zusätzlich die Python-Tests der Werkzeuge aus (numpy
@@ -103,7 +105,7 @@ ein aktiver Patch lässt jeden `--locked`-Aufruf scheitern. Vor dem Commit zusä
 | Workflow | Auslöser | Inhalt |
 |----------|----------|--------|
 | `ci.yml` | Push auf `main`, Pull Request, manuell | `fmt`; `assets` (Linux, Python-Tests von `assets_src/figure_pack` und `assets_src/asset_import`); `content` (Linux, Asset-Gate über `content/` und der Negativnachweis, je ein eigener Job); `test` auf Windows/Linux/macOS mit clippy, Tests (`--no-fail-fast`) und Build; unter Linux zusätzlich der Abgleich der `clippy.toml`-Kopien mit dem gepinnten Engine-Tag |
-| `nightly.yml` | täglich 02:47 UTC, manuell | Asset-Gate auf Windows/Linux/macOS (beide Fälle), Determinismus-Test im Release-Profil, dann Release-Build von `fiends-n-patrons` für drei Systeme als Artefakt (7 Tage), Kurz-Changelog im Job-Summary; geplante Läufe entfallen, wenn `main` 24 h nicht bewegt wurde (Push oder Merge laut Aktivitäts-API, nicht Commit-Datum) |
+| `nightly.yml` | täglich 02:47 UTC, manuell | Asset-Gate auf Windows/Linux/macOS (beide Fälle) samt Referenz-Pattern-Master, Golden-Master der Szenen auf drei Systemen (Diff-Artefakt bei Abweichung), Determinismus-Test im Release-Profil, dann Release-Build von `fiends-n-patrons` für drei Systeme als Artefakt (7 Tage), Kurz-Changelog im Job-Summary; geplante Läufe entfallen, wenn `main` 24 h nicht bewegt wurde (Push oder Merge laut Aktivitäts-API, nicht Commit-Datum) |
 | `release.yml` | Tag `vX.Y.Z` | Versionsprüfung, Determinismus-Test im Release-Profil und Release-Builds für drei Systeme, **Entwurf** eines GitHub-Release mit git-cliff-Notes und Binaries |
 
 - Der Job `assets` läuft bei jedem Auslöser des Workflows, nicht nur bei Änderungen unter
@@ -277,6 +279,37 @@ Aufruf war so nicht durchführbar.
 
 ## Golden-Master und Referenzwerte
 
+Zwei Sätze Master liegen unter `tests/golden/` (Plan 0002 WP7.5):
+
+| Master | Was er einfriert | Wer prüft ihn |
+|---|---|---|
+| `tests/golden/scenes/<szene>.json` | Verhalten **einer Szene**: Zustands-Hash alle 60 Ticks, Endhash, Höchststand, Despawns nach Ursache, Treffer, Runden und der Tick, auf dem jede Runde startet | `cargo test -p fnp_sim_harness --test golden` (also jeder Push, auf allen drei Systemen) und nightly zusätzlich über die CLI |
+| `tests/golden/reference_patterns.json` | dass der **gepinnte Engine-Tag** die Referenz-Patterns der Engine noch zu denselben Units und derselben Simulation macht (`unit_id`, `content_hash`, Endhash nach 600 Ticks) | Schritt im Asset-Gate (Linux je Push) und nightly auf drei Systemen |
+
+Der Szenen-Master pinnt bewusst das **Szenen**-Verhalten und nicht die Zahlen eines Patterns für
+sich: In einem echten Lauf macht der Clear die meisten Despawns, die Höchststände liegen weit unter
+denen eines isolierten Laufs, und „endlich" gilt nur je Runde. Deshalb stehen die Runden-Starts
+ausdrücklich im Master, statt als Rauschen in einem Hash zu verschwinden.
+
+```bash
+# Prüfen (dasselbe, was die CI tut)
+cargo run -q -p fnp_sim_harness --bin fnp-sim-harness -- golden check
+bash .github/scripts/reference-masters.sh check engine     # engine/ = Checkout des gepinnten Tags
+
+# Erneuern — nur nach der Regel unten, und immer mit Grund
+cargo run -q -p fnp_sim_harness --bin fnp-sim-harness -- golden renew --reason "<warum>"
+bash .github/scripts/reference-masters.sh renew engine
+```
+
+`golden check` meldet bei einer Abweichung den **ersten abweichenden Checkpoint**, das 60-Tick-
+**Fenster**, in dem die Änderung begann, jede weitere Abweichung (Treffer, Runden, Despawns …) und
+das Ergebnis der **Eingrenzung**: Engine-ADR-0018 erkennt alle 60 Ticks und grenzt dann *innerhalb*
+dieses Fensters je System ein, indem der Lauf mit einem Thread gegen einen Lauf mit vier Threads
+verglichen wird (`grimoire_sim::trace`, `first_divergence`). Die Referenz wird dafür **neu
+gefahren**, nie im Master gespeichert. Mit `--out <pfad>` legt der Lauf zusätzlich ab, was man
+woanders braucht: den Diff-Bericht, den vollständigen Lauf-Bericht und die `.replay`-Datei
+(`InputLog` v1) der Szene — die nightly-CI hebt genau das als Artefakt auf.
+
 Golden-Master-Replays, Zustands-Hashes und später Render-Snapshots sind eingefrorene Erwartungen
 (PRD-0018 FR-05). Erneuert wird **nur bewusst**:
 
@@ -287,6 +320,8 @@ Golden-Master-Replays, Zustands-Hashes und später Render-Snapshots sind eingefr
    abweichenden Tick und das Subsystem) und die Begründung. Keine anderen Änderungen im selben Commit.
 3. **Nie für eine einzelne Plattform** und **nie, um CI grün zu bekommen.** Agenten erneuern
    Golden-Master nicht eigenmächtig; die Entscheidung trifft der PO.
+   `golden renew` verlangt `--reason` und schreibt ihn samt *alt → neu* je Szene nach
+   `tests/golden/RENEWALS.md`; diese Datei gehört in denselben Commit wie die Master.
 4. Ein Engine-Upgrade, das Golden-Master bricht, ist laut Engine-CHANGELOG eine inkompatible
    Engine-Änderung. Die Erneuerung gehört dann in den Upgrade-PR, mit Verweis auf den
    CHANGELOG-Eintrag.

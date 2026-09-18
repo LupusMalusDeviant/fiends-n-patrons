@@ -195,6 +195,11 @@ jobs:
       - name: grimoire-ac build ${{ matrix.case.directory }}
         if: steps.tools.outputs.ready == 'true'
         run: bash .github/scripts/asset-gate.sh "${{ matrix.case.directory }}" "${{ matrix.case.out }}" "${{ matrix.case.expect }}" "${{ matrix.case.codes }}"
+      # Plan 0002 WP7.5: the tag the game pins must still turn the engine's reference patterns into
+      # the same units and the same simulation. The tools for it are already built above.
+      - name: Reference patterns match their master
+        if: steps.tools.outputs.ready == 'true' && matrix.case.expect == 'pass'
+        run: bash .github/scripts/reference-masters.sh check engine
       # `packs/` is a build artefact: it is produced here, kept for a week and never checked in.
       - name: Upload packs
         if: steps.tools.outputs.ready == 'true' && matrix.case.expect == 'pass'

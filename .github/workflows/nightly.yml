@@ -193,6 +193,11 @@ jobs:
       - name: grimoire-ac build ${{ matrix.case.directory }}
         if: steps.tools.outputs.ready == 'true'
         run: bash .github/scripts/asset-gate.sh "${{ matrix.case.directory }}" "${{ matrix.case.out }}" "${{ matrix.case.expect }}" "${{ matrix.case.codes }}"
+      # Plan 0002 WP7.5: the tag the game pins must still turn the engine's reference patterns into
+      # the same units and the same simulation. The tools for it are already built above.
+      - name: Reference patterns match their master
+        if: steps.tools.outputs.ready == 'true' && matrix.case.expect == 'pass'
+        run: bash .github/scripts/reference-masters.sh check engine
 
   build:
     name: release build (${{ matrix.platform }})
@@ -222,6 +227,22 @@ jobs:
       # level must not change the arena's golden hash on any platform (tests/determinism.rs).
       - name: Determinism gate (release profile)
         run: cargo test --release --locked -p fnp_sim_harness --test determinism
+      # Plan 0002 WP7.5: the cross-platform comparison of the golden masters. Every push already
+      # checks them in the test job; here they run on all three systems through the command line,
+      # and a mismatch keeps its diff report, its run report and the replay that reproduces it.
+      - name: Golden masters match (scenes)
+        run: |
+          set -euo pipefail
+          cargo run --release --locked -p fnp_sim_harness --bin fnp-sim-harness -- \
+            golden check --out target/golden-diff
+      - name: Upload the golden diff
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-diff-${{ matrix.platform }}
+          path: target/golden-diff/*
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Build fiends-n-patrons (release)
         run: cargo build --release --locked -p fnp_app --bin fiends-n-patrons
       # upload-artifact drops the executable bit, so Unix binaries travel inside a tarball.
