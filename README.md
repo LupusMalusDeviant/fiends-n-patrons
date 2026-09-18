@@ -6,10 +6,10 @@ auf Kosten des Zorns der übrigen vier.
 
 Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Release-Tags).
 
-> Status: **erster spielbarer Prototyp**. Die Seele läuft durch eine beleuchtete Arena, ein Imp
-> feuert Sigil-Patterns, ein Treffer beendet die Runde, nach 1,5 s beginnt sie neu; ein Vorhang-Modus
-> zeigt rund 10.000 Bullets. Das Spiel läuft in der Hauptschleife der Engine und pinnt Grimoire
-> `v0.4.0` über einen Git-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Der
+> Status: **erster spielbarer Prototyp**. Die Hexe läuft durch eine beleuchtete Arena, ein Imp
+> feuert eines von sechs Sigil-Mustern, ein Treffer beendet die Runde, nach 1,5 s beginnt sie neu;
+> ein Vorhang-Modus zeigt rund 10.000 Bullets. Das Spiel läuft in der Hauptschleife der Engine und pinnt Grimoire
+> `v0.6.0` über einen Git-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Der
 > Determinismus-Test friert die Endhashes der Arena und des Vorhangs für Seed 42 ein.
 
 ## Einstieg
@@ -83,7 +83,12 @@ gemessen dasselbe ist. Die Patterns nutzen nur Katalognamen, die der Bullet-Pass
 `ArenaGame::new()` bleibt daneben die Arena des Imps allein — die Form, die die Goldmasters
 `imp_arena` und `imp_curtain` festhalten. Bullets laufen über den Adapter
 `grimoire::adapters::sigil_render` in den Bullet-Pass, der auch die Geschoss-Lichter ableitet.
-Vorläufig im Prototyp: Die Figuren haben keine Animation, nur Ruhe- und Treffer-Pose.
+Die Figuren tragen das Rim-Licht der Engine (`MeshRole::Actor`): Nur sie bekommen es, die Bühne
+bleibt `Environment` und zeichnet unverändert. Bringt ein Pack Clips mit (`figures/<Figur>/clip/idle`
+und `walk`), spielt das Spiel sie ab: Die Clip-Zeit ist `(Tick + alpha) / Tickrate`, die Überblendung
+zwischen Stehen und Gehen eine reine Funktion der Geschwindigkeit — die Pose hängt damit nur von Welt
+und `alpha` ab (Engine-ADR-0017), die Simulation zählt keine Animationszeit. Ohne Clips steht die
+Figur in ihrer Ruhepose, wie bisher; der Imp tut das derzeit.
 
 Die Kamera führt `ArenaStage` selbst (Voreinstellung, Folgefeder, Zug zum Imp), der Zielanker fürs
 Mauszielen ist die Spielfigur. Die Kamera ist reine Darstellung: Die Taste `C` kommt über
