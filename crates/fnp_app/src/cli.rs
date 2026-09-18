@@ -39,7 +39,8 @@ Controls:
   P                   Cycle the fiend's pattern: imp_volley, swarm_weave, shooter_rails,
                       harrier_scatter, summoner_bloom, breaker_toll
   V                   Toggle the curtain mode (about 10,000 bullets, the player invulnerable)
-  C                   Cycle the camera presets A (60 deg, 14.5 m), B (52, 12.5), C (45, 11)
+  C                   Cycle the camera presets A (60 deg, 14.5 m), B (52, 12.5), C (45, 11);
+                      presentation only, never part of a recording
   F3                  Toggle the engine's stats overlay
   Escape              Quit
 

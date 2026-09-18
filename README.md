@@ -6,10 +6,10 @@ auf Kosten des Zorns der übrigen vier.
 
 Das Spiel läuft auf der eigenen Engine **Grimoire** (eigenes Repo, gepinnte Release-Tags).
 
-> Status: **erster spielbarer Prototyp**. Die Seele läuft durch eine beleuchtete Arena, ein Imp
-> feuert Sigil-Patterns, ein Treffer beendet die Runde, nach 1,5 s beginnt sie neu; ein Vorhang-Modus
-> zeigt rund 10.000 Bullets. Das Spiel läuft in der Hauptschleife der Engine und pinnt Grimoire
-> `v0.4.0` über einen Git-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Der
+> Status: **erster spielbarer Prototyp**. Die Hexe läuft durch eine beleuchtete Arena, ein Imp
+> feuert eines von sechs Sigil-Mustern, ein Treffer beendet die Runde, nach 1,5 s beginnt sie neu;
+> ein Vorhang-Modus zeigt rund 10.000 Bullets. Das Spiel läuft in der Hauptschleife der Engine und pinnt Grimoire
+> `v0.6.0` über einen Git-Tag ([ADR-0009](docs/adr/0009-engine-pin-ueber-git-tag.md)). Der
 > Determinismus-Test friert die Endhashes der Arena und des Vorhangs für Seed 42 ein.
 
 ## Einstieg
@@ -58,7 +58,7 @@ Im Spiel:
 | `WASD` oder Pfeiltasten | Seele bewegen (mit leichtem Nachgleiten) |
 | `P` | Muster des Gegners wechseln, reihum: `imp_volley`, `swarm_weave`, `shooter_rails`, `harrier_scatter`, `summoner_bloom`, `breaker_toll` (Wechsel löscht die Bullets des alten Musters) |
 | `V` | Vorhang-Modus ein/aus: rund 10.000 Bullets, die Spielfigur ist dabei unverwundbar |
-| `C` | Kamera-Voreinstellung wechseln: A (60°, 14,5 m, Vorgabe), B (52°, 12,5 m), C (45°, 11 m); Blickwinkel immer 42°, die aktive Voreinstellung steht im Fenstertitel |
+| `C` | Kamera-Voreinstellung wechseln: A (60°, 14,5 m, Vorgabe), B (52°, 12,5 m), C (45°, 11 m); Blickwinkel immer 42°, die aktive Voreinstellung steht im Fenstertitel. Reine Darstellungstaste: Sie läuft über `GamePlugin::presentation_input` (Vertrag §9.12) und steht in keiner Aufzeichnung |
 | `F3` | Stats-Overlay der Engine ein/aus (Profiler-Scopes mit Budgetbalken) |
 | `Escape` | Beenden |
 
@@ -83,13 +83,20 @@ gemessen dasselbe ist. Die Patterns nutzen nur Katalognamen, die der Bullet-Pass
 `ArenaGame::new()` bleibt daneben die Arena des Imps allein — die Form, die die Goldmasters
 `imp_arena` und `imp_curtain` festhalten. Bullets laufen über den Adapter
 `grimoire::adapters::sigil_render` in den Bullet-Pass, der auch die Geschoss-Lichter ableitet.
-Vorläufig im Prototyp: Die Figuren haben keine Animation, nur Ruhe- und Treffer-Pose.
+Die Figuren tragen das Rim-Licht der Engine (`MeshRole::Actor`): Nur sie bekommen es, die Bühne
+bleibt `Environment` und zeichnet unverändert. Bringt ein Pack Clips mit (`figures/<Figur>/clip/idle`
+und `walk`), spielt das Spiel sie ab: Die Clip-Zeit ist `(Tick + alpha) / Tickrate`, die Überblendung
+zwischen Stehen und Gehen eine reine Funktion der Geschwindigkeit — die Pose hängt damit nur von Welt
+und `alpha` ab (Engine-ADR-0017), die Simulation zählt keine Animationszeit. Ohne Clips steht die
+Figur in ihrer Ruhepose, wie bisher; der Imp tut das derzeit.
 
 Die Kamera führt `ArenaStage` selbst (Voreinstellung, Folgefeder, Zug zum Imp), der Zielanker fürs
-Mauszielen ist die Seele. Die Kamera ist reine Darstellung: Ein Test spielt denselben Lauf unter
-allen drei Voreinstellungen mit Wechseln mitten im Lauf und vergleicht den Zustands-Hash nach
-jedem Tick; ein zweiter prüft, dass derselbe Bodenpunkt unter dem Mauszeiger unter jeder
-Voreinstellung dieselbe Zielrichtung ergibt.
+Mauszielen ist die Spielfigur. Die Kamera ist reine Darstellung: Die Taste `C` kommt über
+`GamePlugin::presentation_input` (Vertrag §9.12) und nicht über die `InputMap`, taucht also in
+keinem Tick und keiner Aufzeichnung auf. Ein Test spielt denselben Lauf unter allen drei
+Voreinstellungen mit Wechseln mitten im Lauf und vergleicht den Zustands-Hash nach jedem Tick —
+auch gegen denselben Lauf ganz ohne Kamera-Tasten ist jeder Hash gleich; ein zweiter prüft, dass
+derselbe Bodenpunkt unter dem Mauszeiger unter jeder Voreinstellung dieselbe Zielrichtung ergibt.
 
 Ohne Fenster läuft dieselbe Simulation über `fnp_sim_harness::run_arena(seed, ticks, input)`; der
 Determinismus-Test liegt in `crates/fnp_sim_harness/tests/determinism.rs`. Eine Bildfolge eines

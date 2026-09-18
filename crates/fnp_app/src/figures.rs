@@ -12,10 +12,12 @@ use std::fmt;
 use std::path::Path;
 
 use fnp_game::arena::present::{
-    ArenaVisuals, AuthoredFront, FigureVisual, StageMeshData, stage_mesh_data,
+    ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, StageMeshData, stage_mesh_data,
 };
 use grimoire::RenderAssets;
-use grimoire::adapters::figure_assets::{FigureLoadError, load_figure_into};
+use grimoire::adapters::figure_assets::{
+    FigureLoadError, LoadedFigure, load_clip, load_figure_into,
+};
 use grimoire::platform::StdFileSystem;
 use grimoire::render::figure_format::SkeletonData;
 use grimoire::render::{MeshError, MeshHandle};
@@ -36,6 +38,12 @@ pub const ENEMY_FIGURES: &[&str] = &["imp_hi3d", "imp"];
 /// Which way a figure whose rig says nothing is assumed to look: the game's convention, glTF +Z
 /// (the glTF standard and the Hi3D assets).
 pub const DEFAULT_FIGURE_FRONT: AuthoredFront = AuthoredFront::PlusZ;
+
+/// Clip a figure plays while it stands still (`figures/<name>/clip/idle`).
+pub const IDLE_CLIP: &str = "idle";
+
+/// Clip a figure plays while it moves (`figures/<name>/clip/walk`).
+pub const WALK_CLIP: &str = "walk";
 
 /// Which way the figures of the earlier packs (rounds 3 and 4) look: glTF -Z, against the
 /// convention, so they are turned by half a turn before anything else ([`AuthoredFront`]).
@@ -470,6 +478,10 @@ pub struct LoadSummary {
     pub player_front: (AuthoredFront, bool),
     /// Which way the enemy's model looks and whether that was measured or set.
     pub enemy_front: (AuthoredFront, bool),
+    /// Whether the player's figure plays its clips, and why not if it does not.
+    pub player_clips: Result<(), String>,
+    /// The same for the enemy's figure.
+    pub enemy_clips: Result<(), String>,
 }
 
 impl fmt::Display for LoadSummary {
@@ -482,18 +494,25 @@ impl fmt::Display for LoadSummary {
             let source = if measured { "measured" } else { "set" };
             format!("front {name} ({source})")
         };
+        let clips = |result: &Result<(), String>| match result {
+            Ok(()) => String::from("clips idle+walk"),
+            Err(reason) => format!("no clips ({reason})"),
+        };
         write!(
             f,
-            "player `{}`: {} parts, {} joints, {:.2} m, {}; enemy `{}`: {} parts, {:.2} m, {}",
+            "player `{}`: {} parts, {} joints, {:.2} m, {}, {}; enemy `{}`: {} parts, \
+             {:.2} m, {}, {}",
             self.player_name,
             self.player_parts,
             self.player_joints,
             self.player_height,
             front(self.player_front),
+            clips(&self.player_clips),
             self.enemy_name,
             self.enemy_parts,
             self.enemy_height,
-            front(self.enemy_front)
+            front(self.enemy_front),
+            clips(&self.enemy_clips)
         )
     }
 }
@@ -551,8 +570,18 @@ pub fn load_visuals(
     };
     let (player_front, player_measured) = front(&figures.player, &player.skeleton);
     let (enemy_front, enemy_measured) = front(&figures.enemy, &enemy.skeleton);
-    let player_visual = FigureVisual::from_loaded(&player, player_front);
-    let enemy_visual = FigureVisual::from_loaded(&enemy, enemy_front);
+    // Clips are optional: a pack without them draws the rest pose, exactly as before.
+    let (player_animation, player_clips) =
+        load_animation(&mut store, &figures.player.name, &player);
+    let (enemy_animation, enemy_clips) = load_animation(&mut store, &figures.enemy.name, &enemy);
+    let mut player_visual = FigureVisual::from_loaded(&player, player_front);
+    if let Some(animation) = player_animation {
+        player_visual = player_visual.with_animation(animation);
+    }
+    let mut enemy_visual = FigureVisual::from_loaded(&enemy, enemy_front);
+    if let Some(animation) = enemy_animation {
+        enemy_visual = enemy_visual.with_animation(animation);
+    }
     let summary = LoadSummary {
         player_name: figures.player.name.clone(),
         player_parts: player.parts.len(),
@@ -563,6 +592,8 @@ pub fn load_visuals(
         enemy_height: enemy_visual.height,
         player_front: (player_front, player_measured),
         enemy_front: (enemy_front, enemy_measured),
+        player_clips,
+        enemy_clips,
     };
     Ok((
         ArenaVisuals {
@@ -575,6 +606,32 @@ pub fn load_visuals(
         },
         summary,
     ))
+}
+
+/// Loads the [`IDLE_CLIP`] and [`WALK_CLIP`] of `name` and checks them against the figure's own
+/// skeleton (`load_clip` compares joint count and skeleton fingerprint, so a clip of another rig
+/// is refused instead of posing nonsense).
+///
+/// A figure without both clips simply has no animation; the reason is returned for the log.
+fn load_animation(
+    store: &mut AssetStore,
+    name: &str,
+    figure: &LoadedFigure,
+) -> (Option<FigureAnimation>, Result<(), String>) {
+    let mut load = |clip: &str| {
+        load_clip(store, name, clip, &figure.skeleton).map_err(|error| format!("{clip}: {error}"))
+    };
+    match (load(IDLE_CLIP), load(WALK_CLIP)) {
+        (Ok(idle), Ok(walk)) => (
+            Some(FigureAnimation {
+                skeleton: figure.skeleton.clone(),
+                idle,
+                walk,
+            }),
+            Ok(()),
+        ),
+        (Err(reason), _) | (Ok(_), Err(reason)) => (None, Err(reason)),
+    }
 }
 
 /// Registers only the stage geometry and stands both figures in as placeholders that reuse the

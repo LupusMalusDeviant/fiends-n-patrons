@@ -5,7 +5,7 @@
   "seed": 11,
   "ticks": 1200,
   "bot": "dodger",
-  "engine_version": "0.5.0",
+  "engine_version": "0.6.0",
   "patterns": ["breaker_toll"],
   "final_state_hash": "e5e39bab013e6d99",
   "peak_bullets": 62,

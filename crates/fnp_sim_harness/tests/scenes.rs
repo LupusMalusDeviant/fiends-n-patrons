@@ -165,6 +165,10 @@ fn the_report_document_names_the_scene_and_its_patterns() {
     assert!(json.contains("\"scene\": \"document\""));
     assert!(json.contains("\"patterns\": [\"breaker_toll\"]"));
     assert!(json.contains("\"bot\": \"dodger\""));
-    assert!(json.contains("\"engine_version\": \"0.5.0\""));
+    // The pinned engine's version, so an engine bump does not need this test edited.
+    assert!(json.contains(&format!(
+        "\"engine_version\": \"{}\"",
+        grimoire::sim::ENGINE_VERSION
+    )));
     assert!(json.contains("\"ok\": true"));
 }

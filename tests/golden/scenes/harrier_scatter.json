@@ -5,7 +5,7 @@
   "seed": 9,
   "ticks": 1800,
   "bot": "dodger",
-  "engine_version": "0.5.0",
+  "engine_version": "0.6.0",
   "patterns": ["harrier_scatter"],
   "final_state_hash": "82b7025c56c0c847",
   "peak_bullets": 80,

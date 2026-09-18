@@ -16,11 +16,12 @@ use std::time::{Duration, Instant};
 
 use fnp_game::arena::present::{self, ArenaVisuals, CAMERA_PRESETS, Hud};
 use fnp_game::arena::{
-    ArenaGame, ArenaMode, CAMERA_BUTTON, CURTAIN_BUTTON, Mode, PATTERN_BUTTON, Roster, RosterState,
+    ArenaGame, ArenaMode, CURTAIN_BUTTON, Mode, PATTERN_BUTTON, Roster, RosterState,
     playable_roster,
 };
 use fnp_game::{GAME_TITLE, TICK_RATE_HZ};
 use grimoire::debug::FrameProfile;
+use grimoire::platform::RawInputEvent;
 use grimoire::prelude::*;
 use grimoire::render::{CameraFollow, LightBudget, StageRendererConfig};
 use grimoire::{PluginError, RenderAssets};
@@ -31,6 +32,10 @@ use crate::figures::{PackFigures, load_visuals, placeholder_visuals};
 pub const CURTAIN_KEY: KeyCode = KeyCode::KeyV;
 
 /// Key that cycles the camera presets ([`CAMERA_PRESETS`]).
+///
+/// Presentation only: it reaches the stage through [`GamePlugin::presentation_input`] (contract
+/// §9.12), never through the [`InputMap`], so it cannot appear in a tick, a state hash or a
+/// recording.
 pub const CAMERA_KEY: KeyCode = KeyCode::KeyC;
 
 /// Key that cycles the fiend's fight pattern through the roster.
@@ -142,8 +147,6 @@ pub struct ArenaStage {
     log_summary: bool,
     /// Index into [`CAMERA_PRESETS`].
     camera_preset: usize,
-    /// Whether [`CAMERA_BUTTON`] was held in the tick seen last.
-    camera_held: bool,
     /// Tick whose input was seen last, so a frame without a tick does not toggle twice.
     input_tick: Option<u64>,
     /// Render-side follow spring of the camera target.
@@ -156,6 +159,8 @@ pub struct ArenaStage {
     pattern: &'static str,
     /// Mode and roster index seen in the previous tick, to count switches.
     switched_from: (Mode, u16),
+    /// Buffers for sampling the figures' clips; holds no playback state.
+    animator: present::Animator,
 }
 
 impl ArenaStage {
@@ -178,12 +183,12 @@ impl ArenaStage {
             window: None,
             log_summary: true,
             camera_preset: camera_preset % CAMERA_PRESETS.len(),
-            camera_held: false,
             input_tick: None,
             follow: None,
             frame_seconds: 0.0,
             pattern: roster.fight.first().map_or("", |entry| entry.name),
             switched_from: (Mode::Volley, 0),
+            animator: present::Animator::new(),
             roster,
         }
     }
@@ -244,25 +249,6 @@ impl GamePlugin for ArenaStage {
         let tick = world.resource::<Tick>().map(|tick| tick.0);
         if self.input_tick != tick {
             self.input_tick = tick;
-            let held = input.slots[0].is_pressed(CAMERA_BUTTON);
-            if held && !self.camera_held {
-                self.camera_preset = (self.camera_preset + 1) % CAMERA_PRESETS.len();
-                let preset = CAMERA_PRESETS[self.camera_preset];
-                self.stats.borrow_mut().camera_switches += 1;
-                eprintln!(
-                    "fiends-n-patrons: camera preset {} ({} degrees, {} m)",
-                    preset.name, preset.tilt_degrees, preset.distance
-                );
-                if let Some(window) = &self.window {
-                    window.set_title(&Self::title(
-                        self.hud,
-                        self.pattern,
-                        self.camera_preset,
-                        0.0,
-                    ));
-                }
-            }
-            self.camera_held = held;
         }
         let mode = world
             .resource::<ArenaMode>()
@@ -302,7 +288,7 @@ impl GamePlugin for ArenaStage {
         let Some(visuals) = &self.visuals else {
             return;
         };
-        let extraction = present::extract(world, alpha, visuals, stage);
+        let extraction = present::extract(world, alpha, visuals, &mut self.animator, stage);
         self.hud = present::hud(world);
         let mut stats = self.stats.borrow_mut();
         stats.peak_bullets = stats.peak_bullets.max(self.hud.bullets);
@@ -313,6 +299,37 @@ impl GamePlugin for ArenaStage {
         stats.camera_preset = self.camera_preset;
         stats.pattern = self.pattern;
         stats.last_aim = [input.slots[0].axes[2], input.slots[0].axes[3]];
+    }
+
+    /// Presentation keys (contract §9.12): [`CAMERA_KEY`] cycles the camera presets.
+    ///
+    /// The event never reaches a tick, a hash or a recording, so a run recorded while the camera
+    /// is switched is byte-identical to one without it. Key repeats are ignored, so holding the
+    /// key cycles once.
+    fn presentation_input(&mut self, event: &RawInputEvent) {
+        let RawInputEvent::Key {
+            code: CAMERA_KEY,
+            pressed: true,
+            repeat: false,
+        } = event
+        else {
+            return;
+        };
+        self.camera_preset = (self.camera_preset + 1) % CAMERA_PRESETS.len();
+        let preset = CAMERA_PRESETS[self.camera_preset];
+        self.stats.borrow_mut().camera_switches += 1;
+        eprintln!(
+            "fiends-n-patrons: camera preset {} ({} degrees, {} m)",
+            preset.name, preset.tilt_degrees, preset.distance
+        );
+        if let Some(window) = &self.window {
+            window.set_title(&Self::title(
+                self.hud,
+                self.pattern,
+                self.camera_preset,
+                0.0,
+            ));
+        }
     }
 
     /// The mouse-aim anchor: the interpolated player. The camera follows its own, pulled point
@@ -382,8 +399,11 @@ pub fn stage_renderer_config() -> StageRendererConfig {
     config
 }
 
-/// The engine's default bindings plus [`CURTAIN_KEY`] on [`CURTAIN_BUTTON`], [`PATTERN_KEY`] on
-/// [`PATTERN_BUTTON`] and [`CAMERA_KEY`] on [`CAMERA_BUTTON`].
+/// The engine's default bindings plus [`CURTAIN_KEY`] on [`CURTAIN_BUTTON`] and [`PATTERN_KEY`]
+/// on [`PATTERN_BUTTON`] — both change what the fiend does, so both belong in the tick input.
+///
+/// [`CAMERA_KEY`] is deliberately missing: it only moves the camera and takes the presentation
+/// path ([`GamePlugin::presentation_input`]).
 #[must_use]
 pub fn input_map() -> InputMap {
     InputMap::default()
@@ -394,10 +414,6 @@ pub fn input_map() -> InputMap {
         .with(
             InputSource::Key(PATTERN_KEY),
             InputAction::Button(PATTERN_BUTTON),
-        )
-        .with(
-            InputSource::Key(CAMERA_KEY),
-            InputAction::Button(CAMERA_BUTTON),
         )
 }
 
@@ -444,7 +460,7 @@ pub fn arena_app(config: ArenaConfig) -> (AppBuilder, Shared<RunStats>) {
 
 #[cfg(test)]
 mod tests {
-    use grimoire::platform::{PlatformEvent, RawInputEvent};
+    use grimoire::platform::PlatformEvent;
 
     use super::*;
     use crate::figures::{ChosenFigure, FrontChoice};
@@ -686,7 +702,9 @@ mod tests {
     fn camera_presets_never_change_the_state_hashes() {
         // A replay with the state hash after every tick: the same movement script, started under
         // each preset and switching presets three times mid-run, against the same script without
-        // the camera key. The camera differs in every frame; the simulation does not.
+        // the camera key. The camera differs in every frame; the simulation does not — and since
+        // the camera key takes the presentation path (contract §9.12) instead of an `InputMap`
+        // binding, not even the recorded tick input differs any more.
         const TAPS: [u64; 3] = [30, 90, 150];
         let run = |start: usize, camera_key: bool| {
             let (app, stats) = headless_with_camera(Some(240), start);
@@ -723,20 +741,31 @@ mod tests {
             assert_eq!(report.final_hash, reference.final_hash);
         }
 
-        // Against the run without the key, only ticks whose recorded input carries the button
-        // itself may differ (the tick input is part of the state); every later tick is equal.
-        assert_eq!(reference.hashes.len(), without_key.hashes.len());
-        for (with, without) in reference.hashes.iter().zip(&without_key.hashes) {
-            assert_eq!(with.0, without.0);
-            if with.1 != without.1 {
-                assert!(
-                    TAPS.iter().any(|&tap| (tap..=tap + 3).contains(&with.0)),
-                    "tick {} differs away from a camera key tap",
-                    with.0
-                );
-            }
-        }
+        // Against the run without the key: every tick's hash is equal, tap ticks included. The
+        // key is not in the tick input at all, so the recording cannot tell the runs apart.
+        assert_eq!(
+            reference.hashes, without_key.hashes,
+            "pressing the camera key changes nothing that is recorded"
+        );
         assert_eq!(reference.final_hash, without_key.final_hash);
+        assert_eq!(reference.final_tick, without_key.final_tick);
+    }
+
+    #[test]
+    fn only_the_camera_key_cycles_the_presets() {
+        // Other keys reach the presentation hook too; they must leave the camera alone.
+        let (app, stats) = headless(Some(120));
+        app.run_headless_frames_with_events(1_000, FRAME, &mut |frame, events| {
+            taps(KeyCode::KeyD, &[10], frame, events);
+            taps(KeyCode::KeyW, &[20], frame, events);
+            taps(PATTERN_KEY, &[30], frame, events);
+            taps(CURTAIN_KEY, &[40], frame, events);
+            taps(CAMERA_KEY, &[50], frame, events);
+        })
+        .expect("runs");
+        let stats = *stats.borrow();
+        assert_eq!(stats.camera_switches, 1, "{stats:?}");
+        assert_eq!(stats.camera_preset, 1, "{stats:?}");
     }
 
     #[test]
