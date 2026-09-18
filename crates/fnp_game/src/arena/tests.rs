@@ -49,6 +49,184 @@ fn bullets(sim: &Simulation) -> usize {
         .map_or(0, |pool| pool.len() as usize)
 }
 
+fn roster_sim(seed: u64) -> (Simulation, Arc<Roster>) {
+    let roster = Arc::new(playable_roster());
+    let mut sim = Simulation::new(seed);
+    ArenaGame::with_roster(Arc::clone(&roster)).build(&mut sim);
+    (sim, roster)
+}
+
+fn cycle() -> TickInput {
+    let mut input = TickInput::default();
+    input.slots[0].buttons = 1 << PATTERN_BUTTON;
+    input
+}
+
+fn active_units(sim: &Simulation) -> Vec<UnitId> {
+    let mut units: Vec<UnitId> = sim
+        .world()
+        .query::<&Emitter>()
+        .map(|emitter| emitter.unit)
+        .collect();
+    units.sort_unstable_by_key(|id| id.0);
+    units.dedup_by_key(|id| id.0);
+    units
+}
+
+/// Steps `ticks` idle ticks and returns the most bullets that were alive at any of them (a hit
+/// clears the arena, so the count at the end says nothing about whether a pattern fired).
+fn max_bullets(sim: &mut Simulation, ticks: u64) -> usize {
+    let mut max = bullets(sim);
+    for _ in 0..ticks {
+        sim.step(TickInput::default());
+        max = max.max(bullets(sim));
+    }
+    max
+}
+
+fn roster_index(sim: &Simulation) -> u16 {
+    sim.world()
+        .resource::<RosterState>()
+        .expect("roster state")
+        .index
+}
+
+#[test]
+fn the_roster_starts_with_the_imps_volley_and_installs_every_pattern() {
+    let (sim, roster) = roster_sim(3);
+    assert_eq!(roster.fight.len(), 6, "five role patterns plus the volley");
+    assert_eq!(roster.fight[0].name, "imp_volley");
+    assert_eq!(
+        roster.curtain.as_ref().map(|entry| entry.name),
+        Some("imp_curtain")
+    );
+    let library = sim
+        .world()
+        .resource::<SigilContent>()
+        .expect("the interpreter is installed");
+    assert_eq!(library.library().units().len(), 7, "every unit once");
+    assert_eq!(roster_index(&sim), 0);
+    assert_eq!(mode(&sim), Mode::Volley);
+    assert_eq!(
+        active_units(&sim),
+        vec![roster.fight[0].pattern.unit.id()],
+        "only the first fight pattern fires"
+    );
+    // No ImpUnits resource: the roster is not the imp's own two-mode arena.
+    assert!(sim.world().resource::<ImpUnits>().is_none());
+}
+
+#[test]
+fn a_press_cycles_the_roster_and_clears_what_the_last_pattern_left() {
+    let (mut sim, roster) = roster_sim(4);
+    assert!(max_bullets(&mut sim, 200) > 0, "the volley is in the air");
+    sim.step(cycle());
+    assert_eq!(roster_index(&sim), 1);
+    assert_eq!(
+        active_units(&sim),
+        vec![roster.fight[1].pattern.unit.id()],
+        "the new pattern replaced the old emitters"
+    );
+    assert_eq!(bullets(&sim), 0, "the switch cleared the arena");
+    // Holding the button does not cycle again; releasing and pressing does.
+    sim.step(cycle());
+    assert_eq!(roster_index(&sim), 1);
+    sim.step(TickInput::default());
+    sim.step(cycle());
+    assert_eq!(roster_index(&sim), 2);
+}
+
+#[test]
+fn cycling_through_the_whole_roster_comes_back_to_the_start() {
+    let (mut sim, roster) = roster_sim(5);
+    for step in 1..=roster.fight.len() {
+        sim.step(cycle());
+        sim.step(TickInput::default());
+        let expected = step % roster.fight.len();
+        assert_eq!(usize::from(roster_index(&sim)), expected);
+        assert_eq!(
+            active_units(&sim),
+            vec![roster.fight[expected].pattern.unit.id()]
+        );
+        // Every pattern gets to fire in the playable arena.
+        assert!(
+            max_bullets(&mut sim, 240) > 0,
+            "{} fires within four seconds",
+            roster.fight[expected].name
+        );
+    }
+}
+
+#[test]
+fn the_curtain_still_toggles_in_the_roster_and_cycling_leaves_it() {
+    let (mut sim, roster) = roster_sim(6);
+    let curtain = roster.curtain.as_ref().expect("the roster has a curtain");
+    sim.step(toggle());
+    assert_eq!(mode(&sim), Mode::Curtain);
+    assert_eq!(active_units(&sim), vec![curtain.pattern.unit.id()]);
+    for _ in 0..600 {
+        sim.step(TickInput::default());
+    }
+    assert!(bullets(&sim) > 5_000, "the curtain fills the arena");
+    assert_eq!(
+        round(&sim).hits,
+        0,
+        "the soul is invulnerable in the curtain"
+    );
+    sim.step(cycle());
+    assert_eq!(mode(&sim), Mode::Volley, "cycling leaves the curtain");
+    assert_eq!(roster_index(&sim), 1);
+    assert_eq!(bullets(&sim), 0, "and clears its ten thousand bullets");
+}
+
+#[test]
+fn switching_during_a_lost_round_keeps_the_restart_tick() {
+    let (mut sim, _) = roster_sim(7);
+    // Stand still until a bullet lands.
+    let mut hit_tick = None;
+    for tick in 0..600_u64 {
+        sim.step(TickInput::default());
+        if let Phase::Hit { at_tick } = round(&sim).phase {
+            hit_tick = Some(at_tick);
+            break;
+        }
+        let _ = tick;
+    }
+    let at_tick = hit_tick.expect("the idle soul is hit");
+    sim.step(cycle());
+    assert!(matches!(round(&sim).phase, Phase::Hit { at_tick: t } if t == at_tick));
+    for emitter in sim.world().query::<&Emitter>() {
+        assert_eq!(emitter.started_at, at_tick + HIT_RECOVERY_TICKS);
+    }
+}
+
+#[test]
+fn the_roster_never_touches_the_imps_own_arena() {
+    // The golden path must stay bit-identical next to the playable one: same hashes, tick by tick.
+    let mut imp = built(42);
+    let (mut roster, _) = roster_sim(42);
+    let mut imp_hashes = Vec::new();
+    for tick in 0..240_u64 {
+        let input = if tick == 30 {
+            cycle()
+        } else {
+            TickInput::default()
+        };
+        imp.step(input);
+        roster.step(input);
+        imp_hashes.push(imp.state_hash());
+    }
+    let mut plain = built(42);
+    for _ in 0..240 {
+        plain.step(TickInput::default());
+    }
+    assert_eq!(
+        imp_hashes.last().copied(),
+        Some(plain.state_hash()),
+        "the pattern button does not reach the imp's arena"
+    );
+}
+
 #[test]
 fn a_scene_plays_its_own_patterns_and_has_no_second_mode() {
     // Plan 0002 WP7.4: the harness builds the same arena with a pattern set of its own.
