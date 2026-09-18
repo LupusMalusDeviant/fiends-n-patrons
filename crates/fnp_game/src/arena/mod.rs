@@ -40,7 +40,7 @@ use grimoire::collide::{
 use grimoire::prelude::*;
 use grimoire::sigil::{
     AimTarget, BehaviorRegistryBuilder, BulletPool, ClearFilter, ClearRequest, Emitter,
-    SigilConfig, SigilContent, SigilLibrary, UnitId, install,
+    SigilConfig, SigilContent, SigilLibrary, SigilUnit, UnitId, install,
 };
 
 use crate::{DT, Player, Position, PreviousPosition, Velocity};
@@ -510,15 +510,52 @@ fn toggle_mode(world: &mut World) {
     world.insert_resource(mode);
 }
 
+/// One pattern of a harness scene: a compiled unit and the emitters of it the fiend fires.
+///
+/// Sub-emitters (`role = sub`) never belong here; they fire through a bullet's `become_emitter`
+/// transform, not from the fiend.
+#[derive(Clone, Debug)]
+pub struct ScenePattern {
+    /// The compiled unit.
+    pub unit: SigilUnit,
+    /// Emitter indices of [`Self::unit`] that start at tick 0.
+    pub emitters: Vec<u16>,
+}
+
+impl ScenePattern {
+    /// A pattern that fires the given emitters of `unit`.
+    #[must_use]
+    pub fn new(unit: SigilUnit, emitters: Vec<u16>) -> Self {
+        Self { unit, emitters }
+    }
+}
+
 /// The first playable prototype's game plugin.
+///
+/// [`ArenaGame::new`] builds the arena the game itself plays: the imp with its two patterns and
+/// the curtain toggle. [`ArenaGame::with_patterns`] builds the same arena — same player, same
+/// collision, same rounds — but with a pattern set the caller chooses, which is how the harness
+/// turns the game's content into scenes (Plan 0002 WP7.4). The default path is untouched by that
+/// option, down to the resources it inserts, so the golden hashes of the prototype stay valid.
 #[derive(Debug, Default)]
-pub struct ArenaGame;
+pub struct ArenaGame {
+    /// `None` is the imp with its two modes; `Some` is a scene's own pattern set.
+    scene: Option<Vec<ScenePattern>>,
+}
 
 impl ArenaGame {
-    /// Creates the plugin.
+    /// Creates the plugin as the game plays it.
     #[must_use]
     pub fn new() -> Self {
-        Self
+        Self { scene: None }
+    }
+
+    /// Creates the plugin with a pattern set of its own; the curtain toggle is inert in it.
+    #[must_use]
+    pub fn with_patterns(patterns: Vec<ScenePattern>) -> Self {
+        Self {
+            scene: Some(patterns),
+        }
     }
 }
 
@@ -552,32 +589,77 @@ impl GamePlugin for ArenaGame {
             .add_system(system_fn("arena.steer_player", steer_player))
             .add_system(system_fn("arena.aim", aim_at_player));
 
-        let volley = fnp_content::sigil::imp_volley().expect("the embedded volley unit decodes");
-        let curtain = fnp_content::sigil::imp_curtain().expect("the embedded curtain unit decodes");
-        let units = ImpUnits {
-            volley: volley.id(),
-            curtain: curtain.id(),
-        };
+        let scene = self.scene.take();
         let registry = BehaviorRegistryBuilder::new(BEHAVIOR_REGISTRY_VERSION).build();
-        let library = SigilLibrary::new(vec![volley, curtain], Arc::clone(&registry))
-            .expect("the imp units form a valid library");
         let bounds = ARENA_HALF + Vec2::splat(BULLET_BOUNDS_MARGIN);
-        install(
-            sim,
-            library,
-            registry,
-            SigilConfig::new(BULLET_CAPACITY, -bounds, bounds),
-        )
-        .expect("the Sigil interpreter installs once");
+        let units = match &scene {
+            None => {
+                let volley =
+                    fnp_content::sigil::imp_volley().expect("the embedded volley unit decodes");
+                let curtain =
+                    fnp_content::sigil::imp_curtain().expect("the embedded curtain unit decodes");
+                let imp = ImpUnits {
+                    volley: volley.id(),
+                    curtain: curtain.id(),
+                };
+                let library = SigilLibrary::new(vec![volley, curtain], Arc::clone(&registry))
+                    .expect("the imp units form a valid library");
+                install(
+                    sim,
+                    library,
+                    registry,
+                    SigilConfig::new(BULLET_CAPACITY, -bounds, bounds),
+                )
+                .expect("the Sigil interpreter installs once");
+                Some(imp)
+            }
+            Some(patterns) => {
+                let library = SigilLibrary::new(
+                    patterns
+                        .iter()
+                        .map(|pattern| pattern.unit.clone())
+                        .collect(),
+                    Arc::clone(&registry),
+                )
+                .expect("a scene's units form a valid library");
+                install(
+                    sim,
+                    library,
+                    registry,
+                    SigilConfig::new(BULLET_CAPACITY, -bounds, bounds),
+                )
+                .expect("the Sigil interpreter installs once");
+                // No ImpUnits resource: a scene has no second mode, so the toggle does nothing.
+                None
+            }
+        };
 
         let world = sim.world_mut();
-        world.insert_resource(units);
         world.spawn((
             Position { at: IMP_POSITION },
             PreviousPosition { at: IMP_POSITION },
             Imp,
         ));
-        spawn_emitters(world, units, Mode::Volley, 0);
+        match (units, &scene) {
+            (Some(units), _) => {
+                world.insert_resource(units);
+                spawn_emitters(world, units, Mode::Volley, 0);
+            }
+            (None, Some(patterns)) => {
+                for pattern in patterns {
+                    for &emitter in &pattern.emitters {
+                        world.spawn((Emitter {
+                            unit: pattern.unit.id(),
+                            emitter,
+                            origin: IMP_POSITION,
+                            rotation: 0.0,
+                            started_at: 0,
+                        },));
+                    }
+                }
+            }
+            (None, None) => unreachable!("the imp path always has its units"),
+        }
 
         sim.schedule_mut()
             .add_system(system_fn("arena.broadphase", broadphase))

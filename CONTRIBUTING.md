@@ -74,6 +74,13 @@ cargo test --workspace --locked --no-fail-fast
 cargo build --workspace --locked
 ```
 
+Wer an Content, Arena oder Harness arbeitet, fährt zusätzlich die Szenen-Suite; sie dauert
+Sekunden und sagt mehr als ein einzelner Testlauf (siehe „Sim-Harness"):
+
+```bash
+cargo run -q -p fnp_sim_harness --bin fnp-sim-harness -- suite
+```
+
 Wer etwas unter `assets_src/` ändert, führt zusätzlich die Python-Tests der Werkzeuge aus (numpy
 und Pillow nach `assets_src/textures/requirements.txt`; kein Blender, keine Grafikkarte nötig):
 
@@ -226,6 +233,47 @@ gh run view "$run_id" --log-failed
 Die Ursache wird benannt und zugeordnet: **Code**, **Vorrichtung** (Workflow, Cache, Engine-Abruf,
 Runner) oder **fremd** (Dienst gestört, Zeitfehler, Runner-Image). Auch eine fremde Ursache wird
 festgehalten, zusammen mit der Antwort, ob der Test das künftig aushalten soll.
+
+## Sim-Harness (Szenen)
+
+Der Harness (`crates/fnp_sim_harness`) fährt das Spiel headless und sagt, was passiert ist
+(Plan 0002 WP7.4, PRD-0018 FR-02). Eine **Szene** ist nichts weiter als *Seed + Pattern-Set +
+Bot-Profil + Tickzahl*; gespielt wird dieselbe Arena wie im Spiel — derselbe Spieler, dieselbe
+Kollision, dieselben Runden —, nur mit den Patterns der Szene statt der zwei Modi des Imps.
+
+```bash
+cargo run -q -p fnp_sim_harness --bin fnp-sim-harness -- list
+cargo run -q -p fnp_sim_harness --bin fnp-sim-harness -- run swarm_weave --ticks 600
+cargo run -q -p fnp_sim_harness --bin fnp-sim-harness -- run summoner_bloom --json
+cargo run -q -p fnp_sim_harness --bin fnp-sim-harness -- suite
+```
+
+Exit-Codes wie bei den Engine-Werkzeugen: `0` alles gehalten, `1` eine Invariante gebrochen, `2` der
+Aufruf war so nicht durchführbar.
+
+- **Bot-Profile.** `idle` steht still, `dodger` würfelt alle 15 Ticks eine neue Richtung über die
+  Achsen 0 und 1. Beide sind reine Funktionen von Seed und Tick — kein Zustand, keine Uhr, kein
+  Zufall aus der Umgebung (Vertrag §3).
+- **Invarianten** (bei jedem Tick auf dem echten Zustand geprüft, nicht auf einer Zusammenfassung):
+  `no_nan` (keine Position und keine Geschwindigkeit von Spieler oder Bullet wird unendlich oder
+  NaN), `pool_within_capacity` (der Pool bleibt in seinen Grenzen und verwirft keinen Spawn) und
+  `clear_within_one_tick` (nach einem Treffer ist der Pool spätestens einen Tick später leer —
+  Spiele fordern Clears an, sie leeren den Pool nie selbst, Vertrag §11.4).
+- **Bericht.** `--json` schreibt das Dokument `grimoire.fnp.harness` (Version 1): Szene, Seed,
+  Patterns, Bot, Engine-Version, Metriken (Höchststand, Bullet-Ticks, Despawns nach Ursache,
+  verworfene Spawns, Treffer, Runden), die Invarianten mit erstem Verstoß-Tick, die Zustands-Hashes
+  alle 60 Ticks und ein Ereignisprotokoll. Keine Uhrzeiten, keine Gleitkommazahlen, Hashes als 16
+  Hex-Ziffern: derselbe Lauf ergibt dieselben Bytes, auf jeder Plattform.
+- **Standard-Suite.** `suite` fährt jede Szene aus `scene::STANDARD_SUITE` — jedes Pattern des
+  Spiels einmal, dazu `all_roles` mit allen fünf Rollen-Patterns gleichzeitig. Sie läuft im
+  Test-Profil in weniger als einer Sekunde und damit weit unter den fünf Minuten aus Plan 0002; die
+  Tests dazu liegen in `crates/fnp_sim_harness/tests/`.
+- **Szene oder Spiel?** `ArenaGame::new()` ist die Arena, die das Spiel spielt (Imp mit zwei Modi,
+  Vorhang-Taste); `ArenaGame::with_patterns(...)` ist dieselbe Arena mit eigenem Pattern-Set. Der
+  Standardweg ist davon unberührt, bis hin zu den eingefügten Ressourcen, damit die Golden-Hashes
+  des Prototyps gültig bleiben. In einer Szene gibt es keinen zweiten Modus, also auch keine
+  Unverwundbarkeit im Vorhang: die Vorhang-Szene ist deshalb der Härtetest für `clear` unter
+  mehreren tausend Bullets.
 
 ## Golden-Master und Referenzwerte
 

@@ -50,6 +50,54 @@ fn bullets(sim: &Simulation) -> usize {
 }
 
 #[test]
+fn a_scene_plays_its_own_patterns_and_has_no_second_mode() {
+    // Plan 0002 WP7.4: the harness builds the same arena with a pattern set of its own.
+    let bloom = fnp_content::sigil::summoner_bloom().expect("the bloom unit decodes");
+    let weave = fnp_content::sigil::swarm_weave().expect("the weave unit decodes");
+    let (bloom_id, weave_id) = (bloom.id(), weave.id());
+    let mut sim = Simulation::new(1);
+    ArenaGame::with_patterns(vec![
+        ScenePattern::new(bloom, vec![fnp_content::sigil::summoner_bloom::SEEDS]),
+        ScenePattern::new(weave, vec![fnp_content::sigil::swarm_weave::PASSES]),
+    ])
+    .build(&mut sim);
+
+    let world = sim.world();
+    let emitters: Vec<(UnitId, u16)> = world
+        .query::<&Emitter>()
+        .map(|emitter| (emitter.unit, emitter.emitter))
+        .collect();
+    assert_eq!(
+        emitters,
+        vec![
+            (bloom_id, fnp_content::sigil::summoner_bloom::SEEDS),
+            (weave_id, fnp_content::sigil::swarm_weave::PASSES),
+        ]
+    );
+    // The imp's units are not loaded, so the curtain toggle has nothing to switch to.
+    assert!(world.resource::<ImpUnits>().is_none());
+    assert_eq!(world.query::<&Player>().count(), 1);
+    assert_eq!(world.query::<&Imp>().count(), 1);
+    assert!(world.resource::<BulletPool>().is_some());
+
+    // The scene still runs: bullets appear, and pressing the curtain button changes nothing.
+    for tick in 0..200 {
+        sim.step(if tick == 30 {
+            toggle()
+        } else {
+            TickInput::default()
+        });
+    }
+    assert!(bullets(&sim) > 0);
+    let after: Vec<(UnitId, u16)> = sim
+        .world()
+        .query::<&Emitter>()
+        .map(|emitter| (emitter.unit, emitter.emitter))
+        .collect();
+    assert_eq!(after, emitters);
+}
+
+#[test]
 fn build_spawns_player_imp_the_volley_emitters_and_the_interpreter() {
     let sim = built(1);
     let world = sim.world();
