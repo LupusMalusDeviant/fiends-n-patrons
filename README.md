@@ -82,6 +82,8 @@ Asset-Haken (`register_assets`, `load_figure_into`), `ArenaGame` ist die Simulat
 standardmäßig mit dem Hordenmodus: drei verfolgende Imps zu Beginn, bis zu sieben mit zeitlichem
 Nachschub und Kontaktgefahr. Der zentrale Imp schießt nur die gezielte Fünfer-Salve, ohne Ring
 und Fächer. Pfützen liegen als Bildanteil auf jeweils einer 1-m-Bodenplatte, unter den Props.
+Die 48-m-Bodentextur mischt angrenzende Untergründe über diagonal und sanft geschwungene
+Grenzen; ihre Übergänge werden in Weltkoordinaten berechnet und treffen sich an Patchgrenzen.
 `FNP_ARENA_MODE=classic` öffnet das Muster-Aufgebot (`ArenaGame::with_roster`,
 `arena::playable_roster`): alle sechs Kampf-Muster aus `content/sigil/` auf `P`, dazu der Vorhang
 auf `V`. Dieselbe Tabelle

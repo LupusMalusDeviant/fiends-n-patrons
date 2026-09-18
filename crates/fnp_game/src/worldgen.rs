@@ -512,6 +512,12 @@ pub struct WorldPlan {
 }
 
 impl WorldPlan {
+    /// Seed shared by the logical map and its continuous visual transition field.
+    #[must_use]
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
+
     /// Plan coherent regions for one world seed and biome.
     #[must_use]
     pub fn new(seed: u64, district: ArenaDistrict) -> Self {
