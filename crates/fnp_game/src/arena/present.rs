@@ -435,6 +435,8 @@ pub struct ArenaVisuals {
     pub floor: MeshHandle,
     /// Base colour, tangent normal and ORM for the stone floor, when available.
     pub floor_textures: Option<[TextureHandle; 3]>,
+    /// Blood, plague and void decals; absent in placeholder-only tests.
+    pub puddles: Option<[PuddleVisual; 3]>,
     /// Registered [`StageMeshData::pillar`].
     pub pillar: MeshHandle,
     /// Registered [`StageMeshData::block`].
@@ -453,11 +455,21 @@ impl ArenaVisuals {
             imp: FigureVisual::placeholder(MeshHandle(0)),
             floor: MeshHandle(0),
             floor_textures: None,
+            puddles: None,
             pillar: MeshHandle(0),
             block: MeshHandle(0),
             marker_ring: MeshHandle(0),
         }
     }
+}
+
+/// A flat silhouette mesh with its colour map. The game keeps its placement separate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PuddleVisual {
+    /// Mesh cut to the puddle's alpha silhouette.
+    pub mesh: MeshHandle,
+    /// Colour image sampled on the silhouette mesh.
+    pub base_color: TextureHandle,
 }
 
 /// One of the camera settings the player can cycle through.
@@ -575,8 +587,8 @@ mod slot {
 }
 
 /// Pushes the fixed materials in the order of [`slot`].
-fn push_stage_materials(frame: &mut StageFrame, floor_textures: Option<[TextureHandle; 3]>) {
-    frame.materials.push(floor_material(floor_textures));
+fn push_stage_materials(frame: &mut StageFrame, visuals: &ArenaVisuals) {
+    frame.materials.push(floor_material(visuals.floor_textures));
     frame
         .materials
         .push(material(linear(0x3E_40_47), 0.75, [0.0; 3]));
@@ -589,6 +601,13 @@ fn push_stage_materials(frame: &mut StageFrame, floor_textures: Option<[TextureH
         .materials
         .push(material(marker, 0.5, scale3(marker, 0.55)));
     debug_assert_eq!(frame.materials.len(), slot::COUNT as usize);
+    if let Some(puddles) = visuals.puddles {
+        for puddle in puddles {
+            let mut mat = material([0.72, 0.72, 0.72], 0.28, [0.0; 3]);
+            mat.base_color_texture = Some(puddle.base_color);
+            frame.materials.push(mat);
+        }
+    }
 }
 
 /// The arena floor's material, shared with the offscreen comparison scene.
@@ -670,6 +689,24 @@ fn push_arena(visuals: &ArenaVisuals, frame: &mut StageFrame) {
     frame
         .meshes
         .push(mesh(visuals.floor, slot::FLOOR, IDENTITY));
+
+    if let Some(puddles) = visuals.puddles {
+        // Fixed first-room dressing. The eventual level generator can replace this
+        // list with seeded tile placements without changing the decal meshes.
+        for (kind, at, size) in [
+            (0, [-4.8, -1.2], 1.45),
+            (1, [5.0, 1.4], 1.35),
+            (2, [-5.8, 4.6], 1.20),
+            (0, [4.3, -5.1], 1.0),
+        ] {
+            let transform = mul(translation([at[0], at[1], 0.025]), scale([size, size, 1.0]));
+            frame.meshes.push(mesh(
+                puddles[kind].mesh,
+                slot::COUNT + kind as u32,
+                transform,
+            ));
+        }
+    }
 
     let edge = ARENA_HALF + Vec2::splat(CURB_GAP + CURB_DEPTH * 0.5);
     let pillar_x = edge.x + CURB_DEPTH;
@@ -977,7 +1014,7 @@ pub fn extract(
     animator: &mut Animator,
     frame: &mut StageFrame,
 ) -> BulletExtractionStats {
-    push_stage_materials(frame, visuals.floor_textures);
+    push_stage_materials(frame, visuals);
     push_arena(visuals, frame);
     push_imp(world, alpha, visuals, animator, frame);
     push_player(world, alpha, visuals, animator, frame);

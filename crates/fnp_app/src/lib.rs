@@ -6,6 +6,7 @@
 //! `src/main.rs` opens the window; integration tests drive the same app headless or offscreen.
 
 pub mod arena_floor;
+pub mod arena_puddles;
 pub mod cli;
 pub mod figures;
 pub mod stage;

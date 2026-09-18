@@ -12,7 +12,8 @@ use std::fmt;
 use std::path::Path;
 
 use fnp_game::arena::present::{
-    ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, StageMeshData, stage_mesh_data,
+    ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, PuddleVisual, StageMeshData,
+    stage_mesh_data,
 };
 use grimoire::RenderAssets;
 use grimoire::adapters::figure_assets::{
@@ -395,6 +396,8 @@ pub enum VisualsError {
     StageMesh(MeshError),
     /// The bundled arena floor maps could not be registered.
     StageTexture(TextureError),
+    /// A puddle decal mesh or colour could not be registered.
+    Puddle(crate::arena_puddles::PuddleError),
 }
 
 impl fmt::Display for VisualsError {
@@ -407,6 +410,7 @@ impl fmt::Display for VisualsError {
             }
             Self::StageMesh(error) => write!(f, "cannot register a stage mesh: {error}"),
             Self::StageTexture(error) => write!(f, "cannot register an arena texture: {error}"),
+            Self::Puddle(error) => write!(f, "cannot register a puddle: {error}"),
         }
     }
 }
@@ -564,6 +568,12 @@ pub fn load_visuals(
     let stage = register_stage(assets, stage_mesh_data())?;
     let floor_textures =
         crate::arena_floor::register(assets).map_err(VisualsError::StageTexture)?;
+    let puddles = crate::arena_puddles::register(assets)
+        .map_err(VisualsError::Puddle)?
+        .map(|puddle| PuddleVisual {
+            mesh: puddle.mesh,
+            base_color: puddle.base_color,
+        });
 
     // Which way a figure looks is a property of the figure, not of its name: the packs reuse
     // `soul` and `imp` across generations that were authored differently.
@@ -606,6 +616,7 @@ pub fn load_visuals(
             imp: enemy_visual,
             floor: stage.floor,
             floor_textures: Some(floor_textures),
+            puddles: Some(puddles),
             pillar: stage.pillar,
             block: stage.block,
             marker_ring: stage.marker_ring,
@@ -652,6 +663,7 @@ pub fn placeholder_visuals(assets: &mut dyn RenderAssets) -> Result<ArenaVisuals
         imp: FigureVisual::placeholder(stage.block),
         floor: stage.floor,
         floor_textures: None,
+        puddles: None,
         pillar: stage.pillar,
         block: stage.block,
         marker_ring: stage.marker_ring,
