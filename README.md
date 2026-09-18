@@ -87,7 +87,10 @@ Die Figuren tragen das Rim-Licht der Engine (`MeshRole::Actor`): Nur sie bekomme
 bleibt `Environment` und zeichnet unverändert. Bringt ein Pack Clips mit (`figures/<Figur>/clip/idle`
 und `walk`), spielt das Spiel sie ab: Die Clip-Zeit ist `(Tick + alpha) / Tickrate`, die Überblendung
 zwischen Stehen und Gehen eine reine Funktion der Geschwindigkeit — die Pose hängt damit nur von Welt
-und `alpha` ab (Engine-ADR-0017), die Simulation zählt keine Animationszeit. Ohne Clips steht die
+und `alpha` ab (Engine-ADR-0017), die Simulation zählt keine Animationszeit. Das Gehen wird an die
+Strecke angepasst: Beim Laden misst `walk_clip_rate` am Clip selbst, wie schnell er läuft (der
+aufgesetzte Fuß trägt die Figur, also sagt seine Rückwärtsbewegung das Tempo), und spielt ihn so
+schnell ab, dass der Schritt die Strecke deckt — begrenzt auf `WALK_CLIP_RATE_BOUNDS`. Ohne Clips steht die
 Figur in ihrer Ruhepose, wie bisher; der Imp tut das derzeit.
 
 Die Kamera führt `ArenaStage` selbst (Voreinstellung, Folgefeder, Zug zum Imp), der Zielanker fürs
