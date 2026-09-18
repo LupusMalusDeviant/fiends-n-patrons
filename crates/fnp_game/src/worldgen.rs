@@ -3,10 +3,20 @@
 //! Straight material bands reflect the six authored transition tiles; arbitrary
 //! corners and junctions need more art before they can be admitted here.
 
-/// Tiles along either axis of one 48 m floor.
+/// Tiles along either axis of the current 48 m combat-room prototype.
 pub const FLOOR_SIDE: usize = 12;
-/// Edge length of one authored tile in metres.
+/// Edge length of a tile in the current combat-room prototype, in metres.
 pub const TILE_SIZE_M: u32 = 4;
+/// Requested edge length of the complete world in metres and one-metre tiles.
+pub const WORLD_SIDE: usize = 256;
+/// Edge length of one world tile in metres.
+pub const WORLD_TILE_SIZE_M: u32 = 1;
+/// Tiles along either axis of one independently generated world chunk.
+pub const WORLD_CHUNK_SIDE: usize = 16;
+/// Number of chunks along either axis of the world.
+pub const WORLD_CHUNKS_PER_SIDE: usize = WORLD_SIDE / WORLD_CHUNK_SIDE;
+/// Visual puddles in a 16 by 16 metre chunk.
+pub const PUDDLES_PER_CHUNK: usize = 10;
 /// Puddles in one playable room.
 pub const PUDDLES_PER_ROOM: usize = 10;
 
@@ -207,6 +217,20 @@ pub struct RoomFloor {
     pub second_boundary: u8,
     /// Whether the material order is reflected across X.
     pub reflected: bool,
+}
+
+/// One independently generated section of the 256 by 256 metre world. Its
+/// tile coordinates start at the south-west corner; the world origin is central.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorldChunk {
+    /// Zero-based chunk X coordinate.
+    pub x: u8,
+    /// Zero-based chunk Y coordinate.
+    pub y: u8,
+    /// Row-major one-metre tiles.
+    pub tiles: [TileInstance; WORLD_CHUNK_SIDE * WORLD_CHUNK_SIDE],
+    /// World-space puddle placements, in centimetres.
+    pub puddles: [PuddlePlacement; PUDDLES_PER_CHUNK],
 }
 
 /// A room's purpose in the linear run plan. The current combat prototype only
@@ -433,6 +457,76 @@ pub fn generate_floor(seed: u64, district: ArenaDistrict) -> RoomFloor {
     }
 }
 
+fn world_terrain_layout(seed: u64, district: ArenaDistrict) -> (usize, usize, [Terrain; 3]) {
+    let mut rng = Rng::new(seed ^ 0x2E7A_1A9D_004D_2560);
+    let first = 64 + rng.below(32) as usize;
+    let second = 160 + rng.below(32) as usize;
+    let mut terrains = district.terrains();
+    if rng.below(2) == 1 {
+        terrains.reverse();
+    }
+    (first, second, terrains)
+}
+
+/// Generate a 16 by 16 metre world section without allocating a world-sized
+/// texture. Any section can be regenerated from its seed and coordinates.
+/// The current authored transitions support straight boundaries only.
+#[must_use]
+pub fn generate_world_chunk(
+    seed: u64,
+    district: ArenaDistrict,
+    chunk_x: usize,
+    chunk_y: usize,
+) -> Option<WorldChunk> {
+    if chunk_x >= WORLD_CHUNKS_PER_SIDE || chunk_y >= WORLD_CHUNKS_PER_SIDE {
+        return None;
+    }
+    let (first, second, terrains) = world_terrain_layout(seed, district);
+    let tiles = std::array::from_fn(|index| {
+        let col = chunk_x * WORLD_CHUNK_SIDE + index % WORLD_CHUNK_SIDE;
+        let row = chunk_y * WORLD_CHUNK_SIDE + index / WORLD_CHUNK_SIDE;
+        if col == first {
+            transition(terrains[0], terrains[1])
+        } else if col == second {
+            transition(terrains[1], terrains[2])
+        } else {
+            let zone = usize::from(col > first) + usize::from(col > second);
+            let mut rng =
+                Rng::new(seed ^ ((col as u64) << 32) ^ row as u64 ^ 0x7505_C0DE_A11C_E123);
+            TileInstance {
+                id: choose_base(&mut rng, terrains[zone]),
+                turns: 0,
+            }
+        }
+    });
+    let puddles = std::array::from_fn(|index| {
+        let mut rng = Rng::new(
+            seed ^ ((chunk_x as u64) << 40)
+                ^ ((chunk_y as u64) << 24)
+                ^ index as u64
+                ^ 0xD00D_1E55_2560_0001,
+        );
+        let local_x_cm = 80 + rng.below(1440) as i16;
+        let local_y_cm = 80 + rng.below(1440) as i16;
+        let world_x_cm = (chunk_x as i16 * WORLD_CHUNK_SIDE as i16 - 128) * 100 + local_x_cm;
+        let world_y_cm = (chunk_y as i16 * WORLD_CHUNK_SIDE as i16 - 128) * 100 + local_y_cm;
+        let col = chunk_x * WORLD_CHUNK_SIDE + local_x_cm as usize / 100;
+        let zone = usize::from(col > first) + usize::from(col > second);
+        PuddlePlacement {
+            kind: puddle_kind(terrains[zone]),
+            x_cm: world_x_cm,
+            y_cm: world_y_cm,
+            size_cm: 70 + rng.below(71) as u16,
+        }
+    });
+    Some(WorldChunk {
+        x: chunk_x as u8,
+        y: chunk_y as u8,
+        tiles,
+        puddles,
+    })
+}
+
 /// Ordered half-edge labels for N/E/S/W. Each pair is ordered left-to-right
 /// along horizontal edges or top-to-bottom along vertical edges.
 fn edges(cell: TileInstance) -> [[Terrain; 2]; 4] {
@@ -554,5 +648,73 @@ mod tests {
             }
         }
         assert_eq!(seen.len(), 20);
+    }
+
+    #[test]
+    fn metre_scale_world_chunks_cover_256_metres_without_socket_gaps() {
+        assert_eq!(WORLD_SIDE * WORLD_TILE_SIZE_M as usize, 256);
+        assert_eq!(WORLD_CHUNKS_PER_SIDE * WORLD_CHUNK_SIDE, WORLD_SIDE);
+        for district in [
+            ArenaDistrict::Crypt,
+            ArenaDistrict::Foundry,
+            ArenaDistrict::Ossuary,
+        ] {
+            let chunks: Vec<_> = (0..WORLD_CHUNKS_PER_SIDE)
+                .flat_map(|y| {
+                    (0..WORLD_CHUNKS_PER_SIDE)
+                        .map(move |x| generate_world_chunk(41, district, x, y).unwrap())
+                })
+                .collect();
+            for row in 0..WORLD_SIDE {
+                for col in 0..WORLD_SIDE {
+                    let chunk = &chunks
+                        [(row / WORLD_CHUNK_SIDE) * WORLD_CHUNKS_PER_SIDE + col / WORLD_CHUNK_SIDE];
+                    let local =
+                        (row % WORLD_CHUNK_SIDE) * WORLD_CHUNK_SIDE + col % WORLD_CHUNK_SIDE;
+                    let here = edges(chunk.tiles[local]);
+                    if col + 1 < WORLD_SIDE {
+                        let next_chunk = &chunks[(row / WORLD_CHUNK_SIDE) * WORLD_CHUNKS_PER_SIDE
+                            + (col + 1) / WORLD_CHUNK_SIDE];
+                        let next = edges(
+                            next_chunk.tiles[(row % WORLD_CHUNK_SIDE) * WORLD_CHUNK_SIDE
+                                + (col + 1) % WORLD_CHUNK_SIDE],
+                        );
+                        assert_eq!(here[1], next[3], "east gap at {col},{row}");
+                    }
+                    if row + 1 < WORLD_SIDE {
+                        let next_chunk = &chunks[((row + 1) / WORLD_CHUNK_SIDE)
+                            * WORLD_CHUNKS_PER_SIDE
+                            + col / WORLD_CHUNK_SIDE];
+                        let next = edges(
+                            next_chunk.tiles[((row + 1) % WORLD_CHUNK_SIDE) * WORLD_CHUNK_SIDE
+                                + col % WORLD_CHUNK_SIDE],
+                        );
+                        assert_eq!(here[2], next[0], "north gap at {col},{row}");
+                    }
+                }
+            }
+            assert_eq!(chunks.len() * WORLD_CHUNK_SIDE * WORLD_CHUNK_SIDE, 65_536);
+            assert!(chunks.iter().flat_map(|chunk| chunk.puddles).all(|puddle| {
+                i32::from(puddle.x_cm).abs() <= 12_800 && i32::from(puddle.y_cm).abs() <= 12_800
+            }));
+        }
+        assert!(generate_world_chunk(41, ArenaDistrict::Crypt, 16, 0).is_none());
+    }
+
+    #[test]
+    fn world_chunks_are_independent_and_repeatable() {
+        let a = generate_world_chunk(41, ArenaDistrict::Crypt, 7, 8).unwrap();
+        assert_eq!(
+            a,
+            generate_world_chunk(41, ArenaDistrict::Crypt, 7, 8).unwrap()
+        );
+        assert_ne!(
+            a,
+            generate_world_chunk(42, ArenaDistrict::Crypt, 7, 8).unwrap()
+        );
+        assert_ne!(
+            a,
+            generate_world_chunk(41, ArenaDistrict::Crypt, 8, 8).unwrap()
+        );
     }
 }
