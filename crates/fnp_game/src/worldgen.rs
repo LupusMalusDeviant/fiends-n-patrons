@@ -19,8 +19,8 @@ pub const WORLD_TILE_SIZE_M: u32 = 1;
 pub const WORLD_CHUNK_SIDE: usize = 16;
 /// Number of chunks along either axis of the world.
 pub const WORLD_CHUNKS_PER_SIDE: usize = WORLD_SIDE / WORLD_CHUNK_SIDE;
-/// Visual puddles in a 16 by 16 metre chunk.
-pub const PUDDLES_PER_CHUNK: usize = 10;
+/// Visual puddles in a 16 by 16 metre chunk. Keep the full map readable.
+pub const PUDDLES_PER_CHUNK: usize = 3;
 /// Puddles in one playable room.
 pub const PUDDLES_PER_ROOM: usize = 10;
 
@@ -609,6 +609,32 @@ impl WorldPlan {
         self.terrain_map[y * WORLD_SIDE + x]
     }
 
+    /// One metre of floor, independent of how the renderer divides the map.
+    #[must_use]
+    pub fn tile(&self, x: usize, y: usize) -> Option<WorldTile> {
+        if x >= WORLD_SIDE || y >= WORLD_SIDE {
+            return None;
+        }
+        let col = x as i32;
+        let row = y as i32;
+        let terrain = self.terrain_at(col, row);
+        let mut rng =
+            Rng::new(self.seed ^ ((col as u64) << 32) ^ row as u64 ^ 0x7505_C0DE_A11C_E123);
+        Some(WorldTile {
+            visual: TileInstance {
+                id: choose_base(&mut rng, terrain),
+                turns: 0,
+            },
+            terrain,
+            adjacent: [
+                self.terrain_at(col, row + 1),
+                self.terrain_at(col + 1, row),
+                self.terrain_at(col, row - 1),
+                self.terrain_at(col - 1, row),
+            ],
+        })
+    }
+
     /// Generate a section from this plan, with no seam at a chunk boundary.
     #[must_use]
     pub fn chunk(&self, chunk_x: usize, chunk_y: usize) -> Option<WorldChunk> {
@@ -704,24 +730,11 @@ fn generate_chunk_from_plan(
         return None;
     }
     let tiles = std::array::from_fn(|index| {
-        let col = (chunk_x * WORLD_CHUNK_SIDE + index % WORLD_CHUNK_SIDE) as i32;
-        let row = (chunk_y * WORLD_CHUNK_SIDE + index / WORLD_CHUNK_SIDE) as i32;
-        let terrain = layout.terrain_at(col, row);
-        let mut rng =
-            Rng::new(layout.seed ^ ((col as u64) << 32) ^ row as u64 ^ 0x7505_C0DE_A11C_E123);
-        WorldTile {
-            visual: TileInstance {
-                id: choose_base(&mut rng, terrain),
-                turns: 0,
-            },
-            terrain,
-            adjacent: [
-                layout.terrain_at(col, row + 1),
-                layout.terrain_at(col + 1, row),
-                layout.terrain_at(col, row - 1),
-                layout.terrain_at(col - 1, row),
-            ],
-        }
+        let col = chunk_x * WORLD_CHUNK_SIDE + index % WORLD_CHUNK_SIDE;
+        let row = chunk_y * WORLD_CHUNK_SIDE + index / WORLD_CHUNK_SIDE;
+        layout
+            .tile(col, row)
+            .expect("chunk coordinates are in world")
     });
     let puddles = std::array::from_fn(|index| {
         let mut rng = Rng::new(

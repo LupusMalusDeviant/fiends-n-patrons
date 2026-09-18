@@ -47,7 +47,9 @@ def load_map(path: Path) -> tuple[bytes, list[tuple[int, int, int, int]]]:
     return tiles, puddles
 
 
-def render(tiles: bytes, puddles: list[tuple[int, int, int, int]], props: Path | None) -> Image.Image:
+def render(
+    tiles: bytes, puddles: list[tuple[int, int, int, int]], props: Path | None
+) -> tuple[Image.Image, Image.Image]:
     size = PIXELS_PER_METRE
     art = [Image.open(ART / f"{name}.png").convert("RGB").resize(
         (size, size), Image.Resampling.LANCZOS) for name in TILE_NAMES]
@@ -83,6 +85,7 @@ def render(tiles: bytes, puddles: list[tuple[int, int, int, int]], props: Path |
             )
             image.paste(tile_image(tiles[index], neighbors), (x * size, (SIDE - y - 1) * size))
 
+    floor_only = image.copy()
     if props is not None:
         originals = [Image.open(props / name).convert("RGBA") for name in PUDDLE_NAMES]
 
@@ -100,7 +103,7 @@ def render(tiles: bytes, puddles: list[tuple[int, int, int, int]], props: Path |
             x = round((x_cm / 100 + SIDE / 2) * size - sprite.width / 2)
             y = round((SIDE / 2 - y_cm / 100) * size - sprite.height / 2)
             image.paste(sprite, (x, y), sprite)
-    return image
+    return image, floor_only
 
 
 def main() -> None:
@@ -110,12 +113,13 @@ def main() -> None:
     parser.add_argument("--puddles", type=Path, help="directory with the three authored puddle PNGs")
     args = parser.parse_args()
     tiles, puddles = load_map(args.map)
-    image = render(tiles, puddles, args.puddles)
+    image, floor_only = render(tiles, puddles, args.puddles)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     image.save(args.output, optimize=True)
 
-    # A readable in-chat overview and one detail crop, both from the same map.
-    overview = image.resize((1280, 1280), Image.Resampling.LANCZOS)
+    # Sub-metre puddles become tiny angular marks when the whole world is
+    # reduced to 1280 px. Keep the overview readable; show decals in the crop.
+    overview = floor_only.resize((1280, 1280), Image.Resampling.LANCZOS)
     overview.save(args.output.with_name(args.output.stem + "_overview.png"), optimize=True)
     center = 128 * PIXELS_PER_METRE
     detail = image.crop((center - 512, center - 512, center + 512, center + 512))

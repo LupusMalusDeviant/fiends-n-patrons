@@ -15,7 +15,7 @@ use fnp_game::arena::present::{
     ArenaDistrict, ArenaVisuals, AuthoredFront, FigureAnimation, FigureVisual, PuddleVisual,
     StageMeshData, stage_mesh_data,
 };
-use fnp_game::worldgen::{generate_floor, generate_run, validate_floor};
+use fnp_game::worldgen::{WorldPlan, generate_floor, generate_run, validate_floor};
 use grimoire::RenderAssets;
 use grimoire::adapters::figure_assets::{
     FigureLoadError, LoadedFigure, load_clip, load_figure_into,
@@ -583,8 +583,28 @@ pub fn load_visuals(
         .unwrap_or(first_stage.district);
     let room_floor = generate_floor(first_stage.rooms[0].floor_seed, district);
     debug_assert_eq!(validate_floor(&room_floor), Ok(()));
-    let floor_textures =
-        crate::arena_floor::register(assets, &room_floor).map_err(VisualsError::StageTexture)?;
+    let floor_textures = if std::env::var("FNP_WORLD_PATCH_PREVIEW").as_deref() == Ok("1") {
+        // The playable arena is still a smaller room. This preview lets the
+        // renderer show any 48 m patch of the 256 m world at true scale.
+        let coordinate = |name: &str| {
+            std::env::var(name)
+                .ok()
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(128)
+        };
+        let center = (
+            coordinate("FNP_WORLD_PATCH_CENTER_X"),
+            coordinate("FNP_WORLD_PATCH_CENTER_Y"),
+        );
+        crate::arena_floor::register_world_patch(
+            assets,
+            &WorldPlan::new(world_seed, district),
+            center,
+        )
+    } else {
+        crate::arena_floor::register(assets, &room_floor)
+    }
+    .map_err(VisualsError::StageTexture)?;
     let puddles = crate::arena_puddles::register(assets)
         .map_err(VisualsError::Puddle)?
         .map(|puddle| PuddleVisual {

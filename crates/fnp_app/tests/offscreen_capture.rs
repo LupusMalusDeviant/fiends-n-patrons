@@ -230,9 +230,13 @@ fn capture_a_district_preview() {
         max_frames: None,
         camera_preset: 0,
     });
+    let size = (
+        env_or("FNP_WORLD_PREVIEW_WIDTH", 960_u32),
+        env_or("FNP_WORLD_PREVIEW_HEIGHT", 540_u32),
+    );
     let mut run = OffscreenRun::new(
-        960,
-        540,
+        size.0,
+        size.1,
         2,
         Duration::from_nanos(1_000_000_000 / u64::from(TICK_RATE_HZ)),
     );
@@ -240,7 +244,7 @@ fn capture_a_district_preview() {
     let mut written = 0_u32;
     let result = app.run_offscreen(run, &mut script, &mut |_, rgba| {
         let path = dir.join(format!("frame_{written:05}.ppm"));
-        write_ppm(&path, (960, 540), rgba).expect("the preview image can be written");
+        write_ppm(&path, size, rgba).expect("the preview image can be written");
         written += 1;
     });
     let report = result.expect("the district renders through the software adapter");
