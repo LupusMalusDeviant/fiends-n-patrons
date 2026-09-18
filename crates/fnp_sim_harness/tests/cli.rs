@@ -81,6 +81,67 @@ fn every_usage_error_ends_with_exit_code_two() {
     }
 }
 
+/// The masters, as an absolute path: a test runs with the crate directory as its working
+/// directory, the command line's default expects the repository root.
+fn master_directory() -> String {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join(fnp_sim_harness::golden::MASTER_DIR)
+        .to_string_lossy()
+        .into_owned()
+}
+
+#[test]
+fn golden_check_reports_that_every_scene_matches() {
+    let directory = master_directory();
+    let output = harness(&[
+        "golden",
+        "check",
+        "--scene",
+        "summoner_bloom",
+        "--dir",
+        &directory,
+    ]);
+    assert!(output.status.success(), "{}", stdout(&output));
+    assert!(stdout(&output).contains("summoner_bloom: matches its master"));
+}
+
+#[test]
+fn golden_refuses_a_renewal_without_a_reason_and_an_unknown_master_directory() {
+    let without_reason = harness(&["golden", "renew"]);
+    assert_eq!(without_reason.status.code(), Some(2));
+
+    let empty_reason = harness(&["golden", "renew", "--reason", "  "]);
+    assert_eq!(empty_reason.status.code(), Some(2));
+
+    // A missing master is a usage error, never a silently passing check.
+    let missing = harness(&[
+        "golden",
+        "check",
+        "--scene",
+        "imp_arena",
+        "--dir",
+        "no/such/directory",
+    ]);
+    assert_eq!(missing.status.code(), Some(2));
+
+    for arguments in [
+        vec!["golden"],
+        vec!["golden", "nonsense"],
+        vec!["golden", "check", "--nonsense"],
+        vec!["golden", "check", "--scene"],
+        vec!["golden", "check", "--scene", "no_such_scene"],
+    ] {
+        assert_eq!(
+            harness(&arguments).status.code(),
+            Some(2),
+            "`{}` should be a usage error",
+            arguments.join(" ")
+        );
+    }
+}
+
 #[test]
 fn the_suite_runs_from_the_command_line() {
     let output = harness(&["suite"]);

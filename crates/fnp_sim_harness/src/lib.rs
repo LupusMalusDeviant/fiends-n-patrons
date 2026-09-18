@@ -15,6 +15,7 @@
 //! [`curtain_bot_input`] is the same bot switching the imp to its curtain mode. The integration tests in `tests/determinism.rs` prove determinism, freeze a golden
 //! final hash and check every checkpoint with 1, 2 and N threads.
 
+pub mod golden;
 pub mod report;
 pub mod scene;
 
