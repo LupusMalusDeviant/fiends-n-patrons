@@ -35,6 +35,8 @@ const FNP_SKELETON: u16 = 0x8002;
 const FNP_FIGURE: u16 = 0x8003;
 const FNP_MESH: u16 = 0x8000;
 const FNP_MATERIAL: u16 = 0x8004;
+/// One skeletal animation clip, engine format document `docs/formats/figure-clip.md` version 1.
+const FNP_CLIP: u16 = 0x8005;
 
 const COMPILER_NAME: &str = "fnp_figure_pack_builder";
 
@@ -338,6 +340,160 @@ fn collect_joint_counts(
     Ok(joint_counts)
 }
 
+// Limits of the clip format (`figure-clip.md` §7). Re-stated here rather than imported: this
+// binary pins the engine at a tag and must reject a payload the engine would reject, whether or
+// not the pinned tag already knows the kind.
+const CLIP_MAGIC: [u8; 8] = *b"FNP_CLIP";
+const CLIP_FORMAT_VERSION: u32 = 1;
+const MAX_CLIP_FRAMES: u32 = 4096;
+const MAX_CLIP_MARKERS: u32 = 64;
+const MAX_CLIP_MARKER_NAME_LEN: usize = 63;
+const MAX_CLIP_FRAME_RATE_HZ: f32 = 1000.0;
+const CLIP_QUATERNION_TOLERANCE: f32 = 1.0e-3;
+
+/// Re-checks one `FNP_CLIP` payload against `figure-clip.md` before it reaches [`PackWriter`],
+/// independently of the engine's decoder: magic, version, flags, the counts against their limits
+/// and against the figure's own skeleton, every key finite, every rotation key a unit quaternion,
+/// markers inside the clip and sorted, and no trailing bytes.
+fn validate_clip(
+    path: &str,
+    bytes: &[u8],
+    joint_counts: &HashMap<String, u32>,
+) -> Result<(), String> {
+    let figure = figure_name_of(path).ok_or_else(|| format!("path {path:?} has no figure name"))?;
+    let skeleton_joints = *joint_counts
+        .get(figure)
+        .ok_or_else(|| format!("no FNP_SKELETON found for figure {figure:?}"))?;
+
+    let mut reader = Reader::new(bytes);
+    let magic = reader.take(8)?;
+    if magic != CLIP_MAGIC {
+        return Err(format!("magic {magic:?} is not {CLIP_MAGIC:?}"));
+    }
+    let version = reader.u32()?;
+    if version != CLIP_FORMAT_VERSION {
+        return Err(format!(
+            "unsupported FNP_CLIP version {version} (expected {CLIP_FORMAT_VERSION})"
+        ));
+    }
+    let flags = reader.u32()?;
+    if flags & !1 != 0 {
+        return Err(format!("flags 0x{flags:08x} set a reserved bit"));
+    }
+    let joint_count = reader.u32()?;
+    if joint_count == 0 {
+        return Err("joint_count is 0".to_owned());
+    }
+    if joint_count != skeleton_joints {
+        return Err(format!(
+            "clip has {joint_count} joints, the skeleton of figure {figure:?} has {skeleton_joints}"
+        ));
+    }
+    let frame_count = reader.u32()?;
+    if frame_count == 0 {
+        return Err("frame_count is 0".to_owned());
+    }
+    if frame_count > MAX_CLIP_FRAMES {
+        return Err(format!("{frame_count} frames exceeds {MAX_CLIP_FRAMES}"));
+    }
+    let frame_rate = reader.f32()?;
+    if !frame_rate.is_finite() || frame_rate <= 0.0 || frame_rate > MAX_CLIP_FRAME_RATE_HZ {
+        return Err(format!(
+            "frame_rate_hz {frame_rate} is not in (0, {MAX_CLIP_FRAME_RATE_HZ}]"
+        ));
+    }
+    let _fingerprint = reader.take(8)?; // checked against the skeleton by the engine, on load
+    let marker_count = reader.u32()?;
+    if marker_count > MAX_CLIP_MARKERS {
+        return Err(format!("{marker_count} markers exceeds {MAX_CLIP_MARKERS}"));
+    }
+
+    for joint in 0..joint_count {
+        read_clip_track(&mut reader, frame_count, joint, "translation", 3)?;
+        read_clip_track(&mut reader, frame_count, joint, "rotation", 4)?;
+        read_clip_track(&mut reader, frame_count, joint, "scale", 3)?;
+    }
+
+    let mut previous: Option<u32> = None;
+    for marker in 0..marker_count {
+        let frame = reader.u32()?;
+        if frame >= frame_count {
+            return Err(format!(
+                "marker {marker} sits at frame {frame}, outside the clip's {frame_count} frames"
+            ));
+        }
+        if previous.is_some_and(|earlier| frame < earlier) {
+            return Err(format!("marker {marker} at frame {frame} is out of order"));
+        }
+        previous = Some(frame);
+        let name_len = usize::from(reader.u8()?);
+        if name_len > MAX_CLIP_MARKER_NAME_LEN {
+            return Err(format!(
+                "marker {marker} name_len {name_len} exceeds {MAX_CLIP_MARKER_NAME_LEN}"
+            ));
+        }
+        let name = reader.take(name_len)?;
+        if std::str::from_utf8(name).is_err() {
+            return Err(format!("marker {marker} name is not valid UTF-8"));
+        }
+    }
+
+    if !reader.finished() {
+        return Err(format!(
+            "{} trailing byte(s) after the last marker",
+            reader.remaining()
+        ));
+    }
+    Ok(())
+}
+
+/// One track of a clip: a storage byte, then one value (constant) or `frame_count` values.
+fn read_clip_track(
+    reader: &mut Reader<'_>,
+    frame_count: u32,
+    joint: u32,
+    track: &str,
+    width: usize,
+) -> Result<(), String> {
+    let storage = reader.u8()?;
+    let keys = match storage {
+        0 => 1,
+        1 => frame_count,
+        other => {
+            return Err(format!(
+                "joint {joint} {track}: storage byte {other} is neither 0 (constant) nor 1 (sampled)"
+            ));
+        }
+    };
+    // The declared size is checked against what remains before anything is read key by key.
+    let declared = keys as usize * width * 4;
+    if declared > reader.remaining() {
+        return Err(format!(
+            "joint {joint} {track}: declares {declared} byte(s), {} remain",
+            reader.remaining()
+        ));
+    }
+    for key in 0..keys {
+        let mut value = [0.0_f32; 4];
+        for component in value.iter_mut().take(width) {
+            *component = reader.f32()?;
+            if !component.is_finite() {
+                return Err(format!("joint {joint} {track}: key {key} is not finite"));
+            }
+        }
+        if width == 4 {
+            let [x, y, z, w] = value;
+            let length = (x * x + y * y + z * z + w * w).sqrt();
+            if (length - 1.0).abs() > CLIP_QUATERNION_TOLERANCE {
+                return Err(format!(
+                    "joint {joint} rotation: key {key} {value:?} has length {length}, not 1.0"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Bounds-checked little-endian cursor, independent of `grimoire_assets`'s own (private) one --
 /// deliberately a second implementation, so a bug in either does not hide the same bug in both.
 struct Reader<'a> {
@@ -418,6 +574,7 @@ fn validate_payload(
         FNP_TEXTURE_RAW => validate_texture(bytes),
         FNP_SKELETON => validate_skeleton(bytes),
         FNP_FIGURE => validate_figure(bytes),
+        FNP_CLIP => validate_clip(&entry.path, bytes, joint_counts),
         other => Err(format!("unknown kind 0x{other:04x}")),
     }
 }
@@ -706,6 +863,177 @@ mod tests {
             out.extend_from_slice(&(i % vertex_count.max(1)).to_le_bytes());
         }
         out
+    }
+
+    /// A minimal well-formed `FNP_CLIP` payload: `joints` joints, `frames` frames, every track
+    /// constant except joint 0's translation. `tweak` sees the bytes before they are returned.
+    fn clip_bytes(joints: u32, frames: u32, markers: &[(u32, &str)]) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(&CLIP_MAGIC);
+        out.extend_from_slice(&1u32.to_le_bytes()); // version
+        out.extend_from_slice(&1u32.to_le_bytes()); // flags: loops
+        out.extend_from_slice(&joints.to_le_bytes());
+        out.extend_from_slice(&frames.to_le_bytes());
+        out.extend_from_slice(&24.0f32.to_le_bytes());
+        out.extend_from_slice(&0u64.to_le_bytes()); // fingerprint, checked by the engine on load
+        out.extend_from_slice(&(markers.len() as u32).to_le_bytes());
+        for joint in 0..joints {
+            if joint == 0 {
+                out.push(1); // sampled translation
+                for frame in 0..frames {
+                    for value in [0.0f32, frame as f32, 0.0] {
+                        out.extend_from_slice(&value.to_le_bytes());
+                    }
+                }
+            } else {
+                out.push(0);
+                out.extend_from_slice(&[0u8; 12]);
+            }
+            out.push(0); // constant rotation: identity
+            for value in [0.0f32, 0.0, 0.0, 1.0] {
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+            out.push(0); // constant scale
+            for value in [1.0f32, 1.0, 1.0] {
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        for (frame, name) in markers {
+            out.extend_from_slice(&frame.to_le_bytes());
+            out.push(name.len() as u8);
+            out.extend_from_slice(name.as_bytes());
+        }
+        out
+    }
+
+    fn clip_joint_counts(joints: u32) -> HashMap<String, u32> {
+        let mut joint_counts = HashMap::new();
+        joint_counts.insert("soul".to_owned(), joints);
+        joint_counts
+    }
+
+    #[test]
+    fn validate_clip_accepts_a_well_formed_payload() {
+        let bytes = clip_bytes(3, 4, &[(0, "start"), (3, "hit")]);
+        assert_eq!(
+            validate_clip("figures/soul/clip/idle", &bytes, &clip_joint_counts(3)),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn validate_clip_rejects_a_foreign_magic() {
+        let mut bytes = clip_bytes(1, 2, &[]);
+        bytes[0] = b'X';
+        assert!(validate_clip("figures/soul/clip/idle", &bytes, &clip_joint_counts(1)).is_err());
+    }
+
+    #[test]
+    fn validate_clip_rejects_another_version() {
+        let mut bytes = clip_bytes(1, 2, &[]);
+        bytes[8..12].copy_from_slice(&2u32.to_le_bytes());
+        assert!(validate_clip("figures/soul/clip/idle", &bytes, &clip_joint_counts(1)).is_err());
+    }
+
+    #[test]
+    fn validate_clip_rejects_a_reserved_flag_bit() {
+        // A later version may define bit 1; a payload that sets it today must not pass silently.
+        let mut bytes = clip_bytes(1, 2, &[]);
+        bytes[12..16].copy_from_slice(&2u32.to_le_bytes());
+        assert!(validate_clip("figures/soul/clip/idle", &bytes, &clip_joint_counts(1)).is_err());
+    }
+
+    #[test]
+    fn validate_clip_rejects_a_joint_count_the_skeleton_does_not_have() {
+        let bytes = clip_bytes(3, 2, &[]);
+        let error = validate_clip("figures/soul/clip/idle", &bytes, &clip_joint_counts(4))
+            .expect_err("3 joints against a 4-joint skeleton");
+        assert!(error.contains("skeleton"), "{error}");
+    }
+
+    #[test]
+    fn validate_clip_rejects_zero_frames_and_too_many() {
+        let mut bytes = clip_bytes(1, 2, &[]);
+        bytes[20..24].copy_from_slice(&0u32.to_le_bytes());
+        assert!(validate_clip("figures/soul/clip/idle", &bytes, &clip_joint_counts(1)).is_err());
+        let mut bytes = clip_bytes(1, 2, &[]);
+        bytes[20..24].copy_from_slice(&(MAX_CLIP_FRAMES + 1).to_le_bytes());
+        assert!(validate_clip("figures/soul/clip/idle", &bytes, &clip_joint_counts(1)).is_err());
+    }
+
+    #[test]
+    fn validate_clip_rejects_an_impossible_frame_rate() {
+        for rate in [0.0f32, -24.0, f32::NAN, MAX_CLIP_FRAME_RATE_HZ + 1.0] {
+            let mut bytes = clip_bytes(1, 2, &[]);
+            bytes[24..28].copy_from_slice(&rate.to_le_bytes());
+            assert!(
+                validate_clip("figures/soul/clip/idle", &bytes, &clip_joint_counts(1)).is_err(),
+                "frame rate {rate} passed"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_clip_rejects_an_unknown_storage_byte() {
+        let mut bytes = clip_bytes(1, 2, &[]);
+        bytes[40] = 2; // neither constant (0) nor sampled (1)
+        assert!(validate_clip("figures/soul/clip/idle", &bytes, &clip_joint_counts(1)).is_err());
+    }
+
+    #[test]
+    fn validate_clip_rejects_a_key_that_is_not_finite() {
+        let mut bytes = clip_bytes(1, 2, &[]);
+        bytes[41..45].copy_from_slice(&f32::INFINITY.to_le_bytes());
+        assert!(validate_clip("figures/soul/clip/idle", &bytes, &clip_joint_counts(1)).is_err());
+    }
+
+    #[test]
+    fn validate_clip_rejects_a_rotation_that_is_not_unit_length() {
+        let bytes = clip_bytes(1, 2, &[]);
+        let rotation = 40 + 1 + 2 * 12 + 1; // header, storage byte, two sampled keys, storage byte
+        let mut broken = bytes.clone();
+        broken[rotation + 12..rotation + 16].copy_from_slice(&0.5f32.to_le_bytes());
+        assert!(validate_clip("figures/soul/clip/idle", &broken, &clip_joint_counts(1)).is_err());
+        assert!(validate_clip("figures/soul/clip/idle", &bytes, &clip_joint_counts(1)).is_ok());
+    }
+
+    #[test]
+    fn validate_clip_rejects_markers_outside_the_clip_or_out_of_order() {
+        let outside = clip_bytes(1, 2, &[(2, "hit")]);
+        assert!(validate_clip("figures/soul/clip/idle", &outside, &clip_joint_counts(1)).is_err());
+        let unsorted = clip_bytes(1, 4, &[(3, "late"), (1, "early")]);
+        assert!(validate_clip("figures/soul/clip/idle", &unsorted, &clip_joint_counts(1)).is_err());
+    }
+
+    #[test]
+    fn validate_clip_rejects_trailing_bytes_and_truncation() {
+        let mut long = clip_bytes(1, 2, &[]);
+        long.push(0);
+        assert!(validate_clip("figures/soul/clip/idle", &long, &clip_joint_counts(1)).is_err());
+        let short = clip_bytes(1, 2, &[]);
+        let truncated = &short[..short.len() - 1];
+        assert!(validate_clip("figures/soul/clip/idle", truncated, &clip_joint_counts(1)).is_err());
+    }
+
+    #[test]
+    fn validate_clip_needs_a_skeleton_for_its_figure() {
+        let bytes = clip_bytes(1, 2, &[]);
+        assert!(validate_clip("figures/ghost/clip/idle", &bytes, &HashMap::new()).is_err());
+    }
+
+    #[test]
+    fn validate_payload_routes_the_clip_kind() {
+        let entry = IndexEntry {
+            path: "figures/soul/clip/idle".to_owned(),
+            kind: FNP_CLIP,
+            kind_version: 1,
+            file: PathBuf::from("soul/clip_idle.bin"),
+        };
+        let bytes = clip_bytes(2, 3, &[]);
+        assert_eq!(
+            validate_payload(&entry, &bytes, &clip_joint_counts(2)),
+            Ok(())
+        );
     }
 
     #[test]
